@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
+status: executing
 stopped_at: Phase 1 UI-SPEC approved
-last_updated: "2026-09-24T17:41:04.013Z"
-last_activity: 2026-09-24 — Roadmap created (8 phases, 41 requisitos v1 mapeados al 100%)
+last_updated: "2026-09-24T18:48:08.872Z"
+last_activity: 2026-09-24 -- Phase 1 planning complete
 progress:
   total_phases: 8
   completed_phases: 0
-  total_plans: 0
+  total_plans: 6
   completed_plans: 0
   percent: 0
 ---
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 
 Phase: 1 of 8 (Fundación)
 Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-09-24 — Roadmap created (8 phases, 41 requisitos v1 mapeados al 100%)
+Status: Ready to execute
+Last activity: 2026-09-24 -- Phase 1 planning complete
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -72,6 +72,7 @@ None yet.
 - [Phase 1]: El usuario aún no tiene cuenta creada en supabase.com — bloqueante para FOUND-01, debe resolverse al inicio de la Phase 1.
 - [Phase 1]: RLS del proyecto no tiene pruebas contra el rol `authenticated` (solo service-role) y `perfiles` permite auto-escalación de privilegios — debe corregirse antes de que cualquier otra fase confíe en el límite multi-tenant.
 - [Phase 7]: Tratamiento de IVA para servicios veterinarios en Colombia es de confianza MEDIA (una sola fuente secundaria) — verificar con un contador antes de fijar la lógica de impuestos en la factura.
+- [Phase 1]: Gate automático `check.decision-coverage-plan` reportó 0/6 decisiones D-01..D-06 cubiertas al planear la Fase 1 — verificado como falso positivo (probablemente busca un campo YAML estructurado en vez del texto de las secciones "Must-Haves"): las 6 decisiones están citadas explícitamente en los planes (ej. `01-02-PLAN.md:249` "D-01/D-02: Inicio shows only the real nombre + clinic name..."). El usuario aprobó continuar sin replanear. Re-verificar en `/gsd:verify-work` si el gate se corrige.
 
 ## Deferred Items
 
