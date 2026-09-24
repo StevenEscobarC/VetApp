@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Flutter Web",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": ["run", "-d", "web-server", "--web-port", "8765"],
+      "port": 8765
+    },
+    {
+      "name": "Design Preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8791", "--directory", "C:\\Users\\Steven\\AppData\\Local\\Temp\\claude\\C--Trabajo-VetApp\\83d15d8d-998b-41b7-8581-421027fd274f\\scratchpad\\design_preview"],
+      "port": 8791
+    }
+  ]
+}

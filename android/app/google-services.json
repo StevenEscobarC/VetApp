@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "21039240622",
+    "project_id": "vetapp-colombia",
+    "storage_bucket": "vetapp-colombia.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:21039240622:android:169a2de80ba519fc0be43f",
+        "android_client_info": {
+          "package_name": "com.vetapp.vetapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGzlFYtCBL-JbzmFQ0Q_Lyffyeq0LP8OY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
