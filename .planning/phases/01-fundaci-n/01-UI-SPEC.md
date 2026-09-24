@@ -1,10 +1,11 @@
 ---
 phase: 1
 slug: fundacion
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-09-24
+reviewed_at: 2026-09-24
 ---
 
 # Phase 1 — UI Design Contract
@@ -129,6 +130,8 @@ Exceptions: `AppSpacing.touchTarget = 44px` (already defined) — every tappable
 
 Only 2 distinct font weights are used across this phase: 400 and 600. Caprasimo ships one weight only (400) — do not attempt to bold it.
 
+**Focal point per screen:** Login — the "VetApp" Caprasimo display title + logo mark, immediately above the primary "Iniciar sesión" button, is the primary visual anchor. Inicio — the "Hola, {nombre}" Caprasimo heading card is the primary visual anchor; everything else on the screen is secondary to it.
+
 ---
 
 ## Color
@@ -183,14 +186,14 @@ Not applicable. This is a Flutter/Dart mobile app — there is no shadcn/npm com
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS (non-blocking flag resolved — focal points now named above)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-09-24
 
 ---
 
