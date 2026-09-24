@@ -36,26 +36,35 @@ key-decisions:
 patterns-established:
   - "Every future tenant-scoped table should follow the clientes/mascotas RLS shape: to authenticated using/with check (public.es_veterinario() and clinica_id = public.mi_clinica_id())"
 
-requirements-completed: []  # Pending: Task 3 (BLOCKING checkpoint) not yet resolved -- see below.
+requirements-completed: [FOUND-01, FOUND-04, FOUND-05]
 
 # Metrics
-duration: 35min
+duration: 40min
 completed: 2026-09-24
 ---
 
 # Phase 1 Plan 1: Supabase Schema Hardening (RLS) Summary
 
-**Hardened schema.sql (new `clientes` table, `mascotas` re-pointed with vet-only RLS, `perfiles_update` self-escalation fix) plus a single-paste 27-check RLS smoke test and an anon REST probe -- code and tests are ready and committed, but the plan is PAUSED at a BLOCKING human checkpoint: the cloud project has not yet had this schema applied.**
+**Hardened schema.sql (new `clientes` table, `mascotas` re-pointed with vet-only RLS, `perfiles_update` self-escalation fix) plus a single-paste 27-check RLS smoke test and an anon REST probe — applied to the live cloud project and verified. `RLS SMOKE: PASS (27 checks)` and `LIVE_SCHEMA_OK` both confirmed.**
 
 ## Performance
 
-- **Duration:** ~35 min (Tasks 1-2)
-- **Tasks:** 2 of 3 complete (Task 3 is a `checkpoint:human-action` and cannot be automated -- see below)
+- **Duration:** ~40 min (Tasks 1-3)
+- **Tasks:** 3 of 3 complete
 - **Files modified:** 3 (1 modified, 2 created)
 
-## Status: PAUSED AT BLOCKING CHECKPOINT
+## Status: COMPLETE
 
-This plan is `autonomous: false` by design. Tasks 1 and 2 (writing the SQL and the tests) are complete and committed. **Task 3 requires the human user to paste SQL into the Supabase cloud SQL Editor** -- Claude has no DB password / CLI link, only the anon key, and cannot reach `https://supabase.com/dashboard/project/apjonrmhkpyzbofupokb`. Full instructions are in the checkpoint message returned alongside this summary. FOUND-01/FOUND-04/FOUND-05 are **not yet closed** -- `requirements-completed` is intentionally empty. A continuation agent must resume Task 3 after the user reports the `RLS SMOKE:` result.
+This plan was `autonomous: false` by design. Tasks 1 and 2 (writing the SQL and the tests) were completed and committed by the executor agent. **Task 3 required the human user to paste SQL into the Supabase cloud SQL Editor** — the user applied `schema.sql` and ran `rls_smoke_test.sql` in the SQL Editor for `https://apjonrmhkpyzbofupokb.supabase.co`, reporting back `RLS SMOKE: PASS (27 checks) - cambios revertidos`. The orchestrator then ran `bash supabase/tests/verify_live_schema.sh` against the live project, which printed:
+```
+OK clinicas 200
+OK perfiles 200
+OK clientes 200
+OK mascotas 200
+OK anon insert rechazado 401
+LIVE_SCHEMA_OK
+```
+All 4 tenant tables are live and reachable over REST with the anon key, and an anonymous write attempt is correctly rejected (401). FOUND-01/FOUND-04/FOUND-05 are now closed.
 
 ## Accomplishments
 
@@ -67,10 +76,9 @@ This plan is `autonomous: false` by design. Tasks 1 and 2 (writing the SQL and t
 
 1. **Task 1: Harden supabase/schema.sql** - `ed63628` (feat)
 2. **Task 2: Write RLS smoke test + anon REST probe** - `e58ef7e` (test)
+3. **Task 3: Apply schema + RLS smoke test to the live cloud project** - human action (SQL Editor) + orchestrator verification (`verify_live_schema.sh` → `LIVE_SCHEMA_OK`)
 
 **Plan metadata:** (this summary's own commit, see below)
-
-_Task 3 (checkpoint:human-action, gate="blocking") has not been executed -- no commit yet._
 
 ## Files Created/Modified
 
@@ -108,18 +116,17 @@ _Task 3 (checkpoint:human-action, gate="blocking") has not been executed -- no c
 
 ## User Setup Required
 
-**External service requires manual configuration -- see the checkpoint message returned alongside this summary.** Task 3 needs the user to, in the Supabase Dashboard SQL Editor for `https://apjonrmhkpyzbofupokb.supabase.co`:
-1. Paste and run the full `supabase/schema.sql` (expect "Success. No rows returned").
-2. Paste and run the full `supabase/tests/rls_smoke_test.sql` in a new query tab (expect an ERROR starting with `RLS SMOKE: PASS (27 checks)`).
-3. (Recommended) Turn off "Confirm email" under Authentication -> Sign In / Providers -> Email.
-4. Report back the verbatim `RLS SMOKE:` message and the Confirm-email choice.
+**Completed by the user.** In the Supabase Dashboard SQL Editor for `https://apjonrmhkpyzbofupokb.supabase.co`:
+1. Pasted and ran the full `supabase/schema.sql` — succeeded.
+2. Pasted and ran the full `supabase/tests/rls_smoke_test.sql` — result: `RLS SMOKE: PASS (27 checks) - cambios revertidos`.
+3. "Confirm email" toggle: not explicitly reported back; app signup still requires email confirmation unless the user later disables it in Authentication → Providers → Email. Non-blocking — flagged for Plan 01-06's real-device verification.
 
 ## Next Phase Readiness
 
-- Blocked: FOUND-01/FOUND-04/FOUND-05 cannot be marked complete until Task 3's checkpoint resolves with `RLS SMOKE: PASS (27 checks)` and `bash supabase/tests/verify_live_schema.sh` prints `LIVE_SCHEMA_OK`.
-- Once resolved, plans 01-02 onward (Riverpod/go_router wiring, walking skeleton) can safely assume `es_veterinario()`/`mi_clinica_id()` are a trustworthy tenant boundary and that `clientes`/`mascotas` exist live in the cloud project.
-- No other phase-1 plan's work is blocked by this pause per se (waves may still parallelize on other independent tracks), but nothing that reads/writes `clientes` or `mascotas` against the real backend can be verified end-to-end until the checkpoint clears.
+- FOUND-01/FOUND-04/FOUND-05 are complete: schema is live, RLS smoke test passed 27/27 checks (including the self-escalation attack C5/C6 and the cross-clinic FK attack A15), and the REST probe confirms all 4 tenant tables are reachable with the anon key while anonymous writes are rejected.
+- Plans 01-02 onward (Riverpod/go_router wiring, walking skeleton) can now safely assume `es_veterinario()`/`mi_clinica_id()` are a trustworthy tenant boundary and that `clientes`/`mascotas` exist live in the cloud project.
+- Open follow-up (non-blocking, for Plan 01-06): confirm whether "Confirm email" is on or off before the real-device signup/sign-in verification, since a pending confirmation email would block sign-in immediately after registration.
 
 ---
 *Phase: 01-fundaci-n*
-*Status: PAUSED at Task 3 (blocking checkpoint) -- 2026-09-24*
+*Status: COMPLETE — 2026-09-24*
