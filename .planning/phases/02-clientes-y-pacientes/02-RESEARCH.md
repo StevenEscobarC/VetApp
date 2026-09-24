@@ -46,6 +46,7 @@ The existing `Mascota`/`Cliente` domain entities (scaffolded before Phase 1's sc
 | PAT-03 | Subir/cambiar foto (Storage privado + URL firmada) | Private bucket + `storage.objects` RLS + `createSignedUrl` pattern below |
 | PAT-04 | Buscar/filtrar mascotas por nombre, dueño, especie | Two-step search (own-field `.or()` + resolved owner-id `.in.()`) below — avoids undocumented embedded-filter-`.or()` limitations |
 | PAT-05 | Historial de peso en el tiempo | New `mascota_pesos` table (not a mutable field) — exact SQL below |
+| CLI-05 | Generar código/enlace de vinculación desde la ficha del cliente (D-07, agregado tras discuss-phase) | Two new nullable columns on `clientes` (`perfiles_id`, `codigo_vinculacion`, `codigo_expira_en`) + vet-side generation via the existing vet-only `clientes_update` RLS policy — no new policy needed. See "Vinculación de cuenta" section below. |
 
 </phase_requirements>
 
@@ -501,6 +502,69 @@ with check (
 ```
 
 Both statements are additive (`add column if not exists`, `create table if not exists`) and safe to run against the now-live cloud project even though `clientes`/`mascotas` may already contain real rows from Phase 1 testing — no data migration/backfill needed since both are new, nullable/append-only additions.
+
+## Vinculación de cuenta cliente↔perfiles (CLI-05, added post-research during discuss-phase)
+
+**Problem this solves:** `public.clientes` (vet-managed, no auth required) and `public.perfiles` (authenticated CLIENTE accounts) have zero schema relationship today — intentional per Phase 1's D-06, so a vet can register a walk-in client without them needing an account. But once that same person registers as a CLIENTE, there's no way to connect their account to the `clientes`/`mascotas` rows the vet already created. The user's decision (D-07 in `02-CONTEXT.md`): **the vet initiates the link from the client's ficha** — not automatic phone/email matching, not a client-initiated claim with no vet involvement.
+
+**Scope split (per D-07, deliberately narrow this phase):**
+- **Phase 2 (this phase, CLI-05):** add the schema columns below, and let the vet *generate and display* a link code from the client ficha. Generating/updating these columns is a normal `UPDATE clientes ... WHERE id = :id`, already covered by the existing vet-only `clientes_update` RLS policy from Phase 1 — **no new RLS policy needed for this half.**
+- **Phase 9 (DIR-06, out of scope here):** the CLIENTE-side "enter this code to claim your pets" UI, plus the claiming RPC described below (not needed until that phase actually calls it — build it there, informed by whatever the Fase 9 UI-SPEC decides about the claim flow's exact steps).
+
+### Exact schema addition
+
+```sql
+alter table public.clientes
+  add column if not exists perfiles_id uuid references auth.users(id) on delete set null,
+  add column if not exists codigo_vinculacion text,
+  add column if not exists codigo_expira_en timestamptz;
+
+-- One active link code per cliente only makes sense unclaimed; once claimed, clear it
+-- (the claiming RPC in Phase 9 sets codigo_vinculacion/codigo_expira_en back to null
+-- in the same statement that sets perfiles_id, single-use by construction).
+create index if not exists clientes_perfiles_id_idx on public.clientes(perfiles_id) where perfiles_id is not null;
+```
+
+No `unique` constraint on `perfiles_id` alone: the same real person could plausibly be linked as a client of more than one clinic (different vets over time) — each `clientes` row is already scoped to its own `clinica_id`, so the natural uniqueness boundary is per-clinic, not global. Skip a `(clinica_id, perfiles_id)` unique constraint too unless a real duplicate-link bug shows up — enforcing it now is speculative given no client-facing consumer exists yet.
+
+### Code format recommendation (Claude's Discretion per CONTEXT.md, resolved here)
+
+A **6-digit numeric code** (`lpad(floor(random() * 1000000)::text, 6, '0')`), not a UUID or deep-link: the vet reads it aloud or shows the screen to the client in person — a 6-digit code is fast to say/type, consistent with D-01's zero-friction principle, and doesn't require any deep-link/URL-scheme infrastructure this project doesn't have yet (see Phase 1 RESEARCH's note that email-confirmation deep links aren't wired up either). Set `codigo_expira_en = now() + interval '24 hours'` on generation — short-lived enough to limit exposure if overheard, long enough that the client doesn't have to claim it in the same visit.
+
+### Claiming mechanism (design note for Phase 9, not built this phase)
+
+`clientes` RLS is vet-only (Phase 1) — a CLIENTE-role user has no direct `UPDATE` access to set their own `perfiles_id`. The claim step therefore needs a `security definer` Postgres function, mirroring the existing `crear_perfil_nuevo_usuario` trigger precedent:
+
+```sql
+create or replace function public.reclamar_codigo_cliente(p_codigo text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_cliente_id uuid;
+begin
+  update public.clientes
+  set perfiles_id = auth.uid(), codigo_vinculacion = null, codigo_expira_en = null
+  where codigo_vinculacion = p_codigo
+    and codigo_expira_en > now()
+    and perfiles_id is null
+  returning id into v_cliente_id;
+
+  if v_cliente_id is null then
+    raise exception 'Código inválido o expirado';
+  end if;
+
+  return v_cliente_id;
+end;
+$$;
+
+revoke all on function public.reclamar_codigo_cliente(text) from public;
+grant execute on function public.reclamar_codigo_cliente(text) to authenticated;
+```
+
+`security definer` is safe here specifically because the function's own `where` clause is the entire authorization check (valid, unclaimed, unexpired code) — it never lets the caller specify which `cliente_id` to modify directly, only a code they must already possess. Flag this function for a manual RLS-style smoke test in Phase 9 (expired code, already-claimed code, wrong code all rejected) before trusting it, same discipline as Phase 1's RLS smoke test.
 
 ## Supabase Storage: private bucket + RLS + signed URL (PAT-03)
 
