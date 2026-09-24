@@ -32,6 +32,8 @@ created: 2026-09-24
 - **Before `/gsd:verify-work`:** Full suite must be green, and the manual RLS smoke test script must be fully run and recorded (pass/fail per table × direction)
 - **Max feedback latency:** ~20 seconds
 
+**Exception:** `01-04-PLAN.md` Task 1's automated verify runs `flutter build apk --debug` (first build can take several minutes) to confirm the app still compiles after removing the Firebase Gradle plugin. This intentionally exceeds the ~20s latency budget — it is a one-off build-integrity check for a Gradle/dependency change, not a per-task TDD-style sampling loop, and is not repeated on subsequent task commits within the plan.
+
 ---
 
 ## Per-Task Verification Map

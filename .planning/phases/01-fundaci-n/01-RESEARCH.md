@@ -703,17 +703,19 @@ This phase is not a rename/refactor/migration of existing production data — th
 | A2 | The `WITH CHECK` subquery-comparison pattern for `perfiles_update` reliably blocks `rol`/`clinica_id` changes under Postgres's command-visibility snapshot rules | Common Pitfalls / Pitfall 1 | Medium — if snapshot semantics behave unexpectedly (e.g., under a specific Postgres/Supabase version), the fix could be a no-op; **this is exactly why the manual smoke test's negative case for `perfiles` is mandatory before considering FOUND-05 done**, not optional |
 | A3 | No dark-mode terracota palette values exist beyond the light-mode extraction in DESIGN-REFERENCE.md | Design Tokens Update | Low — worst case, dark mode looks inconsistent until a UI phase confirms values; does not block FOUND criteria (none require dark mode) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should `ClientHomeScreen` get a real route in this phase's router, or stay unrouted until a later phase?**
+1. **RESOLVED — Should `ClientHomeScreen` get a real route in this phase's router, or stay unrouted until a later phase?**
    - What we know: It exists today, is reachable via `AuthGate` for `rol == 'CLIENTE'` accounts, and self-registration for `CLIENTE` role remains open (D-05 only addresses `VETERINARIO`).
    - What's unclear: CONTEXT.md's walking skeleton scope (D-01/D-02) only discusses the vet-facing `Inicio` screen; it's silent on whether a `CLIENTE` who logs in during this phase should see anything at all.
    - Recommendation: Add a minimal `/cliente` route (reusing the existing `ClientHomeScreen` content, relocated per the Dead Code table) gated by the same `redirect:`, so a `CLIENTE` login doesn't dead-end or crash — this is a small addition, not new feature scope, and keeps the existing self-registration path functional per D-05.
+   - **Resolution:** Implemented in `01-05-PLAN.md` Task 2 (`/cliente` route added).
 
-2. **Does `perfiles_insert`'s existing `rol = 'CLIENTE' and clinica_id is null` restriction need any change given the new `clientes` table?**
+2. **RESOLVED — Does `perfiles_insert`'s existing `rol = 'CLIENTE' and clinica_id is null` restriction need any change given the new `clientes` table?**
    - What we know: `perfiles_insert` already prevents a self-registering user from setting `rol = 'VETERINARIO'` or a non-null `clinica_id` directly (only the trigger, running as `security definer`, can do that).
    - What's unclear: Nothing found requiring a change — the new `clientes` table is a parallel, vet-managed structure and doesn't interact with `perfiles_insert` at all.
    - Recommendation: No change needed; confirmed via schema read, not a gap.
+   - **Resolution:** No change made — confirmed not a gap.
 
 ## Validation Architecture
 
