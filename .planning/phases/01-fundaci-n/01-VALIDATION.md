@@ -2,7 +2,7 @@
 phase: 1
 slug: fundaci-n
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-24
 ---
@@ -40,12 +40,20 @@ Plan/task IDs are assigned by the planner — this table maps each phase require
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | FOUND-01 | — | Schema applies cleanly, signup trigger still works | manual-only | n/a — SQL Editor + real signup smoke check | n/a | ⬜ pending |
-| TBD | TBD | TBD | FOUND-02 | — | App boots to `/login` when unauthenticated, routes to `/inicio` after sign-in | widget | `flutter test test/widget_test.dart` (rewritten for `MaterialApp.router` + `ProviderScope`) | ❌ Wave 0 (update existing file) | ⬜ pending |
-| TBD | TBD | TBD | FOUND-03 | — | No `setState` on data screens; `authProfileProvider` drives `InicioScreen` | widget | `flutter test` (new `test/inicio_screen_test.dart`, fake repo override) | ❌ Wave 0 (new file) | ⬜ pending |
-| TBD | TBD | TBD | FOUND-04 | — | `clientes` table exists, decoupled from `perfiles` | manual-only | n/a — SQL Editor insert as vet, confirm no `auth.users` FK requirement | n/a | ⬜ pending |
-| TBD | TBD | TBD | FOUND-05 | T-01-RLS | RLS blocks cross-tenant access + self-escalation, tested as `authenticated` (not just service-role) | manual-only | n/a — RLS smoke test script (see 01-RESEARCH.md) | n/a | ⬜ pending |
-| TBD | TBD | TBD | FOUND-06 | — | No Firebase dead code remains | static check | `grep -ril "firebase\|Firestore" lib/ --include=*.dart` (zero matches) + `flutter analyze` | n/a | ⬜ pending |
+| 01-01-T1 | 01-01 | 1 | FOUND-04, FOUND-05 | T-01-RLS, T-01-04 | clientes table, composite FK, vet-only mascotas RLS, perfiles_update pins rol/clinica_id | static | grep gate in plan (prints SCHEMA_OK) | n/a | ⬜ pending |
+| 01-01-T2 | 01-01 | 1 | FOUND-05 | T-01-RLS, T-01-06 | Smoke test covers 27 checks (4 tables x positive/negative + escalation); anon probe | static + CLI | bash -n + grep gate (SMOKE_FILES_OK) | created by task | ⬜ pending |
+| 01-01-T3 | 01-01 | 1 | FOUND-01, FOUND-04, FOUND-05 | T-01-RLS | Schema live in cloud; RLS SMOKE: PASS as authenticated role | manual (SQL Editor, D-03) + CLI | bash supabase/tests/verify_live_schema.sh (LIVE_SCHEMA_OK) | ✅ after T2 | ⬜ pending |
+| 01-02-T1 | 01-02 | 1 | FOUND-02, FOUND-03 | — | Wave 0: failing router + Inicio tests with fake notifier | widget (RED) | flutter test test/widget_test.dart test/inicio_screen_test.dart (must fail) | ❌ Wave 0 (created here) | ⬜ pending |
+| 01-02-T2 | 01-02 | 1 | FOUND-03 | T-01-13, T-01-14 | authProfileProvider drives Inicio; no setState | widget | flutter test test/inicio_screen_test.dart | ✅ after T1 | ⬜ pending |
+| 01-02-T3 | 01-02 | 1 | FOUND-02 | T-01-11, T-01-12 | Boot -> /login; vet -> /inicio; 5 tabs; sign-out; cliente -> /cliente | widget | flutter analyze && flutter test | ✅ after T1 | ⬜ pending |
+| 01-03-T1 | 01-03 | 1 | FOUND-02 (D-01) | — | Terracota/crema palette, terracota active nav | unit | flutter test test/app_theme_test.dart | created by task | ⬜ pending |
+| 01-03-T2 | 01-03 | 1 | FOUND-02 (D-01) | — | Caprasimo + Figtree scale | unit | flutter test test/app_theme_test.dart | ✅ | ⬜ pending |
+| 01-04-T1 | 01-04 | 1 | FOUND-06 | T-01-19, T-01-20 | Firebase config + Gradle plugin removed, APK builds | static + build | grep gate && flutter build apk --debug | n/a | ⬜ pending |
+| 01-04-T2 | 01-04 | 1 | FOUND-06 | T-01-21 | Dead auth domain removed | static | grep -rniE "firebase|firestore" lib/features/auth (0) && flutter analyze && flutter test | n/a | ⬜ pending |
+| 01-05-T1 | 01-05 | 2 | FOUND-02, FOUND-03 | T-01-22 | Auth screens via providers + context.push; brand block | widget | flutter test test/widget_test.dart (green after T2) | ✅ | ⬜ pending |
+| 01-05-T2 | 01-05 | 2 | FOUND-06, FOUND-02 | T-01-24, T-01-25 | AuthGate + mock home deleted; no Navigator.push | static + widget | grep gate && flutter analyze && flutter test | ✅ | ⬜ pending |
+| 01-06-T1 | 01-06 | 3 | FOUND-01 | T-01-27, T-01-28 | Full gate incl. live probe | CLI | flutter analyze && flutter test && bash supabase/tests/verify_live_schema.sh | ✅ | ⬜ pending |
+| 01-06-T2 | 01-06 | 3 | FOUND-01, FOUND-02, FOUND-03 | — | Real device: signup write, Inicio real read, tabs, restore, sign-out | manual (human-verify) | bash supabase/tests/verify_live_schema.sh | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -53,8 +61,8 @@ Plan/task IDs are assigned by the planner — this table maps each phase require
 
 ## Wave 0 Requirements
 
-- [ ] `test/widget_test.dart` — currently asserts on `AuthGate`/`LoginScreen` copy directly; must be rewritten for the `MaterialApp.router` + `ProviderScope` boot path (covers FOUND-02)
-- [ ] `test/inicio_screen_test.dart` — new file, covers FOUND-03's "no direct setState" requirement with an assertion against a fake `authProfileProvider` override (no live Supabase required)
+- [ ] `test/widget_test.dart` (Plan 01-02 Task 1) — currently asserts on `AuthGate`/`LoginScreen` copy directly; must be rewritten for the `MaterialApp.router` + `ProviderScope` boot path (covers FOUND-02)
+- [ ] `test/inicio_screen_test.dart` (Plan 01-02 Task 1) — new file, covers FOUND-03's "no direct setState" requirement with an assertion against a fake `authProfileProvider` override (no live Supabase required)
 - [ ] No framework install needed — `flutter_test` is already present
 
 ---

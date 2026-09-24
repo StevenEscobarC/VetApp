@@ -34,7 +34,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. El veterinario puede crear un cliente en una tabla `clientes` independiente de `perfiles`, sin que el cliente necesite autenticarse
   4. Las políticas RLS de `clinicas`, `perfiles` y `mascotas` bloquean el acceso entre clínicas cuando se prueban como rol `authenticated` (no solo service-role), y `perfiles` no permite auto-escalación de privilegios
   5. No queda código muerto de la migración Firebase→Supabase (`firebase.json`, `google-services.json`, dominio de auth duplicado, `LoginScreen` duplicado)
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Harden schema.sql (clientes, mascotas->clientes, perfiles_update fix), RLS smoke test, apply to cloud project (BLOCKING human step)
+- [ ] 01-02-PLAN.md — Walking skeleton core: Riverpod auth AsyncNotifier, go_router 5-tab shell, real Inicio (test-first)
+- [ ] 01-03-PLAN.md — Terracota/crema palette + Caprasimo/Figtree typography tokens
+- [ ] 01-04-PLAN.md — Remove Firebase config/Gradle plugin and dead auth domain layer
+- [ ] 01-05-PLAN.md — Auth screens on Riverpod/go_router with brand block; delete AuthGate + mock home
+- [ ] 01-06-PLAN.md — README + full gate + human-verified skeleton run on a real device
 **UI hint**: yes
 
 ### Phase 2: Clientes y Pacientes
@@ -138,7 +146,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Fundación | 0/TBD | Not started | - |
+| 1. Fundación | 0/6 | Planned | - |
 | 2. Clientes y Pacientes | 0/TBD | Not started | - |
 | 3. Historia Clínica | 0/TBD | Not started | - |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
