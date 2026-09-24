@@ -13,7 +13,7 @@ VetApp pasa de ser una app Flutter con UI mockeada a una herramienta real de ges
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Fundación** - Proyecto Supabase real, RLS probado y Riverpod/go_router realmente conectados
+- [x] **Phase 1: Fundación** - Proyecto Supabase real, RLS probado y Riverpod/go_router realmente conectados (completed 2026-09-24)
 - [ ] **Phase 2: Clientes y Pacientes** - CRUD real de dueños y mascotas con foto y búsqueda
 - [ ] **Phase 3: Historia Clínica** - Registro estructurado, línea de tiempo y exportación a PDF por paciente
 - [ ] **Phase 4: Agenda y Citas** - Calendario de citas con recordatorios locales y por WhatsApp
@@ -54,7 +54,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-06-PLAN.md — README + full gate + human-verified skeleton run on a real device
+- [x] 01-06-PLAN.md — README + full gate + human-verified skeleton run on a real device
 
 **UI hint**: yes
 
@@ -180,7 +180,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Fundación | 5/6 | In Progress|  |
+| 1. Fundación | 6/6 | Complete   | 2026-09-24 |
 | 2. Clientes y Pacientes | 0/TBD | Not started | - |
 | 3. Historia Clínica | 0/TBD | Not started | - |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
