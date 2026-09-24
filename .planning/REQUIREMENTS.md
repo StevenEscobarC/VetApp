@@ -9,12 +9,12 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 
 ### Fundación (FOUND)
 
-- [ ] **FOUND-01**: Existe un proyecto Supabase real en la nube, enlazado al repo, con `schema.sql` aplicado
+- [x] **FOUND-01**: Existe un proyecto Supabase real en la nube, enlazado al repo, con `schema.sql` aplicado
 - [x] **FOUND-02**: La navegación de la app usa `go_router` con las 5 secciones del bottom nav (Inicio, Pacientes, Agenda, Clientes, Más)
 - [x] **FOUND-03**: El estado de la app se maneja con Riverpod (`Notifier`/`AsyncNotifier`), sin `setState` directo en pantallas de datos
-- [ ] **FOUND-04**: Existe una tabla `clientes` independiente de `perfiles`, para que el veterinario pueda registrar clientes sin que estos necesiten autenticarse
-- [ ] **FOUND-05**: Las políticas RLS de `clinicas`, `perfiles` y `mascotas` están probadas contra el rol `authenticated` (no solo service-role), incluyendo el fix de auto-escalación de privilegios en `perfiles`
-- [ ] **FOUND-06**: Se elimina el código muerto de la migración Firebase→Supabase (dominio de auth duplicado, `firebase.json`, `google-services.json`, `LoginScreen` duplicado)
+- [x] **FOUND-04**: Existe una tabla `clientes` independiente de `perfiles`, para que el veterinario pueda registrar clientes sin que estos necesiten autenticarse
+- [x] **FOUND-05**: Las políticas RLS de `clinicas`, `perfiles` y `mascotas` están probadas contra el rol `authenticated` (no solo service-role), incluyendo el fix de auto-escalación de privilegios en `perfiles`
+- [x] **FOUND-06**: Se elimina el código muerto de la migración Firebase→Supabase (dominio de auth duplicado, `firebase.json`, `google-services.json`, `LoginScreen` duplicado)
 
 ### Clientes (CLI)
 
@@ -111,7 +111,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01..06 | Phase 1 — Fundación | Pending |
+| FOUND-01..06 | Phase 1 — Fundación | Complete |
 | CLI-01..04 | Phase 2 — Clientes y Pacientes | Pending |
 | PAT-01..05 | Phase 2 — Clientes y Pacientes | Pending |
 | HIST-01..04 | Phase 3 — Historia Clínica | Pending |
