@@ -21,6 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo
 - [ ] **Phase 7: Facturación** - Cotizaciones/facturas en PDF con descuento automático de inventario
 - [ ] **Phase 8: Dashboard y Diseño Visual** - Resumen operativo real y diseño terracota/crema aplicado a toda la app
+- [ ] **Phase 9: Directorio de Veterinarias** - El cliente explora, busca y califica las clínicas de la plataforma, con reseñas públicas
 
 ## Phase Details
 
@@ -176,7 +177,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -188,3 +189,21 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
 | 8. Dashboard y Diseño Visual | 0/TBD | Not started | - |
+| 9. Directorio de Veterinarias | 0/TBD | Not started | - |
+
+### Phase 9: Directorio de Veterinarias
+
+**Goal:** El cliente ya no está atado a una sola clínica: puede explorar, buscar y calificar las veterinarias de la plataforma, con reseñas públicas y un punto de entrada a agendar cita.
+**Mode:** mvp
+**Depends on:** Phase 2 (registro de cliente ya desacoplado de clínica), Phase 4 (Agenda — el botón "Agendar cita" enlaza ahí)
+**Requirements**: DIR-01, DIR-02, DIR-03, DIR-04, DIR-05, REV-01, REV-02, REV-03, REV-04, REV-05
+**Success Criteria** (what must be TRUE):
+  1. El cliente puede ver el listado de clínicas activas (nombre, ciudad, dirección, foto/logo si existe, calificación promedio) sin tener que pertenecer a ninguna
+  2. El cliente puede buscar veterinarias por nombre o ciudad con resultados instantáneos, y filtrar por ciudad
+  3. El cliente puede ver el detalle de una veterinaria (contacto, horario si existe, calificación promedio, reseñas recientes) y desde ahí iniciar "Agendar cita"
+  4. El cliente puede dejar una reseña (estrellas + comentario opcional) de una clínica; si ya la calificó, volver a calificar edita su reseña en vez de duplicarla
+  5. Cualquier persona autenticada puede leer las reseñas públicas de una clínica, pero solo el autor puede editar/borrar la suya, y la calificación promedio mostrada coincide con el promedio real
+**Plans**: TBD
+**UI hint**: yes
+
+**Nota de alcance:** agregada el 2026-09-24 a partir de una propuesta del usuario. Deliberadamente al final del roadmap porque depende de Agenda (Fase 4) para el flujo "Agendar cita", y porque la regla de negocio "solo puede reseñar quien tuvo una cita real" (aún no exigible sin Agenda) debe revisarse una vez ese módulo exista — por ahora las reseñas quedan abiertas a cualquier cliente registrado, con esa restricción futura documentada en el research/plan de esta fase.

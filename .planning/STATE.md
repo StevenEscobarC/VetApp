@@ -7,7 +7,7 @@ stopped_at: Phase 2 context gathered
 last_updated: "2026-09-24T20:53:08.009Z"
 last_activity: 2026-09-24
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 1
   total_plans: 6
   completed_plans: 6
@@ -73,6 +73,10 @@ None yet.
 - [Phase 1]: RLS del proyecto no tiene pruebas contra el rol `authenticated` (solo service-role) y `perfiles` permite auto-escalación de privilegios — debe corregirse antes de que cualquier otra fase confíe en el límite multi-tenant.
 - [Phase 7]: Tratamiento de IVA para servicios veterinarios en Colombia es de confianza MEDIA (una sola fuente secundaria) — verificar con un contador antes de fijar la lógica de impuestos en la factura.
 - [Phase 1]: Gate automático `check.decision-coverage-plan` reportó 0/6 decisiones D-01..D-06 cubiertas al planear la Fase 1 — verificado como falso positivo (probablemente busca un campo YAML estructurado en vez del texto de las secciones "Must-Haves"): las 6 decisiones están citadas explícitamente en los planes (ej. `01-02-PLAN.md:249` "D-01/D-02: Inicio shows only the real nombre + clinic name..."). El usuario aprobó continuar sin replanear. Re-verificar en `/gsd:verify-work` si el gate se corrige.
+
+### Roadmap Evolution
+
+- Phase 9 added (2026-09-24): Directorio de Veterinarias — el cliente explora, busca y califica las clínicas de la plataforma, con reseñas públicas. Origen: propuesta del usuario durante la discusión de la Fase 2, colocada al final por su dependencia de Agenda (Fase 4). Requisitos DIR-01..05, REV-01..05 agregados a REQUIREMENTS.md.
 
 ## Deferred Items
 

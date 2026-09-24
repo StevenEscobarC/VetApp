@@ -75,6 +75,26 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 - [ ] **DASH-03**: El veterinario tiene accesos rápidos para crear paciente, cita o factura desde el dashboard
 - [ ] **DASH-04**: Todas las pantallas de la app usan el diseño visual definitivo (paleta terracota/crema, tipografía Caprasimo + Figtree) del mockup aprobado
 
+### Directorio de veterinarias (DIR)
+
+<!-- Agregado 2026-09-24 — el cliente deja de estar atado a una sola clínica y puede explorar el directorio de veterinarias de la plataforma. Programado como Fase 9 (al final), después del núcleo de gestión de clínica, porque "Agendar cita" depende de Agenda (Fase 4) y la futura restricción de reseñas a citas reales también. -->
+
+- [ ] **DIR-01**: El cliente puede ver un listado de las clínicas activas en la plataforma (nombre, ciudad, dirección, foto/logo si existe, calificación promedio)
+- [ ] **DIR-02**: El cliente puede buscar veterinarias por nombre o ciudad, con resultados instantáneos mientras escribe
+- [ ] **DIR-03**: El cliente puede filtrar el listado de veterinarias por ciudad
+- [ ] **DIR-04**: El cliente puede ver el detalle de una veterinaria (contacto, horario si existe, calificación promedio, reseñas recientes)
+- [ ] **DIR-05**: Desde el detalle de una veterinaria, el cliente puede iniciar el flujo de "Agendar cita"
+
+### Reseñas de veterinarias (REV)
+
+<!-- Agregado 2026-09-24 -->
+
+- [ ] **REV-01**: El cliente puede dejar una reseña de una clínica (calificación de 1 a 5 estrellas + comentario opcional)
+- [ ] **REV-02**: Si el cliente ya calificó una clínica, volver a calificarla edita su reseña existente en vez de crear una duplicada (una reseña por cliente por clínica)
+- [ ] **REV-03**: Cualquier persona autenticada puede leer las reseñas públicas de cualquier clínica
+- [ ] **REV-04**: Un cliente no puede editar ni borrar la reseña de otro cliente
+- [ ] **REV-05**: La calificación promedio mostrada en el listado y el detalle coincide con el promedio real de las reseñas de esa clínica
+
 ## v2 Requirements
 
 Reconocidos pero diferidos — no forman parte del roadmap actual.
@@ -89,7 +109,7 @@ Reconocidos pero diferidos — no forman parte del roadmap actual.
 
 ### Escalamiento
 
-- **SCALE-01**: App complementaria para el dueño de la mascota (ver historial, citas, carné)
+- **SCALE-01**: App complementaria para el dueño de la mascota (ver historial, citas, carné) — el subconjunto de directorio + reseñas (DIR-*, REV-*) ya se adelantó a la Fase 9; lo que queda diferido aquí es ver historial clínico/carné propio y gestionar citas desde el lado del dueño
 - **SCALE-02**: Multi-usuario / multi-veterinario por clínica
 - **SCALE-03**: Telemedicina veterinaria (videollamada de seguimiento)
 
@@ -100,7 +120,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | Feature | Reason |
 |---------|--------|
 | Agenda multi-veterinario/multi-recurso | Contradice la premisa de veterinario independiente sin recepcionista; sobre-ingeniería para esta etapa |
-| App para dueños de mascotas (login propio) | Duplica superficie de producto (segunda app, segundo auth) antes de validar el producto core del veterinario |
+| App para dueños de mascotas (login propio) | Duplica superficie de producto (segunda app, segundo auth) antes de validar el producto core del veterinario. Distinto del directorio+reseñas (DIR-*/REV-*, Fase 9): eso reutiliza el rol CLIENTE ya existente en la misma app, no crea una app ni un login separado |
 | Telemedicina / videollamada | Conflicto directo con el perfil rural/offline objetivo; infraestructura de video no es prioridad |
 | DIAN construido in-house (sin proveedor autorizado) | Requiere habilitación legal/técnica compleja; se integra vía proveedor autorizado, nunca se construye desde cero |
 | Dosificación por IA sin tabla determinística | Riesgo de seguridad animal y responsabilidad legal — solo con tabla de referencia validada, nunca cálculo libre de LLM |
@@ -120,12 +140,14 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | INV-01..03 | Phase 6 — Inventario | Pending |
 | BILL-01..04 | Phase 7 — Facturación | Pending |
 | DASH-01..04 | Phase 8 — Dashboard y Diseño Visual | Pending |
+| DIR-01..05 | Phase 9 — Directorio de Veterinarias | Pending |
+| REV-01..05 | Phase 9 — Directorio de Veterinarias | Pending |
 
 **Coverage:**
-- v1 requirements: 41 total (corregido; el conteo previo de 37 estaba desactualizado)
-- Mapped to phases: 41/41 ✓
+- v1 requirements: 51 total (41 originales + 10 de DIR/REV agregadas 2026-09-24)
+- Mapped to phases: 51/51 ✓
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-09-24 after roadmap creation (`/gsd:roadmapper`)*
+*Last updated: 2026-09-24 after adding Phase 9 (Directorio de Veterinarias)*
