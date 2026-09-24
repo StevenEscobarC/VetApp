@@ -1,7 +1,7 @@
 ---
 phase: 2
 slug: clientes-y-pacientes
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-09-24
@@ -89,6 +89,7 @@ Reused verbatim from Phase 1 — same 4 roles, same 2 weights (400, 600). No new
 - `ClienteDetailScreen` / `MascotaDetailScreen`: the subject's name (Heading, Caprasimo) directly under the top bar is the primary visual anchor — everything else (fields, mascotas list, weight history) is secondary to it.
 - `NuevoClienteMascotaScreen`: no single focal point by design — D-02 requires the flow to read as one continuous sequence, so both section headings ("Datos del dueño" / "Datos de la mascota") carry equal visual weight; the single "Guardar" button at the bottom is the only accent-colored element competing for attention.
 - Vinculación dialog: the 6-digit code is the focal point — rendered larger than standard Label size is ever used elsewhere (see Copywriting Contract for the exact treatment).
+- `ClientesListScreen` / `PacientesListScreen`: the search field is the primary visual anchor (top of screen, full-width, always visible) — until the vet types, the first result card in the list is the secondary anchor.
 
 ---
 
@@ -100,7 +101,7 @@ Reused verbatim from Phase 1 — same 4 roles, same 2 weights (400, 600). No new
 |------|-------|-------|
 | Dominant (60%) | `#F5EAD8` (`background`) | Screen background on all six screens listed in Scope |
 | Secondary (30%) | `#EEE7DB` (`surface`) + `#DCD3C4` (`border`) | `AppCard` backgrounds (cliente rows, mascota rows, weight-history entries), `AppTextField` fills (`#EBDDC5` `surfaceMuted`), inactive filter chips (outline, `surface` fill), `AppTopBar` |
-| Accent (10%) | `#C67139` (`primary`) | Reserved for, and **only** for: primary CTA buttons ("Guardar cliente y mascota", "Guardar cambios", "Nueva mascota", "Generar código de vinculación"), the active/selected filter chip fill (Especie selector in the create form, Pacientes-list species filter), the camera capture button icon/ring on the photo picker, focus/ring state on the currently-edited input border, the active bottom-nav icon+label (existing, unchanged) |
+| Accent (10%) | `#C67139` (`primary`) | Reserved for, and **only** for: primary CTA buttons ("Guardar cliente y mascota", "Guardar cambios", "Nueva mascota" on `MascotaFormScreen`'s create-mode submit button only — **not** the outline-styled navigation button of the same label on `ClienteDetailScreen`, see Screen-by-Screen Contract), the active/selected filter chip fill (Especie selector in the create form, Pacientes-list species filter), the camera capture button icon/ring on the photo picker, focus/ring state on the currently-edited input border, the active bottom-nav icon+label (existing, unchanged). Code generation for vinculación happens automatically on dialog open — there is no separate "Generar código" button, so it holds no accent slot. |
 | Destructive | `#DC2626` | Not used this phase — no delete/remove flow exists in CLI-01..05/PAT-01..05 (photo *replace* is not delete; token kept as the global default for later phases, same note as Phase 1) |
 
 Accent is never applied to: card backgrounds, body text, inactive filter chips, disabled fields, or more than one primary CTA per screen. Each screen in this phase has exactly one accent-colored primary action.
@@ -122,7 +123,7 @@ Phase 1 shipped no chip or photo-picker widget. Both are needed now and must be 
 
 ### `AppPhotoPicker`
 - **Visual:** a circular avatar (96px on `MascotaDetailScreen`, 56px on list cards) showing the pet's photo via `CachedNetworkImage` (with `cacheKey` = the stable `foto_path`, per 02-RESEARCH.md Pitfall 1 — **non-negotiable**, verify at implementation time that `cacheKey` is passed) once a photo exists; when no photo exists, shows a neutral placeholder (paw-print icon per the brand mark, on `surfaceMuted` background — never a broken-image icon or empty gray box).
-- **Camera-first tap (D-05):** tapping the avatar (or its overlay camera badge, `primary`-colored, positioned bottom-right of the circle) opens the device camera **directly** — no intermediate action-sheet/menu. A separate, visually secondary text button below or beside the avatar, "Elegir de galería", offers the gallery as the explicit alternate path. This is the concrete implementation of D-05: one tap → camera, zero menus.
+- **Camera-first tap (D-05):** tapping the avatar (or its overlay camera badge, `primary`-colored, positioned bottom-right of the circle, labeled with `Semantics(label: "Tomar foto")`/tooltip since it is icon-only) opens the device camera **directly** — no intermediate action-sheet/menu. A separate, visually secondary text button below or beside the avatar, "Elegir de galería", offers the gallery as the explicit alternate path. This is the concrete implementation of D-05: one tap → camera, zero menus.
 - **States:** default (no photo, placeholder), uploading (avatar dims + centered small spinner, no layout shift), populated (photo + camera badge still visible to signal "tap to change"), error (photo failed to load — falls back to placeholder, does not show a broken-image icon; a failed *upload* surfaces the Error Copy below via a snackbar, not inline on the avatar).
 
 ---
@@ -212,14 +213,14 @@ Not applicable. Flutter/Dart mobile app — no shadcn/npm component registry eco
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS (2 clarifications applied: list-screen focal points, camera badge a11y label)
+- [x] Dimension 3 Color: PASS (2 clarifications applied: "Nueva mascota" disambiguated by screen, phantom "Generar código" CTA removed)
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS (not applicable — no registry ecosystem)
 
-**Approval:** pending
+**Approval:** approved (2026-09-24, gsd-ui-checker + in-place fixes, no re-check cycle needed)
 
 ---
 
