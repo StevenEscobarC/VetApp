@@ -74,7 +74,36 @@ Plans:
   5. El veterinario puede subir/cambiar la foto de una mascota (Storage privado + URL firmada), ver el historial de peso en el tiempo, y buscar/filtrar mascotas por nombre, dueño o especie
   6. El veterinario puede generar un código/enlace de vinculación desde la ficha del cliente para que el dueño reclame acceso a sus mascotas cuando cree su cuenta (habilita DIR-06 en Fase 9)
 
-**Plans**: TBD
+**Plans**: 10 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Schema delta (foto_path, mascota_pesos, link-code columns, 3 security-invoker RPCs, private mascota-fotos bucket + Storage RLS), 53-check RLS smoke test, apply to cloud project (BLOCKING human step)
+- [ ] 02-02-PLAN.md — Photo packages legitimacy gate (BLOCKING human step) + install (cached_network_image ^3.4.1) + Android/iOS camera permissions
+- [ ] 02-03-PLAN.md — Slice: Clientes list with instant debounced search (CLI-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-04-PLAN.md — Slice: combined alta cliente+mascota in one screen via atomic RPC (CLI-01, PAT-01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02-05-PLAN.md — Slice: camera-first pet photo in the alta, private Storage + cacheKey rule (PAT-03)
+- [ ] 02-06-PLAN.md — Slice: Pacientes list with two-step search by nombre/dueño/especie + species chips (PAT-04)
+- [ ] 02-07-PLAN.md — Slice: client ficha — edit, their pets, 'Vincular cuenta' 6-digit code (CLI-02, CLI-04, CLI-05)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 02-08-PLAN.md — Slice: pet ficha — data, append-only weight history, photo replacement, list thumbnails/navigation (PAT-02, PAT-03, PAT-05)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 02-09-PLAN.md — Slice: 'Nueva mascota' for existing owner (D-03) + pet edit form (PAT-01, PAT-02)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 02-10-PLAN.md — README + full gate + validation sign-off + human-verified device UAT against the live backend
 **UI hint**: yes
 
 ### Phase 3: Historia Clínica
@@ -183,7 +212,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
-| 2. Clientes y Pacientes | 0/TBD | Not started | - |
+| 2. Clientes y Pacientes | 0/10 | Planned | - |
 | 3. Historia Clínica | 0/TBD | Not started | - |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |

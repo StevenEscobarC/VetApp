@@ -1,8 +1,8 @@
 ---
 phase: 2
 slug: clientes-y-pacientes
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-24
 ---
@@ -27,7 +27,7 @@ created: 2026-09-24
 
 ## Sampling Rate
 
-- **After every task commit:** Run `flutter analyze && flutter test test/clientes_providers_test.dart test/mascotas_providers_test.dart`
+- **After every task commit:** Run `flutter analyze` + the task's own `<automated>` command (each plan names its slice's test files; `mascotas_providers_test.dart` only exists from Plan 06 on)
 - **After every plan wave:** Run `flutter test` (full suite)
 - **Before `/gsd:verify-work`:** Full suite must be green, and the extended RLS manual smoke test (clientes/mascotas/mascota_pesos/storage.objects, positive + negative) must be run and recorded
 - **Max feedback latency:** ~30 seconds
@@ -40,16 +40,20 @@ Plan/task IDs are assigned by the planner — this table maps each phase require
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | CLI-01 | — | Create cliente with valid data succeeds; empty nombre/telefono blocked client-side | unit/widget (fake repository) | `flutter test test/clientes_providers_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | CLI-02, CLI-04 | — | Cliente detail: view/edit, lists only that cliente's mascotas | widget (fake repository) | `flutter test test/cliente_detail_screen_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | CLI-03 | — | Debounced search calls repository once after the debounce window, not once per keystroke | unit (fakeAsync) | `flutter test test/clientes_providers_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | CLI-05 | T-02-VINC | Generating a link code sets `codigo_vinculacion`/`codigo_expira_en`; only the owning clinic's vet can generate (existing RLS) | unit (fake repository) + manual (RLS) | `flutter test test/clientes_providers_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | PAT-01, PAT-02 | — | Mascota create/edit round-trips through the reconciled entity fields | unit (fake repository) | `flutter test test/mascotas_providers_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | PAT-03 | T-02-STOR | Photo upload returns a stable path; `CachedNetworkImage` uses `cacheKey` = stable path, not the signed URL | widget (asserts widget tree props) | `flutter test test/mascota_detail_screen_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | PAT-04 | — | Search-by-dueño-name resolves owner ids before querying mascotas (two-step, not embedded `.or()`) | unit (fake repository, call-sequence assertion) | `flutter test test/mascotas_providers_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | PAT-05 | — | Weight history renders multiple entries in reverse-chronological order, append-only | widget (fake repository, 2+ entries) | `flutter test test/mascota_detail_screen_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | PAT-03 | T-02-STOR | Cross-tenant Storage object read blocked (Vet A cannot read Vet B's pet photo) | manual (SQL Editor / two-session RLS test) | n/a — extended RLS smoke test | n/a | ⬜ pending |
-| TBD | TBD | TBD | CLI-01..05, PAT-01..05 | — | RLS on `clientes`/`mascotas`/`mascota_pesos` blocks cross-clinic access as `authenticated` role | manual (SQL Editor, extends Phase 1 script) | n/a — extended RLS smoke test | n/a | ⬜ pending |
+| 02-01-T1/T2 | 01 | 1 | CLI-01, CLI-05, PAT-01, PAT-03, PAT-05 | T-02-STOR, T-02-VINC, T-02-RPC, T-02-PESO | Schema delta + smoke test files well-formed (grep gates) | static gate | see 02-01 Task 1/2 `<automated>` (SCHEMA2_OK / SMOKE2_FILES_OK) | ✅ (edits existing files) | ⬜ pending |
+| 02-01-T3 | 01 | 1 | all | T-02-STOR, T-02-VINC | Delta live; anon refused on RPCs | probe + manual | `bash supabase/tests/verify_live_schema.sh` (LIVE_SCHEMA_OK) | ✅ | ⬜ pending |
+| 02-02-T2 | 02 | 1 | PAT-03 | T-02-SC | Pinned packages resolve (cached_network_image 3.x) | static gate | `flutter analyze && flutter test` (DEPS_OK) | ✅ | ⬜ pending |
+| 02-03-T1..T3 | 03 | 1 | CLI-03 | T-02-14, T-02-16 | Debounced search: 1 call 350 ms after last keystroke; `.or()` input sanitized | unit + widget (fake repository) | `flutter test test/clientes_providers_test.dart test/clientes_list_screen_test.dart` | ❌ Wave 0 (created in 02-03-T1) | ⬜ pending |
+| 02-04-T1..T3 | 04 | 2 | CLI-01, PAT-01 | T-02-18, T-02-19 | Combined alta: 4 required fields gate submit; exactly one atomic RPC call; dd/mm/aaaa + comma kg parsing | widget + unit (fake repository) | `flutter test test/nuevo_cliente_mascota_screen_test.dart test/formato_test.dart` | ❌ Wave 0 (created in 02-04-T1) | ⬜ pending |
+| 02-05-T1..T3 | 05 | 3 | PAT-03 | T-02-STOR, T-02-22 | Camera-first tap; upload after create returns stable path stored via actualizarFotoPath; `CachedNetworkImage.cacheKey` = foto_path | widget (asserts widget props, fake datasource) | `flutter test test/app_photo_picker_test.dart test/nuevo_cliente_mascota_screen_test.dart` | ❌ Wave 0 (created in 02-05-T1) | ⬜ pending |
+| 02-06-T1..T3 | 06 | 3 | PAT-04 | T-02-26 | Owner-name search resolves owner ids BEFORE querying mascotas (call-order assertion on `buscarMascotasEnDosPasos`); chips filter client-side without re-query | unit + widget | `flutter test test/mascotas_providers_test.dart test/pacientes_list_screen_test.dart` | ❌ Wave 0 (created in 02-06-T1) | ⬜ pending |
+| 02-07-T1..T3 | 07 | 3 | CLI-02, CLI-04, CLI-05 | T-02-VINC, T-02-29 | Ficha edit persists; lists only that cliente's mascotas; link code sheet shows/copies 6-digit 24 h code, reuses unexpired code | widget (fake repositories, clipboard mock) | `flutter test test/cliente_detail_screen_test.dart` | ❌ Wave 0 (created in 02-07-T1) | ⬜ pending |
+| 02-08-T1..T3 | 08 | 4 | PAT-02, PAT-03, PAT-05 | T-02-PESO, T-02-STOR | Weight history newest-first, append-only (no edit/delete affordance); photo replace uploads + updates path + best-effort delete; cacheKey = foto_path | widget (fake repository + datasource) | `flutter test test/mascota_detail_screen_test.dart test/pacientes_list_screen_test.dart` | ❌ Wave 0 (created in 02-08-T1) | ⬜ pending |
+| 02-09-T1..T3 | 09 | 5 | PAT-01, PAT-02 | T-02-FK, T-02-34 | D-03: new pet for existing owner never re-asks owner data; edit form persists, no peso field in edit | widget (real route trees + fakes) | `flutter test test/mascota_form_screen_test.dart` | ❌ Wave 0 (created in 02-09-T1) | ⬜ pending |
+| 02-10-T1 | 10 | 6 | all | T-02-37 | Full suite + analyzer + live probe green | full suite | `flutter analyze && flutter test` | ✅ | ⬜ pending |
+| 02-01-T3 | 01 | 1 | PAT-03 | T-02-STOR | Cross-tenant Storage object read/write blocked (Vet A cannot touch Vet B's prefix) | manual (SQL Editor smoke D16-D18, E3, F3, F4; fallback UAT step 11) | n/a — extended RLS smoke test | n/a | ⬜ pending |
+| 02-01-T3 | 01 | 1 | CLI-01..05, PAT-01..05 | T-02-RPC, T-02-PESO, T-02-VINC | RLS on `clientes`/`mascotas`/`mascota_pesos` + RPCs blocks cross-clinic access as `authenticated` (53 checks) | manual (SQL Editor, extends Phase 1 script) | n/a — extended RLS smoke test | n/a | ⬜ pending |
+| 02-10-T2 | 10 | 6 | CLI-01..05, PAT-01..05 | — | End-to-end device UAT against live project (camera, Storage, signed URLs, debounce feel) | manual | n/a — UAT checklist in 02-10-PLAN | n/a | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -57,10 +61,13 @@ Plan/task IDs are assigned by the planner — this table maps each phase require
 
 ## Wave 0 Requirements
 
-- [ ] `test/helpers/fake_clientes.dart`, `test/helpers/fake_mascotas.dart` — new fakes mirroring `fake_auth.dart`'s shape
-- [ ] `test/clientes_providers_test.dart`, `test/mascotas_providers_test.dart` — new, cover CLI-01/03/05, PAT-01/02/04
-- [ ] `test/cliente_detail_screen_test.dart`, `test/mascota_detail_screen_test.dart` — new widget tests, cover CLI-02/04, PAT-03/05
-- [ ] No framework install needed — `flutter_test` already present
+Each vertical slice creates its own failing tests as its Task 1 (MVP mode: failing test first), before any production code of that slice.
+
+- [ ] `test/helpers/fake_clientes.dart` (02-03-T1), `test/helpers/fake_mascotas.dart` (02-04-T1) — fakes mirroring `fake_auth.dart`'s shape (+ `test/helpers/router_harness.dart` 02-03-T1, `test/helpers/fake_fotos.dart` 02-05-T1)
+- [ ] `test/clientes_providers_test.dart` (02-03-T1), `test/mascotas_providers_test.dart` (02-06-T1) — cover CLI-03, PAT-04 (+ `clientes_list_screen_test.dart`, `pacientes_list_screen_test.dart`)
+- [ ] `test/cliente_detail_screen_test.dart` (02-07-T1), `test/mascota_detail_screen_test.dart` (02-08-T1) — cover CLI-02/04/05, PAT-02/03/05
+- [ ] Additional slice tests: `test/nuevo_cliente_mascota_screen_test.dart` + `test/formato_test.dart` (02-04-T1, CLI-01/PAT-01), `test/app_photo_picker_test.dart` (02-05-T1, PAT-03), `test/mascota_form_screen_test.dart` (02-09-T1, PAT-01/PAT-02)
+- [ ] No framework install needed — `flutter_test` already present; do NOT import `package:fake_async` (undeclared → `depend_on_referenced_packages`); debounce tests use the `testWidgets` fake clock
 
 ---
 
