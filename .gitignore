@@ -46,3 +46,6 @@ app.*.map.json
 
 # Local Supabase credentials for --dart-define-from-file (never commit real keys)
 dart_define.json
+
+# GSD executor worktrees (temporary, auto-managed)
+.claude/worktrees/
