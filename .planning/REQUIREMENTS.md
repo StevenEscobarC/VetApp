@@ -109,25 +109,23 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 
 ## Traceability
 
-Se completa durante la creación del roadmap (`/gsd:roadmapper`).
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01..06 | — | Pending |
-| CLI-01..04 | — | Pending |
-| PAT-01..05 | — | Pending |
-| HIST-01..04 | — | Pending |
-| AGND-01..06 | — | Pending |
-| VAC-01..05 | — | Pending |
-| INV-01..03 | — | Pending |
-| BILL-01..04 | — | Pending |
-| DASH-01..04 | — | Pending |
+| FOUND-01..06 | Phase 1 — Fundación | Pending |
+| CLI-01..04 | Phase 2 — Clientes y Pacientes | Pending |
+| PAT-01..05 | Phase 2 — Clientes y Pacientes | Pending |
+| HIST-01..04 | Phase 3 — Historia Clínica | Pending |
+| AGND-01..06 | Phase 4 — Agenda y Citas | Pending |
+| VAC-01..05 | Phase 5 — Vacunación y Desparasitación | Pending |
+| INV-01..03 | Phase 6 — Inventario | Pending |
+| BILL-01..04 | Phase 7 — Facturación | Pending |
+| DASH-01..04 | Phase 8 — Dashboard y Diseño Visual | Pending |
 
 **Coverage:**
-- v1 requirements: 37 total
-- Mapped to phases: 0 (pendiente de roadmap)
-- Unmapped: 37 ⚠️ (se resuelve al generar ROADMAP.md)
+- v1 requirements: 41 total (corregido; el conteo previo de 37 estaba desactualizado)
+- Mapped to phases: 41/41 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-09-24 after initial definition*
+*Last updated: 2026-09-24 after roadmap creation (`/gsd:roadmapper`)*
