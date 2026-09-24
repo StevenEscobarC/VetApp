@@ -143,10 +143,11 @@ class SupabaseAuthRepository {
     if (message.contains('email not confirmed')) {
       return 'Confirma tu correo electrónico antes de iniciar sesión.';
     }
+    // Dev note: if this fires often during local testing, disable "Confirm
+    // email" in Supabase (Authentication > Providers > Email) to stop the
+    // rate-limited confirmation emails entirely.
     if (message.contains('rate limit')) {
-      return 'Se alcanzó el límite de correos por ahora. '
-          'Desactiva "Confirm email" en Supabase (Authentication > Providers > Email) '
-          'para registrarte sin esperar el correo, o intenta de nuevo en unos minutos.';
+      return 'Se alcanzó el límite de correos por ahora. Intenta de nuevo en unos minutos.';
     }
     if (message.contains('password')) {
       return 'La contraseña debe tener al menos 8 caracteres.';

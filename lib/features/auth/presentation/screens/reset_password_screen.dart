@@ -17,7 +17,8 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _email = TextEditingController();
-  String? _message;
+  String? _error;
+  String? _success;
   bool _loading = false;
 
   @override
@@ -27,17 +28,21 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   }
 
   Future<void> _submit() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+      _success = null;
+    });
     try {
       await ref.read(authRepositoryProvider).resetPassword(_email.text);
       if (mounted) {
         setState(
-          () => _message = 'Revisa tu correo para crear una nueva contraseña.',
+          () => _success = 'Revisa tu correo para crear una nueva contraseña.',
         );
       }
     } on AuthFailure catch (error) {
       if (mounted) {
-        setState(() => _message = error.message);
+        setState(() => _error = error.message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -48,7 +53,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   Widget build(BuildContext context) => AuthScaffold(
     title: 'Recuperar contraseña',
     subtitle: 'Te enviaremos un enlace seguro a tu correo.',
-    error: _message,
+    error: _error,
+    success: _success,
     children: [
       AppTextField(
         label: 'Correo electrónico',

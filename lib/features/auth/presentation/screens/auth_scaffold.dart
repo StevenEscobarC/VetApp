@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 
 /// Shared wrapper for the three unauthenticated screens (login, register,
@@ -13,11 +14,13 @@ class AuthScaffold extends StatelessWidget {
     required this.subtitle,
     required this.children,
     this.error,
+    this.success,
   });
 
   final String title;
   final String subtitle;
   final String? error;
+  final String? success;
   final List<Widget> children;
 
   @override
@@ -52,6 +55,10 @@ class AuthScaffold extends StatelessWidget {
                   const SizedBox(height: AppSpacing.lg),
                   if (error != null) ...[
                     Text(error!, style: TextStyle(color: colorScheme.error)),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  if (success != null) ...[
+                    Text(success!, style: const TextStyle(color: AppColors.success)),
                     const SizedBox(height: AppSpacing.md),
                   ],
                   ...children,
