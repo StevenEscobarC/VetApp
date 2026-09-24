@@ -15,13 +15,14 @@ El veterinario puede llevar toda su consulta — pacientes, historia clínica, a
 <!-- Funcionalidad existente y funcionando en el código actual. -->
 
 - ✓ Autenticación por correo/contraseña contra Supabase (registro, login, sesión) — existente en `lib/features/auth`
+- ✓ Proyecto Supabase real en la nube, enlazado y con `schema.sql` aplicado (incluye tabla `clientes` independiente de `perfiles` y RLS multi-tenant probado contra el rol `authenticated`, con el fix de auto-escalación de privilegios) — Fase 1
+- ✓ Wiring real de estado (Riverpod `AsyncNotifier`) y navegación (`go_router`, 5 secciones del bottom nav) reemplazando `setState`/`Navigator` manual — Fase 1
+- ✓ Código muerto de la migración Firebase→Supabase eliminado (dominio de auth duplicado, `firebase.json`, `google-services.json`, `LoginScreen` duplicado, dashboard mock de 1400 líneas) — Fase 1
 
 ### Active
 
-<!-- Alcance actual: reconstruir la app mockeada con backend y lógica reales (Fase 1). -->
+<!-- Alcance actual: reconstruir la app mockeada con backend y lógica reales, módulo por módulo. -->
 
-- [ ] Crear y enlazar un proyecto Supabase real en la nube; aplicar `supabase/schema.sql`; configurar variables de entorno
-- [ ] Wiring real de gestión de estado (Riverpod) y navegación (go_router) — hoy están declarados en `pubspec.yaml` pero sin usar
 - [ ] Gestión de pacientes (mascotas) con datos reales: crear, ver, editar ficha (especie, raza, edad, peso, foto, dueño asociado)
 - [ ] Gestión de clientes (dueños) con datos reales: contacto, mascotas asociadas, historial
 - [ ] Historia clínica digital real: registro de consultas (anamnesis, examen físico, diagnóstico, tratamiento, evolución), línea de tiempo por paciente, exportable a PDF
@@ -29,9 +30,8 @@ El veterinario puede llevar toda su consulta — pacientes, historia clínica, a
 - [ ] Carné de vacunación y desparasitación digital con alertas automáticas de próxima dosis
 - [ ] Inventario básico de medicamentos/insumos con alertas de stock mínimo
 - [ ] Facturación simple (cotización/recibo en PDF)
-- [ ] Reemplazar el dashboard mockeado (`lib/features/home/home_screen.dart`, 1400 líneas estáticas) por uno con datos reales
-- [ ] Aplicar el diseño visual definitivo del mockup (paleta terracota/crema, tipografía Caprasimo + Figtree) a todas las pantallas
-- [ ] Eliminar código muerto heredado de la migración Firebase→Supabase (dominio de auth duplicado, `firebase.json` huérfano, pantalla de login duplicada)
+- [ ] Reemplazar el dashboard mockeado por uno con datos reales completos (métricas, próximas citas, accesos rápidos — el saludo con nombre/clínica reales ya quedó resuelto en Fase 1; falta el resto, Fase 8)
+- [ ] Aplicar el diseño visual definitivo del mockup (paleta terracota/crema, tipografía Caprasimo + Figtree) al resto de pantallas (Login e Inicio ya lo tienen desde Fase 1; faltan pacientes/clientes/agenda/vacunación/inventario/facturación)
 
 ### Out of Scope
 
@@ -45,8 +45,8 @@ El veterinario puede llevar toda su consulta — pacientes, historia clínica, a
 
 ## Context
 
-- Proyecto brownfield: el código Flutter ya existe pero la mayoría es UI mockeada sin lógica real (ver `.planning/codebase/CONCERNS.md`). Solo el módulo de auth está implementado end-to-end; el resto de módulos (pacientes, clientes, agenda, vacunación, inventario, facturación, dashboard) son pantallas estáticas o carpetas de dominio vacías.
-- Backend ya decidido: Supabase (Postgres + RLS), no Firebase — el schema ya está definido en `supabase/schema.sql`, pero aún no existe un proyecto en la nube creado ni enlazado. El usuario todavía no tiene cuenta en supabase.com; crearla es la primera tarea técnica de la Fase 1.
+- **Fase 1 (Fundación) completa y verificada (2026-09-24).** El proyecto ya no es brownfield-sin-backend: Supabase real está en producción (`apjonrmhkpyzbofupokb.supabase.co`), RLS multi-tenant probado (27/27 checks, incluyendo el ataque de auto-escalación de privilegios), y la app tiene un walking skeleton real (Riverpod + go_router + Inicio con datos reales) verificado en un dispositivo Android real. El resto de módulos (pacientes, clientes, agenda, vacunación, inventario, facturación, dashboard completo) siguen siendo pantallas placeholder ("Próximamente") o carpetas de dominio vacías — eso es el trabajo de las Fases 2-8.
+- Backend decidido y en producción: Supabase (Postgres + RLS), no Firebase — `schema.sql` aplicado al proyecto real, cuenta de Supabase del usuario ya creada.
 - Mercado: los competidores colombianos (Vetlogy, GVET, Panacea) e internacionales (Digitail, IDEXX Neo) están pensados para clínicas con recepción y computador fijo. El hueco identificado es mobile-first para el veterinario que atiende solo o a domicilio.
 - Diseño visual definitivo ya aportado por el usuario: mockup de 9 pantallas (login, dashboard/inicio, pacientes, ficha de paciente con historia clínica, clientes, agenda, carné de vacunación, inventario, facturación). Paleta cálida terracota/crema, tipografía Caprasimo (headings) + Figtree (cuerpo), bottom nav de 5 secciones. Ver `.planning/design/DESIGN-REFERENCE.md` y `.planning/design/vetapp-mobile-designs.html`.
 - Contexto Colombia: moneda COP, formato de fecha dd/mm/aaaa, biológicos de vacunación comunes (antirrábica, óctuple/polivalente), estructura de historia clínica al estilo veterinario local.
@@ -58,16 +58,17 @@ El veterinario puede llevar toda su consulta — pacientes, historia clínica, a
 - **Diseño**: debe seguir el mockup ya aprobado por el usuario (paleta terracota/crema, Caprasimo + Figtree) — no usar Material 3 genérico ni paleta "sobria" del prompt original.
 - **Backend real, no mocks**: cada módulo de la Fase 1 debe conectar a Supabase real; no se sigue construyendo sobre datos falsos.
 - **Mercado objetivo**: Colombia — moneda COP, formato de fecha dd/mm/aaaa.
-- **Cuenta Supabase pendiente**: el usuario aún no tiene cuenta creada en supabase.com; es un bloqueante para conectar el backend real y debe resolverse al inicio de la Fase 1.
+- **Cuenta Supabase**: creada y proyecto en producción desde Fase 1 (`apjonrmhkpyzbofupokb.supabase.co`) — ya no es un bloqueante.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Backend: Supabase (no Firebase) | Ya implementado en el módulo de auth y en `schema.sql` (Postgres/RLS); `firebase.json` es un vestigio sin uso de un intento anterior | ✓ Good |
-| Fase 1 = reconstruir con datos reales, no seguir agregando mocks | El usuario pidió explícitamente "lo más real que se pueda" | — Pending |
-| Diseño visual: mockup terracota/crema + Caprasimo/Figtree es la dirección definitiva | El usuario confirmó que es el diseño final, abierto a sugerencias puntuales | — Pending |
-| Modo offline se evalúa después del CRUD online real | La visión original lo pedía desde el inicio, pero el estado actual (todo mockeado) hace prioritario un backend real funcionando primero | — Pending |
+| Backend: Supabase (no Firebase) | Ya implementado en el módulo de auth y en `schema.sql` (Postgres/RLS); `firebase.json` es un vestigio sin uso de un intento anterior | ✓ Good — confirmado en producción, Fase 1 |
+| Fase 1 = reconstruir con datos reales, no seguir agregando mocks | El usuario pidió explícitamente "lo más real que se pueda" | ✓ Good — walking skeleton verificado en dispositivo real contra el backend real |
+| Tabla `clientes` independiente de `perfiles` (no requiere autenticación del dueño) | Recomendación de `.planning/research/ARCHITECTURE.md`, confirmada en discuss-phase de Fase 1 | ✓ Good — implementada y probada con RLS vet-only |
+| Diseño visual: mockup terracota/crema + Caprasimo/Figtree es la dirección definitiva | El usuario confirmó que es el diseño final, abierto a sugerencias puntuales | ✓ Good — aplicado a Login/Inicio en Fase 1, sin objeciones tras verificación |
+| Modo offline se evalúa después del CRUD online real | La visión original lo pedía desde el inicio, pero el estado actual (todo mockeado) hace prioritario un backend real funcionando primero | — Pending (aún no se ha evaluado; el CRUD online real recién empieza en Fase 2) |
 
 ## Evolution
 
@@ -87,4 +88,4 @@ Este documento evoluciona en las transiciones de fase y en los límites de miles
 4. Actualizar Context con el estado actual
 
 ---
-*Last updated: 2026-09-24 after initialization*
+*Last updated: 2026-09-24 after Phase 1 (Fundación) completion*
