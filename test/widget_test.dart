@@ -130,4 +130,14 @@ void main() {
 
     expect(find.text('Ingresa tu correo y contraseña.'), findsOneWidget);
   });
+
+  testWidgets('cliente cierra sesión', (WidgetTester tester) async {
+    await tester.pumpWidget(appUnderTest(profile: clienteProfile));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Cerrar sesión'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bienvenido a VetApp'), findsOneWidget);
+  });
 }

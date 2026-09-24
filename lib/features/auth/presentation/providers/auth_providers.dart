@@ -17,9 +17,9 @@ final authStateChangesProvider = StreamProvider<AuthState>((ref) {
   return ref.watch(authRepositoryProvider).authStateChanges;
 });
 
-/// Single source of truth for "who is logged in", replacing `AuthGate`'s
-/// local `setState`. Watched by both `routerProvider`'s redirect and every
-/// data screen (starting with `InicioScreen`).
+/// Single source of truth for "who is logged in" — no widget keeps its own
+/// local session state. Watched by both `routerProvider`'s redirect and
+/// every data screen (starting with `InicioScreen`).
 class AuthProfileNotifier extends AsyncNotifier<AuthProfile?> {
   @override
   Future<AuthProfile?> build() async {

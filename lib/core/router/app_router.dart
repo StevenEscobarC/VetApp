@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/auth/presentation/auth_screens.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
+import '../../features/auth/presentation/screens/client_home_screen.dart';
+import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/reset_password_screen.dart';
 import '../../features/home/presentation/app_shell.dart';
 import '../../features/home/presentation/screens/coming_soon_screen.dart';
 import '../../features/home/presentation/screens/inicio_screen.dart';
@@ -20,8 +23,8 @@ class _AuthRefreshNotifier extends ChangeNotifier {
   }
 }
 
-/// The single auth gate for the whole app, replacing `AuthGate`. Reads
-/// [authProfileProvider] and `state.matchedLocation` — never a widget.
+/// The single auth gate for the whole app — no widget re-implements this
+/// branching. Reads [authProfileProvider] and `state.matchedLocation`.
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = _AuthRefreshNotifier(ref);
 
