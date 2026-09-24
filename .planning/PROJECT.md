@@ -59,6 +59,7 @@ El veterinario puede llevar toda su consulta — pacientes, historia clínica, a
 - **Backend real, no mocks**: cada módulo de la Fase 1 debe conectar a Supabase real; no se sigue construyendo sobre datos falsos.
 - **Mercado objetivo**: Colombia — moneda COP, formato de fecha dd/mm/aaaa.
 - **Cuenta Supabase**: creada y proyecto en producción desde Fase 1 (`apjonrmhkpyzbofupokb.supabase.co`) — ya no es un bloqueante.
+- **Diferenciación = fricción cero**: el usuario definió explícitamente (al iniciar Fase 2) que la ventaja competitiva de VetApp no es una sola función "gancho", sino que cada acción se sienta rápida, fácil e intuitiva — para que a nadie le dé pereza usarla. Esto debe guiar TODAS las fases, no solo Fase 2: mínimos campos obligatorios, flujos combinados en vez de pasos separados, búsqueda instantánea mientras se escribe, acciones directas (ej. cámara) en vez de menús intermedios. Al discutir cada fase futura, preguntar explícitamente cómo aplica este principio antes de aceptar un flujo con pasos de más.
 
 ## Key Decisions
 
