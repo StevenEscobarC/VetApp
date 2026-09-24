@@ -64,7 +64,7 @@ Plans:
 **Goal**: El veterinario puede gestionar clientes y mascotas reales de principio a fin, sin datos mockeados.
 **Mode:** mvp
 **Depends on**: Phase 1
-**Requirements**: CLI-01, CLI-02, CLI-03, CLI-04, PAT-01, PAT-02, PAT-03, PAT-04, PAT-05
+**Requirements**: CLI-01, CLI-02, CLI-03, CLI-04, CLI-05, PAT-01, PAT-02, PAT-03, PAT-04, PAT-05
 **Success Criteria** (what must be TRUE):
 
   1. El veterinario puede crear un cliente (dueño) con nombre y teléfono, sin que el cliente necesite cuenta
@@ -72,6 +72,7 @@ Plans:
   3. El veterinario puede ver las mascotas asociadas a un cliente
   4. El veterinario puede crear, ver y editar la ficha de una mascota (especie, raza, edad, peso, foto, dueño)
   5. El veterinario puede subir/cambiar la foto de una mascota (Storage privado + URL firmada), ver el historial de peso en el tiempo, y buscar/filtrar mascotas por nombre, dueño o especie
+  6. El veterinario puede generar un código/enlace de vinculación desde la ficha del cliente para que el dueño reclame acceso a sus mascotas cuando cree su cuenta (habilita DIR-06 en Fase 9)
 
 **Plans**: TBD
 **UI hint**: yes
@@ -195,14 +196,15 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 **Goal:** El cliente ya no está atado a una sola clínica: puede explorar, buscar y calificar las veterinarias de la plataforma, con reseñas públicas y un punto de entrada a agendar cita.
 **Mode:** mvp
-**Depends on:** Phase 2 (registro de cliente ya desacoplado de clínica), Phase 4 (Agenda — el botón "Agendar cita" enlaza ahí)
-**Requirements**: DIR-01, DIR-02, DIR-03, DIR-04, DIR-05, REV-01, REV-02, REV-03, REV-04, REV-05
+**Depends on:** Phase 2 (registro de cliente ya desacoplado de clínica; genera el código de vinculación que aquí se reclama), Phase 4 (Agenda — el botón "Agendar cita" enlaza ahí)
+**Requirements**: DIR-01, DIR-02, DIR-03, DIR-04, DIR-05, DIR-06, REV-01, REV-02, REV-03, REV-04, REV-05
 **Success Criteria** (what must be TRUE):
   1. El cliente puede ver el listado de clínicas activas (nombre, ciudad, dirección, foto/logo si existe, calificación promedio) sin tener que pertenecer a ninguna
   2. El cliente puede buscar veterinarias por nombre o ciudad con resultados instantáneos, y filtrar por ciudad
   3. El cliente puede ver el detalle de una veterinaria (contacto, horario si existe, calificación promedio, reseñas recientes) y desde ahí iniciar "Agendar cita"
   4. El cliente puede dejar una reseña (estrellas + comentario opcional) de una clínica; si ya la calificó, volver a calificar edita su reseña en vez de duplicarla
   5. Cualquier persona autenticada puede leer las reseñas públicas de una clínica, pero solo el autor puede editar/borrar la suya, y la calificación promedio mostrada coincide con el promedio real
+  6. El cliente puede vincular su cuenta a un registro de cliente existente usando el código/enlace generado por el veterinario (Fase 2), y a partir de ahí ve en "Mis mascotas" las mascotas que el veterinario ya le había registrado
 **Plans**: TBD
 **UI hint**: yes
 

@@ -6,9 +6,9 @@
 <domain>
 ## Phase Boundary
 
-Esta fase entrega CRUD real (Supabase, no mock) de dos entidades centrales: **clientes** (dueños de mascotas, gestionados por el veterinario, sin necesitar cuenta propia — tabla `clientes` ya creada en Fase 1) y **pacientes** (mascotas). Incluye: crear/ver/editar cliente, crear/ver/editar ficha de mascota (especie, raza, edad, peso, foto, dueño), subir foto vía Supabase Storage privado, historial de peso en el tiempo, y búsqueda/filtro de ambos.
+Esta fase entrega CRUD real (Supabase, no mock) de dos entidades centrales: **clientes** (dueños de mascotas, gestionados por el veterinario, sin necesitar cuenta propia — tabla `clientes` ya creada en Fase 1) y **pacientes** (mascotas). Incluye: crear/ver/editar cliente, crear/ver/editar ficha de mascota (especie, raza, edad, peso, foto, dueño), subir foto vía Supabase Storage privado, historial de peso en el tiempo, búsqueda/filtro de ambos, y el lado-veterinario de la vinculación de cuenta (CLI-05: generar código/enlace desde la ficha del cliente).
 
-No incluye: historia clínica (Fase 3), agenda (Fase 4), vacunación (Fase 5), inventario/facturación (Fases 6-7), dashboard con métricas (Fase 8).
+No incluye: historia clínica (Fase 3), agenda (Fase 4), vacunación (Fase 5), inventario/facturación (Fases 6-7), dashboard con métricas (Fase 8), el lado-cliente de reclamar la vinculación y ver "Mis mascotas" (DIR-06, Fase 9), directorio de veterinarias/reseñas (Fase 9).
 
 </domain>
 
@@ -29,11 +29,15 @@ No incluye: historia clínica (Fase 3), agenda (Fase 4), vacunación (Fase 5), i
 ### Búsqueda
 - **D-06:** La búsqueda (tanto de clientes como de mascotas) es **instantánea mientras se escribe** — resultados aparecen conforme el usuario teclea, sin botón "buscar" ni tecla Enter.
 
+### Vinculación de cuenta cliente↔mascotas (nuevo, agregado durante discuss-phase)
+- **D-07:** Hoy `clientes` (a quien pertenecen las mascotas) no tiene ningún vínculo con `perfiles` (la cuenta autenticada del dueño, rol CLIENTE) — son intencionalmente independientes desde Fase 1 para que el veterinario pueda registrar un cliente sin que necesite cuenta. El usuario decidió el mecanismo de vinculación: **el veterinario invita/vincula desde la ficha del cliente** (no vinculación automática por teléfono/correo, no que el cliente la reclame sin más desde el directorio). Concretamente: el veterinario genera un código o enlace desde la ficha del cliente (CLI-05, esta fase); el dueño lo usa para reclamar el vínculo desde su cuenta CLIENTE (DIR-06, Fase 9 — fuera del alcance de esta fase, ahí es donde existe la experiencia real del lado cliente). Esta fase solo construye el lado del veterinario: generar y mostrar el código/enlace, y el campo de schema (`clientes.perfiles_id`, nullable) que lo soporta.
+
 ### Claude's Discretion
 - Diseño exacto de la UI del flujo combinado cliente+mascota (¿un wizard de 2 pasos en la misma pantalla? ¿scroll continuo con ambas secciones?) — el UI-SPEC de esta fase debe resolverlo siguiendo D-02 y el mockup ya aprobado.
 - Mecanismo exacto de debounce para la búsqueda instantánea (para no disparar una query por cada tecla).
 - Estructura exacta de la tabla/entidad de historial de peso (nueva tabla vs. campo de auditoría en `mascotas`) — research/planner deciden con base en PAT-05.
 - Manejo de permisos de cámara/galería (ya hay precedente: `permission_handler` recomendado en `.planning/research/STACK.md`).
+- Formato exacto del código/enlace de vinculación (D-07): código corto legible vs. token largo tipo UUID vs. deep-link — research/planner deciden el mecanismo, siempre que sea algo que el veterinario pueda mostrar/leer/compartir fácilmente en persona (coherente con el principio de fricción cero, D-01) y que expire o sea de un solo uso por seguridad.
 
 </decisions>
 

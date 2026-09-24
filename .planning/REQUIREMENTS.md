@@ -22,6 +22,7 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 - [ ] **CLI-02**: El veterinario puede ver y editar los datos de un cliente
 - [ ] **CLI-03**: El veterinario puede buscar/filtrar clientes por nombre o teléfono
 - [ ] **CLI-04**: El veterinario puede ver las mascotas asociadas a un cliente
+- [ ] **CLI-05**: El veterinario puede generar un código/enlace de vinculación desde la ficha del cliente, para que el dueño reclame acceso a sus mascotas registradas cuando cree su propia cuenta (agregado 2026-09-24 — ver DIR-06 en Fase 9 para el lado del cliente)
 
 ### Pacientes (PAT)
 
@@ -84,6 +85,7 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 - [ ] **DIR-03**: El cliente puede filtrar el listado de veterinarias por ciudad
 - [ ] **DIR-04**: El cliente puede ver el detalle de una veterinaria (contacto, horario si existe, calificación promedio, reseñas recientes)
 - [ ] **DIR-05**: Desde el detalle de una veterinaria, el cliente puede iniciar el flujo de "Agendar cita"
+- [ ] **DIR-06**: El cliente puede vincular su cuenta a un registro de cliente existente usando el código/enlace generado por el veterinario (CLI-05), para ver en "Mis mascotas" las mascotas que el veterinario ya le había registrado
 
 ### Reseñas de veterinarias (REV)
 
@@ -132,7 +134,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FOUND-01..06 | Phase 1 — Fundación | Complete |
-| CLI-01..04 | Phase 2 — Clientes y Pacientes | Pending |
+| CLI-01..05 | Phase 2 — Clientes y Pacientes | Pending |
 | PAT-01..05 | Phase 2 — Clientes y Pacientes | Pending |
 | HIST-01..04 | Phase 3 — Historia Clínica | Pending |
 | AGND-01..06 | Phase 4 — Agenda y Citas | Pending |
@@ -140,12 +142,12 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | INV-01..03 | Phase 6 — Inventario | Pending |
 | BILL-01..04 | Phase 7 — Facturación | Pending |
 | DASH-01..04 | Phase 8 — Dashboard y Diseño Visual | Pending |
-| DIR-01..05 | Phase 9 — Directorio de Veterinarias | Pending |
+| DIR-01..06 | Phase 9 — Directorio de Veterinarias | Pending |
 | REV-01..05 | Phase 9 — Directorio de Veterinarias | Pending |
 
 **Coverage:**
-- v1 requirements: 51 total (41 originales + 10 de DIR/REV agregadas 2026-09-24)
-- Mapped to phases: 51/51 ✓
+- v1 requirements: 53 total (41 originales + 10 de DIR/REV + CLI-05/DIR-06 de vinculación de cuenta, agregadas 2026-09-24)
+- Mapped to phases: 53/53 ✓
 - Unmapped: 0 ✓
 
 ---
