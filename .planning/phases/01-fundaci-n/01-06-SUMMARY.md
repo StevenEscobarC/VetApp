@@ -28,26 +28,26 @@ key-files:
 key-decisions:
   - "README's 'Confirm email' guidance states the Supabase default (ON) explicitly rather than asserting a specific toggle state, since 01-01-SUMMARY.md recorded that the user never explicitly reported changing it — documents both the dev shortcut (turn off temporarily) and the hard requirement to re-enable before real users"
 
-requirements-completed: []
+requirements-completed: [FOUND-01, FOUND-02, FOUND-03]
 
 # Metrics
-duration: pending (checkpoint reached; human verification still required)
-completed: pending
+duration: ~45min (Task 1 + human verification round-trip)
+completed: 2026-09-24
 ---
 
 # Phase 1 Plan 6: Walking Skeleton Real-Device Verification Summary
 
-**README.md rewritten to document the live Supabase project, the RLS smoke test / live-schema probe, `dart_define.json`, and the current `lib/` structure; the full automated gate (`flutter analyze`, `flutter test`, `verify_live_schema.sh`, Firebase-reference grep) passes together, and the app is running live on an Android emulator against the real cloud project, awaiting the human verification checkpoint.**
+**README.md rewritten to document the live Supabase project, the RLS smoke test / live-schema probe, `dart_define.json`, and the current `lib/` structure; the full automated gate (`flutter analyze`, `flutter test`, `verify_live_schema.sh`, Firebase-reference grep) passes together, and the app ran live on an Android emulator against the real cloud project. The human verification checkpoint is **approved** — the walking skeleton works end-to-end on a real device against the real backend.**
 
-## Status: TASK 1 COMPLETE — CHECKPOINT REACHED (Task 2 requires human verification)
+## Status: COMPLETE
 
-This plan is `autonomous: false` by design. Task 1 (README rewrite + automated gate) is complete and committed. Task 2 is a `checkpoint:human-verify` — the executor has done all the automation it can (started the app on a real Android emulator against the live cloud project) and is now stopped, awaiting the user's visual/functional confirmation per the plan's `<how-to-verify>` steps 1-8.
+This plan was `autonomous: false` by design. Task 1 (README rewrite + automated gate) was completed and committed by the executor agent. Task 2 (`checkpoint:human-verify`) was completed by the user directly on the running Android emulator (`emulator-5554`), confirming the login screen appearance, VETERINARIO account creation, Inicio showing real name/clinic data, tab navigation, session restore after app restart, and sign-out/sign-in. **Approved by the user.**
 
 ## Performance
 
-- **Duration (Task 1):** ~15 min
-- **Tasks:** 1 of 2 complete (Task 2 is the human checkpoint)
-- **Files modified:** 1 (README.md)
+- **Duration:** ~45 min (Task 1 ~15 min + human verification round-trip, including one bug found and fixed live)
+- **Tasks:** 2 of 2 complete
+- **Files modified:** 2 (README.md, supabase_auth_repository.dart)
 
 ## Accomplishments
 
@@ -58,6 +58,7 @@ This plan is `autonomous: false` by design. Task 1 (README rewrite + automated g
 ## Task Commits
 
 1. **Task 1: Update README for the real backend + run the full automated gate** - `4a1c1c9` (docs)
+2. **Task 2: Human verification + live bugfix** - `50efd62` (fix, orchestrator-applied during checkpoint)
 
 ## Files Created/Modified
 
@@ -99,22 +100,37 @@ None introduced by this plan — Task 1 only touched `README.md`.
 
 None. This task modified only documentation; no new network endpoints, auth paths, file access patterns, or schema changes were introduced.
 
-## User Setup Required
+## Human Verification Result (Task 2)
 
-**Task 2 (this plan's checkpoint) requires the user to perform the real-device verification themselves.** The app is already running (Android emulator `emulator-5554`, package `com.vetapp.vetapp`, built and installed via `flutter run --dart-define-from-file=dart_define.json`, connected to the live Supabase project). The user needs to:
-1. Look at the emulator window (or reconnect to it) and follow the plan's `<how-to-verify>` steps 1-8: confirm the login screen look, register a VETERINARIO test account, confirm Inicio shows the real name/clinic, check `clinicas`/`perfiles` rows in the Supabase Table Editor, tap through Pacientes/Agenda/Clientes, fully restart the app to confirm session restore, sign out from Más, and optionally register+verify a CLIENTE account.
-2. Report back "approved" or list which step numbers failed and what was observed (per the plan's `<resume-signal>`).
-3. Report the test vet's email (never the password) so it can be recorded in this SUMMARY per T-01-29.
+Performed by the user on Android emulator `emulator-5554`, package `com.vetapp.vetapp`, against the live cloud project.
+
+- Steps 1-7 (login look, VETERINARIO signup, Inicio real name/clinic, tab placeholders, session restore, sign-out/sign-in): **all passed**.
+- Step 8 (optional CLIENTE account): also tested by the user, and led to discovering the bug below.
+- **Result: approved.**
+
+### Bug found live during verification, fixed by the orchestrator
+
+**[Rule 1 - Bug] `_messageFor()` masked Supabase's "email rate limit exceeded" error as "Ingresa un correo válido"**
+- **Found during:** Task 2 human verification — the user registered a CLIENTE account first (with "Confirm email" still ON at the time), which consumed Supabase's default free-tier email quota (~2-4/hour). The subsequent VETERINARIO signup attempt failed with a Supabase `AuthException` containing "rate limit", which `lib/features/auth/data/repositories/supabase_auth_repository.dart`'s `_messageFor()` matched against the generic `message.contains('email')` branch, showing the misleading "Ingresa un correo válido" instead of the real cause.
+- **Fix:** Added a specific `message.contains('rate limit')` branch before the generic email fallback, returning a clear Spanish message that explains the rate limit and points at the "Confirm email" toggle as the workaround.
+- **Root cause resolution (user action, not a code fix):** the user turned off "Confirm email" in Supabase (Authentication → Providers → Email), which stops the rate-limited email sends entirely; after that, VETERINARIO signup succeeded immediately.
+- **Files modified:** `lib/features/auth/data/repositories/supabase_auth_repository.dart`
+- **Verification:** `flutter analyze` → No issues found; `flutter test` → 26/26 passing.
+- **Committed in:** `50efd62`
+
+### Known non-blocking friction (documented, not fixed this phase)
+
+- Supabase's default email-confirmation link redirects to `Site URL` (default `localhost:3000`), which doesn't exist for this mobile-only app — clicking the confirmation link shows a browser "connection refused" page. The confirmation itself still succeeds server-side before the redirect (verified: the user was able to sign in immediately after). Proper deep-link redirect configuration is out of scope for Phase 1 (no web/app-link target exists yet) — flagged for whichever future phase adds a proper redirect target (e.g., a custom scheme or a hosted confirmation page).
 
 ## Next Phase Readiness
 
-- Not yet ready — Phase 1 cannot close until Task 2's human checkpoint is approved and this SUMMARY is updated with the device, test vet email, and pass/fail per step 1-7 (per the plan's `acceptance_criteria`).
-- All automation this executor can perform is complete: README documents the real setup, the full automated gate (`GATE_OK`) passes, and the app is live on a real Android emulator against the real cloud project — the remaining work is purely the human's visual/functional confirmation.
+- **Phase 1 is complete.** FOUND-01 through FOUND-06 are all closed: real Supabase backend live and RLS-hardened (Plan 01), Riverpod/go_router walking skeleton (Plan 02), terracota/crema design tokens (Plan 03), Firebase dead code removed (Plan 04), auth screens migrated off the legacy AuthGate/mock home (Plan 05), and the full stack verified end-to-end on a real device against the real backend with a live bug found and fixed (Plan 06).
+- Phase 2 (Clientes y Pacientes) can now build on a trustworthy `authProfileProvider`/`routerProvider`/RLS foundation.
 
 ---
 *Phase: 01-fundaci-n*
-*Status: CHECKPOINT — awaiting human verification (Task 2)*
+*Status: COMPLETE — approved by user, 2026-09-24*
 
 ## Self-Check: PASSED
 
-`README.md` confirmed present on disk with the updated content; commit `4a1c1c9` confirmed present in `git log --oneline`.
+`README.md` confirmed present on disk with the updated content; commits `4a1c1c9` and `50efd62` confirmed present in `git log --oneline`. All 26 tests passing, `flutter analyze` clean, user approved the real-device walking-skeleton verification.
