@@ -50,7 +50,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-05-PLAN.md — Auth screens on Riverpod/go_router with brand block; delete AuthGate + mock home
+- [x] 01-05-PLAN.md — Auth screens on Riverpod/go_router with brand block; delete AuthGate + mock home
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -180,7 +180,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Fundación | 4/6 | In Progress|  |
+| 1. Fundación | 5/6 | In Progress|  |
 | 2. Clientes y Pacientes | 0/TBD | Not started | - |
 | 3. Historia Clínica | 0/TBD | Not started | - |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
