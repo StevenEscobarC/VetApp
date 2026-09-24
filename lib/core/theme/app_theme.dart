@@ -20,8 +20,8 @@ class AppTheme {
       onError: AppColors.onDestructive,
       surface: AppColors.surface,
       onSurface: AppColors.foreground,
-      surfaceContainerHighest: AppColors.muted,
-      onSurfaceVariant: AppColors.mutedForeground,
+      surfaceContainerHighest: AppColors.surfaceMuted,
+      onSurfaceVariant: AppColors.textMuted,
       outline: AppColors.border,
     );
 
@@ -32,10 +32,10 @@ class AppTheme {
 
   static ThemeData get dark {
     final colorScheme = const ColorScheme.dark(
-      primary: AppColors.secondary,
-      onPrimary: AppColors.onSecondary,
-      secondary: AppColors.primary,
-      onSecondary: AppColors.onPrimary,
+      primary: AppColors.primary,
+      onPrimary: AppColors.onPrimary,
+      secondary: AppColors.mutedDark,
+      onSecondary: AppColors.foregroundDark,
       error: AppColors.destructive,
       onError: AppColors.onDestructive,
       surface: AppColors.surfaceDark,
@@ -136,11 +136,21 @@ class AppTheme {
       dividerTheme: DividerThemeData(color: colorScheme.outline, thickness: 1),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: colorScheme.surface,
-        indicatorColor: AppColors.secondary,
+        indicatorColor: colorScheme.primary.withValues(alpha: 0.16),
         elevation: 0,
-        labelTextStyle: WidgetStatePropertyAll(
-          textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+          );
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+          );
+        }),
       ),
       visualDensity: VisualDensity.standard,
     );

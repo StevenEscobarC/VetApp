@@ -3,14 +3,15 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
-/// Figtree keeps headings warm and distinctive while Noto Sans maintains
-/// readable density in tables, forms, and clinical notes.
+/// Caprasimo (single weight, display/headings) paired with Figtree
+/// (body/UI text) per the approved mockup — see
+/// `.planning/design/DESIGN-REFERENCE.md`.
 class AppTypography {
   AppTypography._();
 
   static TextTheme textTheme(Color foreground) {
-    final headingBase = GoogleFonts.figtreeTextTheme();
-    final bodyBase = GoogleFonts.notoSansTextTheme();
+    final headingBase = GoogleFonts.caprasimoTextTheme();
+    final bodyBase = GoogleFonts.figtreeTextTheme();
 
     final colored = bodyBase
         .copyWith(
@@ -21,8 +22,6 @@ class AppTypography {
           headlineMedium: headingBase.headlineMedium,
           headlineSmall: headingBase.headlineSmall,
           titleLarge: headingBase.titleLarge,
-          titleMedium: headingBase.titleMedium,
-          titleSmall: headingBase.titleSmall,
         )
         .apply(
           bodyColor: foreground,
@@ -30,12 +29,20 @@ class AppTypography {
         );
 
     return colored.copyWith(
-      displaySmall: colored.displaySmall?.copyWith(fontWeight: FontWeight.w700),
-      headlineSmall: colored.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-      titleLarge: colored.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-      bodyLarge: colored.bodyLarge?.copyWith(fontSize: 16, height: 1.5),
+      displaySmall: colored.displaySmall?.copyWith(fontSize: 28, height: 1.2),
+      headlineSmall: colored.headlineSmall?.copyWith(fontSize: 20, height: 1.2),
+      titleLarge: colored.titleLarge?.copyWith(fontSize: 20, height: 1.2),
+      bodyLarge: colored.bodyLarge?.copyWith(
+        fontSize: 16,
+        height: 1.5,
+        fontWeight: FontWeight.w400,
+      ),
       bodyMedium: colored.bodyMedium?.copyWith(fontSize: 14, height: 1.5),
-      labelLarge: colored.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+      labelLarge: colored.labelLarge?.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+      labelMedium: colored.labelMedium?.copyWith(fontWeight: FontWeight.w600),
     );
   }
 
