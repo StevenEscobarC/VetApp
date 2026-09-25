@@ -12,6 +12,7 @@ import '../../features/home/presentation/app_shell.dart';
 import '../../features/home/presentation/screens/coming_soon_screen.dart';
 import '../../features/home/presentation/screens/inicio_screen.dart';
 import '../../features/home/presentation/screens/mas_screen.dart';
+import '../../features/patients/presentation/pacientes_routes.dart';
 
 const _publicPaths = {'/login', '/register', '/reset-password'};
 
@@ -82,14 +83,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(path: '/inicio', builder: (_, _) => const InicioScreen()),
             ],
           ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/pacientes',
-                builder: (_, _) => const ComingSoonScreen(title: 'Pacientes'),
-              ),
-            ],
-          ),
+          StatefulShellBranch(routes: [pacientesRoute]),
           StatefulShellBranch(
             routes: [
               GoRoute(
