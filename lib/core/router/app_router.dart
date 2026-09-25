@@ -7,6 +7,7 @@ import '../../features/auth/presentation/screens/client_home_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/reset_password_screen.dart';
+import '../../features/clients/presentation/clientes_routes.dart';
 import '../../features/home/presentation/app_shell.dart';
 import '../../features/home/presentation/screens/coming_soon_screen.dart';
 import '../../features/home/presentation/screens/inicio_screen.dart';
@@ -97,14 +98,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/clientes',
-                builder: (_, _) => const ComingSoonScreen(title: 'Clientes'),
-              ),
-            ],
-          ),
+          StatefulShellBranch(routes: [clientesRoute]),
           StatefulShellBranch(
             routes: [
               GoRoute(path: '/mas', builder: (_, _) => const MasScreen()),
