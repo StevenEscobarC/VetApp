@@ -40,7 +40,7 @@ void main() {
 
     final navigationBar = find.byType(NavigationBar);
     await tester.tap(
-      find.descendant(of: navigationBar, matching: find.text('Pacientes')),
+      find.descendant(of: navigationBar, matching: find.text('Agenda')),
     );
     await tester.pumpAndSettle();
     expect(find.text('Próximamente'), findsOneWidget);

@@ -1,5 +1,6 @@
 import 'package:vetapp/features/patients/data/repositories/supabase_mascota_repository.dart';
 import 'package:vetapp/features/patients/domain/entities/mascota.dart';
+import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 
 /// In-memory [SupabaseMascotaRepository] stand-in so no test in this phase
 /// touches a real Supabase client. Mirrors [FakeClienteRepository]'s "fixed
@@ -34,6 +35,29 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
 
   /// mascotaId -> fotoPath, one entry per [actualizarFotoPath] call.
   final Map<String, String> fotoPathsActualizados = {};
+
+  /// (query, clinicaId) pairs, in call order — mirrors
+  /// [FakeClienteRepository.busquedas].
+  final List<(String, String)> busquedas = [];
+
+  @override
+  Future<List<Mascota>> buscar(String query, {required String clinicaId}) async {
+    busquedas.add((query, clinicaId));
+    if (error != null) throw error!;
+    final q = query.trim().toLowerCase();
+    final resultado = mascotas
+        .where((m) => m.clinicaId == clinicaId)
+        .where(
+          (m) =>
+              q.isEmpty ||
+              m.nombre.toLowerCase().contains(q) ||
+              m.especie.name.toLowerCase().contains(q) ||
+              (m.duenoNombre?.toLowerCase().contains(q) ?? false),
+        )
+        .toList();
+    resultado.sort((a, b) => a.nombre.compareTo(b.nombre));
+    return resultado;
+  }
 
   @override
   Future<({String clienteId, String mascotaId})> registrarClienteConMascota({
@@ -100,3 +124,18 @@ const mascotaMichi = Mascota(
   especie: Especie.gato,
   duenoNombre: 'Otra Persona',
 );
+
+/// Fake [MascotasNotifier] for tests that only need a fixed result and no
+/// debounce/timer behavior — mirrors [FakeClientesNotifier].
+class FakeMascotasNotifier extends MascotasNotifier {
+  FakeMascotasNotifier({this.mascotas = const [], this.error});
+
+  final List<Mascota> mascotas;
+  final Object? error;
+
+  @override
+  Future<List<Mascota>> build() async {
+    if (error != null) throw error!;
+    return mascotas;
+  }
+}
