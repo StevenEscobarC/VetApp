@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>VetApp necesita la cámara para tomar fotos de las mascotas.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>VetApp necesita acceso a tus fotos para elegir la foto de la mascota.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
