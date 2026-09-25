@@ -153,6 +153,69 @@ class SupabaseMascotaRepository {
     }
   }
 
+  /// Nuevo pet para un dueño existente (D-03, PAT-01 vía
+  /// `registrar_mascota`) — una sola llamada atómica que crea la mascota Y
+  /// su primer registro de peso (si [pesoKg] llega), nunca un insert
+  /// seguido de un [registrarPeso] separado.
+  Future<String> registrarMascota({
+    required String duenoId,
+    required String nombre,
+    required Especie especie,
+    String? raza,
+    DateTime? fechaNacimiento,
+    double? pesoKg,
+  }) async {
+    try {
+      final params = {
+        'mascota_dueno_id': duenoId,
+        'mascota_nombre': nombre.trim(),
+        'mascota_especie': especie.name,
+        'mascota_raza': raza?.trim() ?? '',
+        'mascota_fecha_nacimiento': fechaNacimiento == null
+            ? null
+            : _formatoIso.format(fechaNacimiento),
+        'mascota_peso_kg': pesoKg,
+      };
+      final id = await _client.rpc('registrar_mascota', params: params);
+      return id as String;
+    } on PostgrestException catch (e) {
+      throw MascotaFailure(_messageFor(e));
+    } catch (_) {
+      throw const MascotaFailure(
+        'No pudimos guardar los datos. Intenta de nuevo.',
+      );
+    }
+  }
+
+  /// Edita nombre/especie/raza/fecha de nacimiento de una mascota existente
+  /// (PAT-02) — nunca envía `dueno_id`, `clinica_id` ni `foto_path` (esos
+  /// van por [actualizarFotoPath] o nunca cambian desde este formulario), y
+  /// nunca toca el historial de peso (append-only, ver [registrarPeso]).
+  Future<Mascota> actualizar(Mascota mascota) async {
+    try {
+      final row = await _client
+          .from('mascotas')
+          .update({
+            'nombre': mascota.nombre.trim(),
+            'especie': mascota.especie.name,
+            'raza': mascota.raza?.trim() ?? '',
+            'fecha_nacimiento': mascota.fechaNacimiento == null
+                ? null
+                : _formatoIso.format(mascota.fechaNacimiento!),
+          })
+          .eq('id', mascota.id)
+          .select('*, clientes!mascotas_dueno_misma_clinica_fkey(nombre)')
+          .single();
+      return _fromRow(row);
+    } on PostgrestException catch (e) {
+      throw MascotaFailure(_messageFor(e));
+    } catch (_) {
+      throw const MascotaFailure(
+        'No pudimos guardar los datos. Intenta de nuevo.',
+      );
+    }
+  }
+
   /// Actualiza `foto_path` tras una subida a Storage exitosa (Plan 05) —
   /// nunca almacena la URL firmada, solo la ruta estable del objeto.
   Future<void> actualizarFotoPath(String mascotaId, String fotoPath) async {

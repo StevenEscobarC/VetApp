@@ -51,6 +51,23 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
   /// mascotaId -> fotoPath, one entry per [actualizarFotoPath] call.
   final Map<String, String> fotoPathsActualizados = {};
 
+  /// Every call to [registrarMascota] (D-03: new pet for an existing
+  /// owner), in call order.
+  final List<
+    ({
+      String duenoId,
+      String nombre,
+      Especie especie,
+      String? raza,
+      DateTime? fechaNacimiento,
+      double? pesoKg,
+    })
+  >
+  registrosMascota = [];
+
+  /// Every [Mascota] passed to [actualizar] (PAT-02 edit), in call order.
+  final List<Mascota> actualizados = [];
+
   /// (query, clinicaId) pairs, in call order — mirrors
   /// [FakeClienteRepository.busquedas].
   final List<(String, String)> busquedas = [];
@@ -119,6 +136,37 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
   Future<List<PesoRegistro>> pesos(String mascotaId) async {
     if (error != null) throw error!;
     return List.of(pesosPorMascota[mascotaId] ?? const []);
+  }
+
+  /// Nuevo pet para un dueño existente (D-03) — siempre devuelve 'm-creada'
+  /// salvo que [error] esté fijado.
+  @override
+  Future<String> registrarMascota({
+    required String duenoId,
+    required String nombre,
+    required Especie especie,
+    String? raza,
+    DateTime? fechaNacimiento,
+    double? pesoKg,
+  }) async {
+    registrosMascota.add((
+      duenoId: duenoId,
+      nombre: nombre,
+      especie: especie,
+      raza: raza,
+      fechaNacimiento: fechaNacimiento,
+      pesoKg: pesoKg,
+    ));
+    if (error != null) throw error!;
+    return 'm-creada';
+  }
+
+  /// Edita una mascota existente (PAT-02) — nunca toca el historial de peso.
+  @override
+  Future<Mascota> actualizar(Mascota mascota) async {
+    actualizados.add(mascota);
+    if (error != null) throw error!;
+    return mascota;
   }
 
   @override
