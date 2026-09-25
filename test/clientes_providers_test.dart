@@ -23,6 +23,12 @@ ProviderContainer _containerWith({
   AuthProfile? profile = vetProfile,
 }) {
   final container = ProviderContainer(
+    // Riverpod 3's ProviderContainer retries a failed provider with
+    // exponential backoff by default — disable it (same convention as
+    // test/helpers/fake_auth.dart's appUnderTest()) so an intentionally
+    // thrown ClienteFailure settles into AsyncError immediately instead of
+    // silently retrying build() in the background.
+    retry: (retryCount, error) => null,
     overrides: [
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: profile),
