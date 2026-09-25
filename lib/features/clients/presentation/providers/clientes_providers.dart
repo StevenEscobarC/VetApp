@@ -11,6 +11,16 @@ final clienteRepositoryProvider = Provider<SupabaseClienteRepository>((ref) {
   return SupabaseClienteRepository(ref.watch(supabaseClientProvider));
 });
 
+/// Un cliente por [id] (CLI-02), consumido por `ClienteDetailScreen`.
+/// `autoDispose.family` — se recalcula por clienteId y se libera cuando
+/// ninguna pantalla lo observa.
+final clienteProvider = FutureProvider.autoDispose.family<Cliente, String>((
+  ref,
+  id,
+) {
+  return ref.watch(clienteRepositoryProvider).obtener(id);
+});
+
 /// Búsqueda instantánea de clientes (CLI-03, D-06): cada tecla llama a
 /// [search], que hace debounce internamente 350ms antes de disparar la
 /// consulta real — la pantalla nunca maneja su propio [Timer]. Un número de

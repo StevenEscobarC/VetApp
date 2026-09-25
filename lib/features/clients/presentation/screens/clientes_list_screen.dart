@@ -124,6 +124,7 @@ class _ClientesBody extends ConsumerWidget {
         itemBuilder: (context, index) {
           final cliente = clientes[index];
           return AppCard(
+            onTap: () => context.push('/clientes/${cliente.id}'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
