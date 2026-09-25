@@ -85,7 +85,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-04-PLAN.md — Slice: combined alta cliente+mascota in one screen via atomic RPC (CLI-01, PAT-01)
+- [x] 02-04-PLAN.md — Slice: combined alta cliente+mascota in one screen via atomic RPC (CLI-01, PAT-01)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -212,7 +212,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
-| 2. Clientes y Pacientes | 3/10 | In Progress|  |
+| 2. Clientes y Pacientes | 4/10 | In Progress|  |
 | 3. Historia Clínica | 0/TBD | Not started | - |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
