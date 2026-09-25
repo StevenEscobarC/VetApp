@@ -140,6 +140,7 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
 
   /// Nuevo pet para un dueño existente (D-03) — siempre devuelve 'm-creada'
   /// salvo que [error] esté fijado.
+  @override
   Future<String> registrarMascota({
     required String duenoId,
     required String nombre,
@@ -161,6 +162,7 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
   }
 
   /// Edita una mascota existente (PAT-02) — nunca toca el historial de peso.
+  @override
   Future<Mascota> actualizar(Mascota mascota) async {
     actualizados.add(mascota);
     if (error != null) throw error!;
