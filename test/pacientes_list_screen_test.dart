@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/patients/domain/mascota_failure.dart';
+import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/features/patients/presentation/screens/pacientes_list_screen.dart';
 
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/router_harness.dart';
 
@@ -19,6 +21,13 @@ Widget _appUnderTest({required FakeMascotaRepository repo}) {
       GoRoute(
         path: '/pacientes',
         builder: (_, _) => const PacientesListScreen(),
+        routes: [
+          GoRoute(
+            path: ':id',
+            builder: (_, state) =>
+                Text('FICHA MASCOTA ${state.pathParameters['id']}'),
+          ),
+        ],
       ),
     ],
     overrides: [
@@ -26,6 +35,9 @@ Widget _appUnderTest({required FakeMascotaRepository repo}) {
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
       mascotaRepositoryProvider.overrideWithValue(repo),
+      mascotaFotoDatasourceProvider.overrideWithValue(
+        FakeMascotaFotoDatasource(),
+      ),
     ],
   );
 }
@@ -136,5 +148,18 @@ void main() {
       find.text('No pudimos cargar la lista. Intenta de nuevo.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('tocar la fila de Rocky navega a su ficha', (tester) async {
+    final repo = FakeMascotaRepository(
+      mascotas: [mascotaRocky, mascotaLuna, mascotaMichi],
+    );
+    await tester.pumpWidget(_appUnderTest(repo: repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Rocky'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('FICHA MASCOTA m-1'), findsOneWidget);
   });
 }
