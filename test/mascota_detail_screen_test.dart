@@ -75,7 +75,9 @@ Widget _appUnderTest({
       mascotaFotoDatasourceProvider.overrideWithValue(
         fotos ?? FakeMascotaFotoDatasource(),
       ),
-      capturadorFotoProvider.overrideWithValue(capturador ?? capturadorFalso(null)),
+      capturadorFotoProvider.overrideWithValue(
+        capturador ?? capturadorFalso(null),
+      ),
     ],
   );
 }
@@ -133,20 +135,19 @@ void main() {
     );
   });
 
-  testWidgets(
-    'no hay acciones de editar o borrar en el historial de peso',
-    (tester) async {
-      final repo = FakeMascotaRepository(
-        mascotas: [mascotaRocky],
-        pesosPorMascota: {'m-1': _pesosRocky},
-      );
-      await tester.pumpWidget(_appUnderTest(repo: repo));
-      await tester.pumpAndSettle();
+  testWidgets('no hay acciones de editar o borrar en el historial de peso', (
+    tester,
+  ) async {
+    final repo = FakeMascotaRepository(
+      mascotas: [mascotaRocky],
+      pesosPorMascota: {'m-1': _pesosRocky},
+    );
+    await tester.pumpWidget(_appUnderTest(repo: repo));
+    await tester.pumpAndSettle();
 
-      expect(find.byIcon(Icons.edit), findsNothing);
-      expect(find.byIcon(Icons.delete), findsNothing);
-    },
-  );
+    expect(find.byIcon(Icons.edit), findsNothing);
+    expect(find.byIcon(Icons.delete), findsNothing);
+  });
 
   testWidgets(
     'Registrar peso valida un peso inválido sin llamar al repositorio, y '
@@ -156,6 +157,7 @@ void main() {
       await tester.pumpWidget(_appUnderTest(repo: repo));
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.text('Registrar peso'));
       await tester.tap(find.text('Registrar peso'));
       await tester.pumpAndSettle();
 

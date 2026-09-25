@@ -110,7 +110,7 @@ void main() {
       expect(registro.nombre, 'Toby');
       expect(registro.especie, Especie.perro);
 
-      expect(find.text('Rita Gómez'), findsOneWidget);
+      expect(find.text('Cliente'), findsOneWidget);
     },
   );
 
@@ -171,11 +171,17 @@ void main() {
 
       expect(find.text('Peso (kg)'), findsNothing);
       expect(
-        tester.widget<TextFormField>(find.byType(TextFormField).at(0)).controller!.text,
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(0))
+            .controller!
+            .text,
         'Rocky',
       );
       expect(
-        tester.widget<TextFormField>(find.byType(TextFormField).at(1)).controller!.text,
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(1))
+            .controller!
+            .text,
         'Labrador',
       );
       expect(
@@ -194,33 +200,35 @@ void main() {
       await tester.pump();
       expect(boton().onPressed, isNotNull);
 
+      await tester.ensureVisible(
+        find.widgetWithText(AppButton, 'Guardar cambios'),
+      );
       await tester.tap(find.widgetWithText(AppButton, 'Guardar cambios'));
       await tester.pumpAndSettle();
 
       expect(repo.actualizados, hasLength(1));
       expect(repo.actualizados.single.raza, 'Golden');
 
-      expect(find.text('Rocky'), findsOneWidget);
+      expect(find.text('Paciente'), findsOneWidget);
     },
   );
 
-  testWidgets(
-    'abrir /clientes/c-1/mascotas/m-1/editar también renderiza el '
-    'formulario de edición (ambos árboles de rutas quedan conectados)',
-    (tester) async {
-      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
-      await tester.pumpWidget(
-        _appUnderTest(
-          initialLocation: '/clientes/c-1/mascotas/m-1/editar',
-          mascotaRepo: repo,
-        ),
-      );
-      await tester.pumpAndSettle();
+  testWidgets('abrir /clientes/c-1/mascotas/m-1/editar también renderiza el '
+      'formulario de edición (ambos árboles de rutas quedan conectados)', (
+    tester,
+  ) async {
+    final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+    await tester.pumpWidget(
+      _appUnderTest(
+        initialLocation: '/clientes/c-1/mascotas/m-1/editar',
+        mascotaRepo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(AppButton, 'Guardar cambios'), findsOneWidget);
-      expect(find.text('Peso (kg)'), findsNothing);
-    },
-  );
+    expect(find.widgetWithText(AppButton, 'Guardar cambios'), findsOneWidget);
+    expect(find.text('Peso (kg)'), findsNothing);
+  });
 
   testWidgets(
     'si registrarMascota lanza MascotaFailure se muestra el mensaje y se '

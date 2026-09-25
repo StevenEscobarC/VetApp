@@ -116,6 +116,7 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
     final textTheme = Theme.of(context).textTheme;
     final fechaNacimiento = mascota.fechaNacimiento;
     final raza = mascota.raza;
+    final rutaBase = widget.rutaBase;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -128,8 +129,7 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
               size: 96,
               isUploading: _subiendoFoto,
               onTomarFoto: () => _cambiarFoto(mascota, FuenteFoto.camara),
-              onElegirGaleria: () =>
-                  _cambiarFoto(mascota, FuenteFoto.galeria),
+              onElegirGaleria: () => _cambiarFoto(mascota, FuenteFoto.galeria),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -139,6 +139,12 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
               style: textTheme.headlineSmall,
               textAlign: TextAlign.center,
             ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            label: 'Editar',
+            icon: Icons.edit_outlined,
+            onPressed: () => context.push('$rutaBase/editar'),
           ),
           const SizedBox(height: AppSpacing.lg),
           _FichaRow(label: 'Especie', valor: mascota.especie.etiqueta),
@@ -246,10 +252,7 @@ class _HistorialPeso extends ConsumerWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Aún no hay pesos registrados',
-                style: textTheme.bodyLarge,
-              ),
+              Text('Aún no hay pesos registrados', style: textTheme.bodyLarge),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Usa “Registrar peso” para agregar el primero.',
@@ -269,9 +272,7 @@ class _HistorialPeso extends ConsumerWidget {
             for (var i = 0; i < ordenados.length; i++) ...[
               if (i > 0) const Divider(height: 1),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppSpacing.sm,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [

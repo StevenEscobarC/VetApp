@@ -196,11 +196,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           const SizedBox(height: AppSpacing.md),
           AppTextField(label: 'Dirección', controller: _direccionCtrl),
           const SizedBox(height: AppSpacing.md),
-          AppTextField(
-            label: 'Notas',
-            controller: _notasCtrl,
-            maxLines: 3,
-          ),
+          AppTextField(label: 'Notas', controller: _notasCtrl, maxLines: 3),
           const SizedBox(height: AppSpacing.md),
           if (_error != null) ...[
             Text(
@@ -220,6 +216,14 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           Text('Mascotas', style: textTheme.titleMedium),
           const SizedBox(height: AppSpacing.md),
           _buildMascotas(mascotasAsync, textTheme),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: 'Nueva mascota',
+            icon: Icons.add,
+            variant: AppButtonVariant.outline,
+            onPressed: () =>
+                context.push('/clientes/${widget.clienteId}/nueva-mascota'),
+          ),
           const SizedBox(height: AppSpacing.lg),
           _buildVinculacionRow(context, cliente),
         ],
