@@ -99,7 +99,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 02-09-PLAN.md — Slice: 'Nueva mascota' for existing owner (D-03) + pet edit form (PAT-01, PAT-02)
+- [x] 02-09-PLAN.md — Slice: 'Nueva mascota' for existing owner (D-03) + pet edit form (PAT-01, PAT-02)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -212,7 +212,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
-| 2. Clientes y Pacientes | 8/10 | In Progress|  |
+| 2. Clientes y Pacientes | 9/10 | In Progress|  |
 | 3. Historia Clínica | 0/TBD | Not started | - |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
