@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 /// Wraps [TextFormField] with a visible label above the field —
 /// per the design system's accessibility rule, labels are never
-/// placeholder-only.
+/// placeholder-only. Set [hideLabel] to skip the visible label (e.g. search
+/// fields whose placeholder already states its purpose) while keeping the
+/// [Semantics] label for screen readers.
 class AppTextField extends StatelessWidget {
   const AppTextField({
     super.key,
@@ -16,6 +18,7 @@ class AppTextField extends StatelessWidget {
     this.validator,
     this.onChanged,
     this.maxLines = 1,
+    this.hideLabel = false,
   });
 
   final String label;
@@ -28,14 +31,17 @@ class AppTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final void Function(String)? onChanged;
   final int maxLines;
+  final bool hideLabel;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.labelLarge),
-        const SizedBox(height: 6),
+        if (!hideLabel) ...[
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 6),
+        ],
         Semantics(
           label: label,
           child: TextFormField(

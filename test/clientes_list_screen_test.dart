@@ -11,7 +11,7 @@ import 'helpers/fake_auth.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/router_harness.dart';
 
-Widget _appUnderTest({required repo}) {
+Widget _appUnderTest({required FakeClienteRepository repo}) {
   return routerHarness(
     initialLocation: '/clientes',
     routes: [
