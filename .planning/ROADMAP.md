@@ -79,9 +79,9 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Schema delta (foto_path, mascota_pesos, link-code columns, 3 security-invoker RPCs, private mascota-fotos bucket + Storage RLS), 53-check RLS smoke test, apply to cloud project (BLOCKING human step)
-- [ ] 02-02-PLAN.md — Photo packages legitimacy gate (BLOCKING human step) + install (cached_network_image ^3.4.1) + Android/iOS camera permissions
-- [ ] 02-03-PLAN.md — Slice: Clientes list with instant debounced search (CLI-03)
+- [x] 02-01-PLAN.md — Schema delta (foto_path, mascota_pesos, link-code columns, 3 security-invoker RPCs, private mascota-fotos bucket + Storage RLS), 53-check RLS smoke test, apply to cloud project (BLOCKING human step)
+- [x] 02-02-PLAN.md — Photo packages legitimacy gate (BLOCKING human step) + install (cached_network_image ^3.4.1) + Android/iOS camera permissions
+- [x] 02-03-PLAN.md — Slice: Clientes list with instant debounced search (CLI-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -212,7 +212,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
-| 2. Clientes y Pacientes | 0/10 | Planned | - |
+| 2. Clientes y Pacientes | 3/10 | In Progress|  |
 | 3. Historia Clínica | 0/TBD | Not started | - |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
