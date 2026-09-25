@@ -110,20 +110,17 @@ class AppPhotoPicker extends StatelessWidget {
             right: 0,
             child: Semantics(
               label: 'Tomar foto',
-              child: Tooltip(
-                message: 'Tomar foto',
-                child: Container(
-                  width: size * 0.32,
-                  height: size * 0.32,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.camera_alt_outlined,
-                    color: AppColors.onPrimary,
-                    size: size * 0.18,
-                  ),
+              child: Container(
+                width: size * 0.32,
+                height: size * 0.32,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.onPrimary,
+                  size: size * 0.18,
                 ),
               ),
             ),

@@ -79,6 +79,7 @@ Future<void> _llenarCamposRequeridos(WidgetTester tester) async {
     find.byType(TextFormField).at(_campoMascotaNombre),
     'Rocky',
   );
+  await tester.ensureVisible(find.text('Perro'));
   await tester.tap(find.text('Perro'));
   await tester.pump();
 }
@@ -136,6 +137,7 @@ void main() {
       await tester.pump();
       expect(boton().onPressed, isNull, reason: 'aún falta la especie');
 
+      await tester.ensureVisible(find.text('Perro'));
       await tester.tap(find.text('Perro'));
       await tester.pump();
       expect(boton().onPressed, isNotNull);
@@ -166,6 +168,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Gato'));
     await tester.tap(find.text('Gato'));
     await tester.pump();
     var chipGato = tester.widget<AppFilterChip>(
@@ -173,6 +176,7 @@ void main() {
     );
     expect(chipGato.selected, isTrue);
 
+    await tester.ensureVisible(find.text('Perro'));
     await tester.tap(find.text('Perro'));
     await tester.pump();
     chipGato = tester.widget<AppFilterChip>(
@@ -205,6 +209,7 @@ void main() {
         find.byType(TextFormField).at(_campoMascotaNombre),
         'Rocky',
       );
+      await tester.ensureVisible(find.text('Perro'));
       await tester.tap(find.text('Perro'));
       await tester.pump();
 
@@ -278,6 +283,10 @@ void main() {
     'con foto: tocar el avatar muestra la vista previa y tras guardar sube '
     'la foto y actualiza foto_path',
     (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
       final repo = FakeMascotaRepository();
       final fotos = FakeMascotaFotoDatasource();
       await tester.pumpWidget(
@@ -289,6 +298,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.byIcon(Icons.camera_alt_outlined));
       await tester.tap(find.byIcon(Icons.camera_alt_outlined));
       await tester.pumpAndSettle();
 
@@ -328,6 +338,10 @@ void main() {
     'si subir la foto falla se muestra el snackbar y de todos modos '
     'regresa a la lista porque los registros ya se guardaron',
     (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
       final repo = FakeMascotaRepository();
       const falla = MascotaFailure(
         'No pudimos subir la foto. Intenta de nuevo.',
@@ -342,6 +356,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.byIcon(Icons.camera_alt_outlined));
       await tester.tap(find.byIcon(Icons.camera_alt_outlined));
       await tester.pumpAndSettle();
 

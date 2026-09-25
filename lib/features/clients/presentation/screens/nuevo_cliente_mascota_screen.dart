@@ -1,15 +1,21 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/captura_foto.dart';
 import '../../../../core/utils/formato.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../../core/widgets/media/app_photo_picker.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../patients/domain/entities/mascota.dart';
 import '../../../patients/domain/mascota_failure.dart';
+import '../../../patients/presentation/providers/mascota_foto_providers.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../../patients/presentation/widgets/mascota_campos_section.dart';
 import '../providers/clientes_providers.dart';
@@ -37,6 +43,7 @@ class _NuevoClienteMascotaScreenState
   final _pesoCtrl = TextEditingController();
 
   Especie? _especie;
+  Uint8List? _fotoBytes;
   bool _detallesExpandidos = false;
   bool _loading = false;
   String? _error;
@@ -70,6 +77,12 @@ class _NuevoClienteMascotaScreenState
       _mascotaNombreCtrl.text.trim().isNotEmpty &&
       _especie != null;
 
+  Future<void> _capturar(FuenteFoto fuente) async {
+    final capturador = ref.read(capturadorFotoProvider);
+    final bytes = await capturador(context, fuente);
+    if (bytes != null && mounted) setState(() => _fotoBytes = bytes);
+  }
+
   Future<void> _submit() async {
     final fecha = parsearFecha(_fechaCtrl.text);
     final peso = parsearPeso(_pesoCtrl.text);
@@ -89,7 +102,7 @@ class _NuevoClienteMascotaScreenState
     });
 
     try {
-      await ref
+      final resultado = await ref
           .read(mascotaRepositoryProvider)
           .registrarClienteConMascota(
             clienteNombre: _clienteNombreCtrl.text.trim(),
@@ -100,6 +113,41 @@ class _NuevoClienteMascotaScreenState
             mascotaFechaNacimiento: fecha.valor,
             mascotaPesoKg: peso.valor,
           );
+
+      // Los registros ya se guardaron: una falla al subir la foto nunca
+      // debe bloquear el alta ni deshacer lo ya creado.
+      final foto = _fotoBytes;
+      if (foto != null) {
+        try {
+          // `.future` (no `ref.watch(authProfileProvider)` anywhere in this
+          // screen) awaits the AsyncNotifier's build() instead of racing it
+          // — `ref.read(authProfileProvider).value` would return null here
+          // if this is the first read of the provider in the whole app.
+          final clinicaId = (await ref.read(authProfileProvider.future))
+              ?.clinicaId;
+          if (clinicaId != null) {
+            final path = await ref
+                .read(mascotaFotoDatasourceProvider)
+                .upload(
+                  clinicaId: clinicaId,
+                  mascotaId: resultado.mascotaId,
+                  bytes: foto,
+                );
+            await ref
+                .read(mascotaRepositoryProvider)
+                .actualizarFotoPath(resultado.mascotaId, path);
+          }
+        } on MascotaFailure {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('No pudimos subir la foto. Intenta de nuevo.'),
+              ),
+            );
+          }
+        }
+      }
+
       if (!mounted) return;
       ref.invalidate(clientesProvider);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -161,6 +209,12 @@ class _NuevoClienteMascotaScreenState
                     detallesExpandidos: _detallesExpandidos,
                     onToggleDetalles: () => setState(
                       () => _detallesExpandidos = !_detallesExpandidos,
+                    ),
+                    foto: AppPhotoPicker(
+                      localBytes: _fotoBytes,
+                      size: 96,
+                      onTomarFoto: () => _capturar(FuenteFoto.camara),
+                      onElegirGaleria: () => _capturar(FuenteFoto.galeria),
                     ),
                   ),
                 ],
