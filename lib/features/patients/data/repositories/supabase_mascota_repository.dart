@@ -1,8 +1,35 @@
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/data/busqueda.dart';
 import '../../domain/entities/mascota.dart';
 import '../../domain/mascota_failure.dart';
+
+/// Búsqueda de mascotas en dos pasos (PAT-04, D-06): PostgREST no combina de
+/// forma confiable un filtro sobre una tabla embebida (`clientes.nombre`)
+/// con filtros de la propia tabla dentro de un solo `.or()` — por eso primero
+/// se resuelven los ids de dueño que matchean por nombre ([resolverDuenos]),
+/// y luego se pliegan en el `.or()` de la consulta de mascotas ([consultar])
+/// vía `.in.()`. Query vacía nunca resuelve dueños ni agrega un `.or()` —
+/// [consultar] se llama directamente con `filtro: null`. Extraída como
+/// función top-level (en vez de un método privado) para poder probar la
+/// lógica de orquestación sin un `SupabaseClient` real.
+Future<List<Mascota>> buscarMascotasEnDosPasos({
+  required String query,
+  required Future<List<String>> Function(String q) resolverDuenos,
+  required Future<List<Mascota>> Function(String? filtro) consultar,
+}) async {
+  final q = sanitizarBusqueda(query);
+  if (q.isEmpty) return consultar(null);
+  final ids = await resolverDuenos(q);
+  final filtro = filtroOrIlike(
+    columnas: ['nombre', 'especie'],
+    query: q,
+    columnaIn: 'dueno_id',
+    valoresIn: ids,
+  );
+  return consultar(filtro);
+}
 
 /// Acceso concreto a Supabase para `mascotas`. Sigue el mismo patrón de
 /// manejo de errores en dos niveles que `SupabaseClienteRepository` — sin
@@ -54,6 +81,54 @@ class SupabaseMascotaRepository {
         'No pudimos guardar los datos. Intenta de nuevo.',
       );
     }
+  }
+
+  /// Busca mascotas de [clinicaId] por nombre, especie o nombre de dueño
+  /// (PAT-04, D-06) — `query` vacía devuelve todas, ordenadas por nombre. Ver
+  /// [buscarMascotasEnDosPasos] para la razón del enfoque de dos pasos (nunca
+  /// un único `.or()` mezclando `clientes.nombre` con columnas propias).
+  Future<List<Mascota>> buscar(String query, {required String clinicaId}) {
+    return buscarMascotasEnDosPasos(
+      query: query,
+      resolverDuenos: (q) async {
+        try {
+          final rows = await _client
+              .from('clientes')
+              .select('id')
+              .eq('clinica_id', clinicaId)
+              .ilike('nombre', '%$q%')
+              .limit(50);
+          return (rows as List).map((row) => row['id'] as String).toList();
+        } on PostgrestException catch (e) {
+          throw MascotaFailure(_messageFor(e));
+        } catch (_) {
+          throw const MascotaFailure(
+            'No pudimos cargar la lista. Intenta de nuevo.',
+          );
+        }
+      },
+      consultar: (filtro) async {
+        try {
+          var builder = _client
+              .from('mascotas')
+              .select('*, clientes!mascotas_dueno_misma_clinica_fkey(nombre)')
+              .eq('clinica_id', clinicaId);
+          if (filtro != null) {
+            builder = builder.or(filtro);
+          }
+          final rows = await builder.order('nombre');
+          return (rows as List)
+              .map((row) => _fromRow(row as Map<String, dynamic>))
+              .toList();
+        } on PostgrestException catch (e) {
+          throw MascotaFailure(_messageFor(e));
+        } catch (_) {
+          throw const MascotaFailure(
+            'No pudimos cargar la lista. Intenta de nuevo.',
+          );
+        }
+      },
+    );
   }
 
   /// Mascotas del cliente [clienteId], ordenadas por nombre. Usada por
