@@ -36,7 +36,7 @@ fi
 
 any_fail=0
 
-for t in clinicas perfiles clientes mascotas; do
+for t in clinicas perfiles clientes mascotas mascota_pesos; do
   code=$(curl -s -o /dev/null -w '%{http_code}' \
     -H "apikey: $SUPABASE_ANON_KEY" \
     -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
@@ -64,6 +64,38 @@ else
   echo "FAIL anon insert $anon_code"
   any_fail=1
 fi
+
+for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion; do
+  case "$rpc" in
+    registrar_cliente_con_mascota)
+      payload='{"cliente_nombre":"probe","cliente_telefono":"3000000000","mascota_nombre":"probe","mascota_especie":"perro","mascota_raza":"","mascota_fecha_nacimiento":null,"mascota_peso_kg":null}'
+      ;;
+    registrar_mascota)
+      payload='{"mascota_dueno_id":"00000000-0000-0000-0000-000000000000","mascota_nombre":"probe","mascota_especie":"perro","mascota_raza":"","mascota_fecha_nacimiento":null,"mascota_peso_kg":null}'
+      ;;
+    generar_codigo_vinculacion)
+      payload='{"p_cliente_id":"00000000-0000-0000-0000-000000000000"}'
+      ;;
+  esac
+
+  rpc_code=$(curl -s -o /dev/null -w '%{http_code}' \
+    -X POST \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$payload" \
+    "$SUPABASE_URL/rest/v1/rpc/$rpc")
+
+  if [ "$rpc_code" = "401" ] || [ "$rpc_code" = "403" ]; then
+    echo "OK rpc $rpc protegido $rpc_code"
+  elif [ "$rpc_code" = "404" ]; then
+    echo "FAIL rpc $rpc 404 (no aplicada)"
+    any_fail=1
+  else
+    echo "FAIL rpc $rpc $rpc_code"
+    any_fail=1
+  fi
+done
 
 if [ "$any_fail" -ne 0 ]; then
   exit 1

@@ -17,6 +17,10 @@
 --
 -- Cobertura: clinicas, perfiles, clientes, mascotas -- positivo y negativo,
 -- incluyendo el intento de auto-escalación de privilegios en perfiles (D-03/D-04).
+-- Fase 2: mascota_pesos (historial de peso append-only), las 3 RPCs atómicas
+-- (registrar_cliente_con_mascota, registrar_mascota, generar_codigo_vinculacion),
+-- las columnas de código de vinculación en clientes, y storage.objects del bucket
+-- privado mascota-fotos -- todo scoped por clínica.
 
 do $$
 declare
@@ -32,6 +36,13 @@ declare
   failures text[] := '{}';
   checks int := 0;
   n int;
+  v_codigo text;
+  v_codigo2 text;
+  v_expira timestamptz;
+  v_reemplazo boolean;
+  v_uuid uuid;
+  v_cli uuid;
+  v_masc uuid;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -82,6 +93,14 @@ begin
     values (cliente_a_id, clinica_a_id, 'Mascota Seed A', 'perro') returning id into mascota_a_id;
   insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
     values (cliente_b_id, clinica_b_id, 'Mascota Seed B', 'gato') returning id into mascota_b_id;
+
+  insert into public.mascota_pesos (mascota_id, peso_kg) values (mascota_a_id, 10.00);
+  insert into public.mascota_pesos (mascota_id, peso_kg) values (mascota_b_id, 20.00);
+
+  insert into storage.objects (bucket_id, name)
+    values ('mascota-fotos', clinica_a_id::text || '/' || mascota_a_id::text || '/smoke-a.jpg');
+  insert into storage.objects (bucket_id, name)
+    values ('mascota-fotos', clinica_b_id::text || '/' || mascota_b_id::text || '/smoke-b.jpg');
 
   -------------------------------------------------------------------------
   -- Impersonar vet A (positivo + negativo).
@@ -288,6 +307,279 @@ begin
   exception
     when insufficient_privilege then null;
     when others then failures := failures || ('C8 error inesperado: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- Fase 2: volver a impersonar vet A -- mascota_pesos, RPCs atómicas,
+  -- código de vinculación y storage.objects (positivo + negativo).
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- D1: insert mascota_pesos (mascota A) -> éxito.
+  checks := checks + 1;
+  begin
+    insert into public.mascota_pesos (mascota_id, peso_kg) values (mascota_a_id, 5.5);
+  exception when others then
+    failures := failures || ('D1 insert peso de mascota propia debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- D2: insert mascota_pesos (mascota B) -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    insert into public.mascota_pesos (mascota_id, peso_kg) values (mascota_b_id, 7.0);
+    failures := failures || 'D2 vet A insertó peso de mascota B';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('D2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- D3: select mascota_pesos de mascota B -> 0.
+  checks := checks + 1;
+  select count(*) into n from public.mascota_pesos where mascota_id = mascota_b_id;
+  if n <> 0 then failures := failures || format('D3 vet A ve %s pesos de mascota B, esperaba 0', n); end if;
+
+  -- D4: update mascota_pesos de mascota A -> 0 filas (append-only).
+  checks := checks + 1;
+  update public.mascota_pesos set peso_kg = 99 where mascota_id = mascota_a_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('D4 update mascota_pesos afectó %s filas, esperaba 0 (append-only)', n); end if;
+
+  -- D5: delete mascota_pesos de mascota A -> 0 filas (append-only).
+  checks := checks + 1;
+  delete from public.mascota_pesos where mascota_id = mascota_a_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('D5 delete mascota_pesos afectó %s filas, esperaba 0 (append-only)', n); end if;
+
+  -- D6: insert mascota_pesos peso 0 -> check_violation.
+  checks := checks + 1;
+  begin
+    insert into public.mascota_pesos (mascota_id, peso_kg) values (mascota_a_id, 0);
+    failures := failures || 'D6 insert peso 0 debía fallar pero tuvo éxito';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('D6 error inesperado: ' || sqlerrm);
+  end;
+
+  -- D7: registrar_cliente_con_mascota crea cliente+mascota+peso atómicamente en clinica A.
+  checks := checks + 1;
+  begin
+    select cliente_id, mascota_id into v_cli, v_masc
+      from public.registrar_cliente_con_mascota('Smoke RPC Cliente', '3000000000', 'Smoke RPC Pet', 'perro', '', null, 4.5);
+    if not exists (select 1 from public.clientes where id = v_cli and clinica_id = clinica_a_id) then
+      failures := failures || 'D7 cliente creado por RPC no quedó en clinica A';
+    end if;
+    if not exists (select 1 from public.mascotas where id = v_masc and clinica_id = clinica_a_id) then
+      failures := failures || 'D7 mascota creada por RPC no quedó en clinica A';
+    end if;
+    select count(*) into n from public.mascota_pesos where mascota_id = v_masc;
+    if n <> 1 then failures := failures || format('D7 esperaba 1 fila de peso para la mascota nueva, vio %s', n); end if;
+  exception when others then
+    failures := failures || ('D7 registrar_cliente_con_mascota propia clinica debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- D8: registrar_mascota con dueño de otra clinica -> foreign_key_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_mascota(cliente_b_id, 'Smoke Intruso', 'gato');
+    failures := failures || 'D8 registrar_mascota con dueño de otra clinica debía fallar pero tuvo éxito';
+  exception
+    when foreign_key_violation then null;
+    when others then failures := failures || ('D8 error inesperado: ' || sqlerrm);
+  end;
+
+  -- D9: registrar_mascota con dueño propio y peso inicial -> éxito, 1 fila de peso.
+  checks := checks + 1;
+  begin
+    select public.registrar_mascota(cliente_a_id, 'Smoke Luna', 'gato', '', null, 3.2) into v_uuid;
+    select count(*) into n from public.mascota_pesos where mascota_id = v_uuid;
+    if n <> 1 then failures := failures || format('D9 esperaba 1 fila de peso para Smoke Luna, vio %s', n); end if;
+  exception when others then
+    failures := failures || ('D9 registrar_mascota propia clinica debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- D10: generar_codigo_vinculacion primera vez -- formato de 6 dígitos, no expirado, reemplazo_expirado false.
+  checks := checks + 1;
+  begin
+    select codigo, expira_en, reemplazo_expirado into v_codigo, v_expira, v_reemplazo
+      from public.generar_codigo_vinculacion(cliente_a_id);
+    if v_codigo !~ '^[0-9]{6}$' then
+      failures := failures || format('D10 codigo generado no tiene formato de 6 dígitos: %s', v_codigo);
+    end if;
+    if v_reemplazo is distinct from false then
+      failures := failures || 'D10 reemplazo_expirado debía ser false en la primera generación';
+    end if;
+    if v_expira <= now() then
+      failures := failures || 'D10 expira_en no quedó en el futuro';
+    end if;
+    if not exists (select 1 from public.clientes where id = cliente_a_id and codigo_vinculacion = v_codigo) then
+      failures := failures || 'D10 clientes.codigo_vinculacion no quedó igual al codigo devuelto';
+    end if;
+  exception when others then
+    failures := failures || ('D10 generar_codigo_vinculacion propio cliente debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- D11: pedirlo otra vez antes de expirar -> mismo codigo.
+  checks := checks + 1;
+  begin
+    select codigo into v_codigo2 from public.generar_codigo_vinculacion(cliente_a_id);
+    if v_codigo2 is distinct from v_codigo then
+      failures := failures || format('D11 esperaba el mismo codigo vigente, obtuvo %s vs %s', v_codigo2, v_codigo);
+    end if;
+  exception when others then
+    failures := failures || ('D11 error inesperado: ' || sqlerrm);
+  end;
+
+  -- D12: forzar expiración y regenerar -> reemplazo_expirado true, nueva expiración futura.
+  checks := checks + 1;
+  update public.clientes set codigo_expira_en = now() - interval '1 minute' where id = cliente_a_id;
+  begin
+    select codigo, expira_en, reemplazo_expirado into v_codigo2, v_expira, v_reemplazo
+      from public.generar_codigo_vinculacion(cliente_a_id);
+    if v_reemplazo is distinct from true then
+      failures := failures || 'D12 reemplazo_expirado debía ser true tras expirar el codigo anterior';
+    end if;
+    if v_expira <= now() then
+      failures := failures || 'D12 expira_en no quedó en el futuro tras regenerar';
+    end if;
+  exception when others then
+    failures := failures || ('D12 error inesperado: ' || sqlerrm);
+  end;
+
+  -- D13: generar_codigo_vinculacion sobre cliente de otra clinica -> no_data_found.
+  checks := checks + 1;
+  begin
+    perform public.generar_codigo_vinculacion(cliente_b_id);
+    failures := failures || 'D13 generar_codigo_vinculacion sobre cliente de otra clinica debía fallar pero tuvo éxito';
+  exception
+    when no_data_found then null;
+    when others then failures := failures || ('D13 error inesperado: ' || sqlerrm);
+  end;
+
+  -- D14: codigo_vinculacion con formato inválido -> check_violation.
+  checks := checks + 1;
+  begin
+    update public.clientes set codigo_vinculacion = 'abc123' where id = cliente_a_id;
+    failures := failures || 'D14 codigo_vinculacion con formato inválido debía fallar pero tuvo éxito';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('D14 error inesperado: ' || sqlerrm);
+  end;
+
+  -- D15: update codigo_vinculacion de cliente B -> 0 filas (RLS-filtrado).
+  checks := checks + 1;
+  update public.clientes set codigo_vinculacion = '000001' where id = cliente_b_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('D15 update codigo_vinculacion sobre cliente B afectó %s filas, esperaba 0', n); end if;
+
+  -- D16: insert storage.objects en la carpeta de la propia clinica -> éxito.
+  checks := checks + 1;
+  begin
+    insert into storage.objects (bucket_id, name)
+      values ('mascota-fotos', clinica_a_id::text || '/' || mascota_a_id::text || '/smoke-a2.jpg');
+  exception when others then
+    failures := failures || ('D16 insert storage.objects en carpeta propia debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- D17: insert storage.objects en carpeta de otra clinica -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    insert into storage.objects (bucket_id, name)
+      values ('mascota-fotos', clinica_b_id::text || '/' || mascota_b_id::text || '/smoke-intruso.jpg');
+    failures := failures || 'D17 insert storage.objects en carpeta de otra clinica debía fallar pero tuvo éxito';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('D17 error inesperado: ' || sqlerrm);
+  end;
+
+  -- D18: select storage.objects bajo el prefijo de clinica B -> 0.
+  checks := checks + 1;
+  begin
+    select count(*) into n from storage.objects
+      where bucket_id = 'mascota-fotos' and name like clinica_b_id::text || '/%';
+    if n <> 0 then failures := failures || format('D18 vet A ve %s objetos de storage de clinica B, esperaba 0', n); end if;
+  exception when others then
+    failures := failures || ('D18 error inesperado: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- Fase 2: impersonar vet B -- negativo cruzado contra datos de A.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- E1: select mascota_pesos de mascota A -> 0.
+  checks := checks + 1;
+  select count(*) into n from public.mascota_pesos where mascota_id = mascota_a_id;
+  if n <> 0 then failures := failures || format('E1 vet B ve %s pesos de mascota A, esperaba 0', n); end if;
+
+  -- E2: select clientes con codigo_vinculacion de cliente A -> 0.
+  checks := checks + 1;
+  select count(*) into n from public.clientes where id = cliente_a_id and codigo_vinculacion is not null;
+  if n <> 0 then failures := failures || format('E2 vet B ve codigo_vinculacion de cliente A (%s filas), esperaba 0', n); end if;
+
+  -- E3: select storage.objects bajo el prefijo de clinica A -> 0.
+  checks := checks + 1;
+  begin
+    select count(*) into n from storage.objects
+      where bucket_id = 'mascota-fotos' and name like clinica_a_id::text || '/%';
+    if n <> 0 then failures := failures || format('E3 vet B ve %s objetos de storage de clinica A, esperaba 0', n); end if;
+  exception when others then
+    failures := failures || ('E3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- E4: generar_codigo_vinculacion sobre cliente de otra clinica -> no_data_found.
+  checks := checks + 1;
+  begin
+    perform public.generar_codigo_vinculacion(cliente_a_id);
+    failures := failures || 'E4 vet B pudo generar codigo para cliente de otra clinica';
+  exception
+    when no_data_found then null;
+    when others then failures := failures || ('E4 error inesperado: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- Fase 2: impersonar cliente (sin clinica) -- sin acceso alguno.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', cliente_c_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- F1: select mascota_pesos -> 0.
+  checks := checks + 1;
+  select count(*) into n from public.mascota_pesos;
+  if n <> 0 then failures := failures || format('F1 cliente ve %s filas de mascota_pesos, esperaba 0', n); end if;
+
+  -- F2: registrar_cliente_con_mascota -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    perform public.registrar_cliente_con_mascota('F2 Cliente', '3000000003', 'F2 Mascota', 'perro');
+    failures := failures || 'F2 cliente pudo ejecutar registrar_cliente_con_mascota';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('F2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- F3: select storage.objects del bucket mascota-fotos -> 0.
+  checks := checks + 1;
+  begin
+    select count(*) into n from storage.objects where bucket_id = 'mascota-fotos';
+    if n <> 0 then failures := failures || format('F3 cliente ve %s objetos en mascota-fotos, esperaba 0', n); end if;
+  exception when others then
+    failures := failures || ('F3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- F4: insert storage.objects en carpeta de clinica A -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    insert into storage.objects (bucket_id, name)
+      values ('mascota-fotos', clinica_a_id::text || '/' || mascota_a_id::text || '/smoke-cliente.jpg');
+    failures := failures || 'F4 cliente pudo insertar objeto en storage de clinica A';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('F4 error inesperado: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------
