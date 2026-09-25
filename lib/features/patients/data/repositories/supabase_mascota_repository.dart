@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/data/busqueda.dart';
 import '../../domain/entities/mascota.dart';
+import '../../domain/entities/peso_registro.dart';
 import '../../domain/mascota_failure.dart';
 
 /// Búsqueda de mascotas en dos pasos (PAT-04, D-06): PostgREST no combina de
@@ -170,6 +171,72 @@ class SupabaseMascotaRepository {
       );
     }
   }
+
+  /// Una sola mascota por [id], con el mismo embed de dueño que [buscar] —
+  /// usada por `mascotaProvider` (ficha, Plan 08).
+  Future<Mascota> obtener(String id) async {
+    try {
+      final row = await _client
+          .from('mascotas')
+          .select('*, clientes!mascotas_dueno_misma_clinica_fkey(nombre)')
+          .eq('id', id)
+          .single();
+      return _fromRow(row);
+    } on PostgrestException catch (e) {
+      throw MascotaFailure(_messageFor(e));
+    } catch (_) {
+      throw const MascotaFailure(
+        'No pudimos cargar la mascota. Intenta de nuevo.',
+      );
+    }
+  }
+
+  /// Historial de peso de [mascotaId], más reciente primero (PAT-05). No
+  /// existe (ni debe existir) un método `actualizarPeso`/`eliminarPeso` —
+  /// ver el doc comment de [PesoRegistro].
+  Future<List<PesoRegistro>> pesos(String mascotaId) async {
+    try {
+      final rows = await _client
+          .from('mascota_pesos')
+          .select()
+          .eq('mascota_id', mascotaId)
+          .order('registrado_en', ascending: false);
+      return (rows as List)
+          .map((row) => _pesoFromRow(row as Map<String, dynamic>))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw MascotaFailure(_messageFor(e));
+    } catch (_) {
+      throw const MascotaFailure(
+        'No pudimos cargar el historial de peso. Intenta de nuevo.',
+      );
+    }
+  }
+
+  /// Agrega una nueva entrada de peso — nunca actualiza ni borra una
+  /// existente (append-only, PAT-05/T-02-PESO). El servidor asigna
+  /// `registrado_en` (`default now()`).
+  Future<void> registrarPeso(String mascotaId, double pesoKg) async {
+    try {
+      await _client.from('mascota_pesos').insert({
+        'mascota_id': mascotaId,
+        'peso_kg': pesoKg,
+      });
+    } on PostgrestException catch (e) {
+      throw MascotaFailure(_messageFor(e));
+    } catch (_) {
+      throw const MascotaFailure(
+        'No pudimos guardar los datos. Intenta de nuevo.',
+      );
+    }
+  }
+
+  PesoRegistro _pesoFromRow(Map<String, dynamic> row) => PesoRegistro(
+    id: row['id'] as String,
+    mascotaId: row['mascota_id'] as String,
+    pesoKg: (row['peso_kg'] as num).toDouble(),
+    registradoEn: DateTime.parse(row['registrado_en'] as String).toLocal(),
+  );
 
   Mascota _fromRow(Map<String, dynamic> row) {
     final raza = row['raza'] as String?;

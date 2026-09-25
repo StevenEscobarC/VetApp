@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -10,6 +11,7 @@ import '../../../../core/widgets/chips/app_filter_chip.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../domain/entities/mascota.dart';
 import '../providers/mascotas_providers.dart';
+import '../widgets/mascota_foto_avatar.dart';
 
 /// Primera pantalla real de Pacientes (PAT-04, D-06): lista + búsqueda
 /// instantánea (nombre, dueño o especie) contra Supabase, más chips de
@@ -173,31 +175,41 @@ class _PacientesBody extends ConsumerWidget {
               : partesSecundarias.join(' · ');
 
           return AppCard(
-            child: Column(
+            onTap: () => context.push('/pacientes/${mascota.id}'),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  mascota.nombre,
-                  style: textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
+                MascotaFotoAvatar(fotoPath: mascota.fotoPath, size: 56),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        mascota.nombre,
+                        style: textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        secundaria,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      if (mascota.duenoNombre != null) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          mascota.duenoNombre!,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  secundaria,
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                if (mascota.duenoNombre != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    mascota.duenoNombre!,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
               ],
             ),
           );

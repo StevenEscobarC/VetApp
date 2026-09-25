@@ -1,5 +1,6 @@
 import 'package:vetapp/features/patients/data/repositories/supabase_mascota_repository.dart';
 import 'package:vetapp/features/patients/domain/entities/mascota.dart';
+import 'package:vetapp/features/patients/domain/entities/peso_registro.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 
 /// In-memory [SupabaseMascotaRepository] stand-in so no test in this phase
@@ -11,13 +12,27 @@ import 'package:vetapp/features/patients/presentation/providers/mascotas_provide
 class FakeMascotaRepository implements SupabaseMascotaRepository {
   FakeMascotaRepository({
     List<Mascota> mascotas = const [],
+    Map<String, List<PesoRegistro>> pesosPorMascota = const {},
     this.error,
     this.resultado = const (clienteId: 'c-nuevo', mascotaId: 'm-nuevo'),
-  }) : mascotas = List.of(mascotas);
+  }) : mascotas = List.of(mascotas),
+       pesosPorMascota = {
+         for (final entry in pesosPorMascota.entries)
+           entry.key: List.of(entry.value),
+       };
 
   final List<Mascota> mascotas;
   final Object? error;
   final ({String clienteId, String mascotaId}) resultado;
+
+  /// mascotaId -> historial de peso seedeado (Plan 08) — deliberadamente NO
+  /// se ordena aquí: [pesos] lo devuelve tal cual fue seedeado, para que los
+  /// tests verifiquen que la pantalla (no el fake) hace el ordenamiento
+  /// defensivo por `registradoEn` descendente.
+  final Map<String, List<PesoRegistro>> pesosPorMascota;
+
+  /// Every call to [registrarPeso], in call order.
+  final List<({String mascotaId, double pesoKg})> pesosRegistrados = [];
 
   /// Every call to [registrarClienteConMascota], in call order.
   final List<
@@ -93,6 +108,33 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
     if (error != null) throw error!;
     fotoPathsActualizados[mascotaId] = fotoPath;
   }
+
+  @override
+  Future<Mascota> obtener(String id) async {
+    if (error != null) throw error!;
+    return mascotas.firstWhere((m) => m.id == id);
+  }
+
+  @override
+  Future<List<PesoRegistro>> pesos(String mascotaId) async {
+    if (error != null) throw error!;
+    return List.of(pesosPorMascota[mascotaId] ?? const []);
+  }
+
+  @override
+  Future<void> registrarPeso(String mascotaId, double pesoKg) async {
+    pesosRegistrados.add((mascotaId: mascotaId, pesoKg: pesoKg));
+    if (error != null) throw error!;
+    final lista = pesosPorMascota.putIfAbsent(mascotaId, () => []);
+    lista.add(
+      PesoRegistro(
+        id: 'p-${lista.length + 1}',
+        mascotaId: mascotaId,
+        pesoKg: pesoKg,
+        registradoEn: DateTime.now(),
+      ),
+    );
+  }
 }
 
 /// Sample mascotas reused verbatim by later plans (07-09) — ids/nombres must
@@ -104,6 +146,7 @@ const mascotaRocky = Mascota(
   nombre: 'Rocky',
   especie: Especie.perro,
   raza: 'Labrador',
+  fotoPath: 'cli-1/m-1/1.jpg',
   duenoNombre: 'Rita Gómez',
 );
 
