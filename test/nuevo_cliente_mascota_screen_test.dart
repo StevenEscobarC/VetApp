@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -9,10 +11,12 @@ import 'package:vetapp/features/clients/presentation/providers/clientes_provider
 import 'package:vetapp/features/clients/presentation/screens/nuevo_cliente_mascota_screen.dart';
 import 'package:vetapp/features/patients/domain/entities/mascota.dart';
 import 'package:vetapp/features/patients/domain/mascota_failure.dart';
+import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_clientes.dart';
+import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/router_harness.dart';
 
@@ -27,6 +31,8 @@ const _campoFecha = 4;
 Widget _appUnderTest({
   required FakeMascotaRepository mascotaRepo,
   FakeClienteRepository? clienteRepo,
+  FakeMascotaFotoDatasource? fotoDatasource,
+  Uint8List? fotoCapturada,
 }) {
   return routerHarness(
     initialLocation: '/clientes/nuevo',
@@ -50,6 +56,12 @@ Widget _appUnderTest({
       clienteRepositoryProvider.overrideWithValue(
         clienteRepo ?? FakeClienteRepository(),
       ),
+      mascotaFotoDatasourceProvider.overrideWithValue(
+        fotoDatasource ?? FakeMascotaFotoDatasource(),
+      ),
+      capturadorFotoProvider.overrideWithValue(
+        capturadorFalso(fotoCapturada),
+      ),
     ],
   );
 }
@@ -67,6 +79,7 @@ Future<void> _llenarCamposRequeridos(WidgetTester tester) async {
     find.byType(TextFormField).at(_campoMascotaNombre),
     'Rocky',
   );
+  await tester.ensureVisible(find.text('Perro'));
   await tester.tap(find.text('Perro'));
   await tester.pump();
 }
@@ -124,6 +137,7 @@ void main() {
       await tester.pump();
       expect(boton().onPressed, isNull, reason: 'aún falta la especie');
 
+      await tester.ensureVisible(find.text('Perro'));
       await tester.tap(find.text('Perro'));
       await tester.pump();
       expect(boton().onPressed, isNotNull);
@@ -154,6 +168,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Gato'));
     await tester.tap(find.text('Gato'));
     await tester.pump();
     var chipGato = tester.widget<AppFilterChip>(
@@ -161,6 +176,7 @@ void main() {
     );
     expect(chipGato.selected, isTrue);
 
+    await tester.ensureVisible(find.text('Perro'));
     await tester.tap(find.text('Perro'));
     await tester.pump();
     chipGato = tester.widget<AppFilterChip>(
@@ -193,6 +209,7 @@ void main() {
         find.byType(TextFormField).at(_campoMascotaNombre),
         'Rocky',
       );
+      await tester.ensureVisible(find.text('Perro'));
       await tester.tap(find.text('Perro'));
       await tester.pump();
 
@@ -259,6 +276,101 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Datos del dueño'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'con foto: tocar el avatar muestra la vista previa y tras guardar sube '
+    'la foto y actualiza foto_path',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final repo = FakeMascotaRepository();
+      final fotos = FakeMascotaFotoDatasource();
+      await tester.pumpWidget(
+        _appUnderTest(
+          mascotaRepo: repo,
+          fotoDatasource: fotos,
+          fotoCapturada: kFotoPrueba,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byIcon(Icons.camera_alt_outlined));
+      await tester.tap(find.byIcon(Icons.camera_alt_outlined));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Image), findsOneWidget);
+
+      await _llenarCamposRequeridos(tester);
+
+      await tester.ensureVisible(find.text('Guardar cliente y mascota'));
+      await tester.tap(find.text('Guardar cliente y mascota'));
+      await tester.pumpAndSettle();
+
+      expect(fotos.uploads, [('cli-1', 'm-nuevo')]);
+      expect(repo.fotoPathsActualizados['m-nuevo'], 'cli-1/m-nuevo/fake.jpg');
+      expect(find.text('LISTA'), findsOneWidget);
+    },
+  );
+
+  testWidgets('sin foto nunca llama a upload', (tester) async {
+    final repo = FakeMascotaRepository();
+    final fotos = FakeMascotaFotoDatasource();
+    await tester.pumpWidget(
+      _appUnderTest(mascotaRepo: repo, fotoDatasource: fotos),
+    );
+    await tester.pumpAndSettle();
+
+    await _llenarCamposRequeridos(tester);
+
+    await tester.ensureVisible(find.text('Guardar cliente y mascota'));
+    await tester.tap(find.text('Guardar cliente y mascota'));
+    await tester.pumpAndSettle();
+
+    expect(fotos.uploads, isEmpty);
+    expect(find.text('LISTA'), findsOneWidget);
+  });
+
+  testWidgets(
+    'si subir la foto falla se muestra el snackbar y de todos modos '
+    'regresa a la lista porque los registros ya se guardaron',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final repo = FakeMascotaRepository();
+      const falla = MascotaFailure(
+        'No pudimos subir la foto. Intenta de nuevo.',
+      );
+      final fotos = FakeMascotaFotoDatasource(error: falla);
+      await tester.pumpWidget(
+        _appUnderTest(
+          mascotaRepo: repo,
+          fotoDatasource: fotos,
+          fotoCapturada: kFotoPrueba,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byIcon(Icons.camera_alt_outlined));
+      await tester.tap(find.byIcon(Icons.camera_alt_outlined));
+      await tester.pumpAndSettle();
+
+      await _llenarCamposRequeridos(tester);
+
+      await tester.ensureVisible(find.text('Guardar cliente y mascota'));
+      await tester.tap(find.text('Guardar cliente y mascota'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No pudimos subir la foto. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+      expect(find.text('LISTA'), findsOneWidget);
     },
   );
 }
