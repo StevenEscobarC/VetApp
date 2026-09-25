@@ -6,6 +6,7 @@ import '../../../../core/data/supabase_client_provider.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/repositories/supabase_mascota_repository.dart';
 import '../../domain/entities/mascota.dart';
+import '../../domain/entities/peso_registro.dart';
 
 final mascotaRepositoryProvider = Provider<SupabaseMascotaRepository>((ref) {
   return SupabaseMascotaRepository(ref.watch(supabaseClientProvider));
@@ -17,6 +18,22 @@ final mascotaRepositoryProvider = Provider<SupabaseMascotaRepository>((ref) {
 final mascotasDeClienteProvider = FutureProvider.autoDispose
     .family<List<Mascota>, String>((ref, clienteId) {
       return ref.watch(mascotaRepositoryProvider).porCliente(clienteId);
+    });
+
+/// Una mascota por id, consumido por `MascotaDetailScreen` (Plan 08).
+/// `autoDispose.family` — solo vive mientras la ficha está montada.
+final mascotaProvider = FutureProvider.autoDispose.family<Mascota, String>((
+  ref,
+  mascotaId,
+) {
+  return ref.watch(mascotaRepositoryProvider).obtener(mascotaId);
+});
+
+/// Historial de peso de una mascota (PAT-05), más reciente primero —
+/// consumido por `MascotaDetailScreen` (Plan 08).
+final pesosProvider = FutureProvider.autoDispose
+    .family<List<PesoRegistro>, String>((ref, mascotaId) {
+      return ref.watch(mascotaRepositoryProvider).pesos(mascotaId);
     });
 
 /// Búsqueda instantánea de mascotas (PAT-04, D-06): cada tecla llama a
