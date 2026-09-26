@@ -2,7 +2,7 @@
 phase: 3
 slug: historia-cl-nica
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-26
 ---
@@ -36,17 +36,17 @@ created: 2026-09-26
 
 ## Per-Task Verification Map
 
-Plan/task IDs are assigned by the planner — this table maps each phase requirement to its verification method.
+Plan/task IDs assigned by the planner (2026-09-26). Additional per-plan coverage: D-02 end-to-end (form -> ficha weight history) in `test/mascota_detail_screen_test.dart` (03-04-T1); PDF export action loading/error/share in `test/mascota_detail_screen_test.dart` (03-05-T1); numeric parsing in `test/formato_test.dart` (03-03-T1); extra helper `test/helpers/fake_pdf.dart` (03-05-T1).
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | HIST-01 | — | Consulta create succeeds with only diagnóstico+tratamiento filled; other fields stay `null` | unit (fake repository) | `flutter test test/consultas_providers_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | HIST-01 | — | Form blocks submission only when diagnóstico or tratamiento is empty — never blocks on anamnesis/examen físico/evolución | widget | `flutter test test/consulta_form_screen_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | HIST-02 | — | Timeline renders consultas ordered by fecha descending, defensively re-sorted client-side | widget (fake repository, 2+ unordered entries) | `flutter test test/mascota_detail_screen_test.dart` | ❌ Wave 0 (extend existing) | ⬜ pending |
-| TBD | TBD | TBD | HIST-03, D-04 | — | `HistoriaClinicaPdfService.generar()` returns non-empty bytes for a list of consultas; includes every consulta, not just the latest | unit | `flutter test test/historia_clinica_pdf_service_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | HIST-04 | — | No `copyWith`/update path exists on `Consulta`; repository exposes no `actualizar`/`eliminar` method | static/manual code-review check | N/A — grep during code review | ❌ Wave 0 (documented, not automated) | ⬜ pending |
-| TBD | TBD | TBD | D-02 | T-03-PESO | `registrarConsulta` with a non-null `pesoKg` triggers exactly one RPC call carrying both the consulta fields and the peso — never two separate repository calls | unit (fake repository, call-count/args assertion) | `flutter test test/consultas_providers_test.dart` | ❌ Wave 0 | ⬜ pending |
-| TBD | TBD | TBD | HIST-01..04 | — | RLS on `consultas` blocks cross-clinic access as `authenticated` role; no update/delete succeeds even for the owning vet | manual (SQL Editor, extends Phase 1-2 script) | n/a — extended RLS smoke test | n/a | ⬜ pending |
+| 03-03-T1/T2 | 03-03 | 1 | HIST-01 | — | Consulta create succeeds with only diagnóstico+tratamiento filled; other fields stay `null` | unit (fake repository) | `flutter test test/consultas_providers_test.dart` | ❌ Wave 0 | ⬜ pending |
+| 03-03-T1/T3 | 03-03 | 1 | HIST-01 | — | Form blocks submission only when diagnóstico or tratamiento is empty — never blocks on anamnesis/examen físico/evolución | widget | `flutter test test/consulta_form_screen_test.dart` | ❌ Wave 0 | ⬜ pending |
+| 03-04-T1/T2 | 03-04 | 2 | HIST-02 | — | Timeline renders consultas ordered by fecha descending, defensively re-sorted client-side | widget (fake repository, 2+ unordered entries) | `flutter test test/mascota_detail_screen_test.dart` | ❌ Wave 0 (extend existing) | ⬜ pending |
+| 03-05-T1/T2 | 03-05 | 3 | HIST-03, D-04 | — | `HistoriaClinicaPdfService.generar()` returns non-empty bytes for a list of consultas; includes every consulta, not just the latest | unit | `flutter test test/historia_clinica_pdf_service_test.dart` | ❌ Wave 0 | ⬜ pending |
+| 03-03-T2, 03-06-T1 | 03-03, 03-06 | 1, 4 | HIST-04 | T-03-APPEND | No `copyWith`/update path exists on `Consulta`; repository exposes no `actualizar`/`eliminar` method | static/manual code-review check | grep gates DATA3_OK (03-03-T2) and GATE3_OK (03-06-T1) | n/a — static gate | ⬜ pending |
+| 03-03-T1/T2 | 03-03 | 1 | D-02 | T-03-PESO | `registrarConsulta` with a non-null `pesoKg` triggers exactly one RPC call carrying both the consulta fields and the peso — never two separate repository calls | unit (fake repository, call-count/args assertion) | `flutter test test/consultas_providers_test.dart` | ❌ Wave 0 | ⬜ pending |
+| 03-01-T2/T3 | 03-01 | 1 | HIST-01..04 | T-03-RLS, T-03-APPEND | RLS on `consultas` blocks cross-clinic access as `authenticated` role; no update/delete succeeds even for the owning vet | manual (SQL Editor, extends Phase 1-2 script) | n/a — extended RLS smoke test | n/a | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -80,6 +80,6 @@ Plan/task IDs are assigned by the planner — this table maps each phase require
 - [ ] Wave 0 covers all MISSING references (5 new test files + 1 new fake)
 - [ ] No watch-mode flags
 - [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter (set once planner confirms coverage)
+- [x] `nyquist_compliant: true` set in frontmatter (planner confirmed coverage 2026-09-26)
 
 **Approval:** pending

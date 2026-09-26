@@ -119,7 +119,26 @@ Plans:
   3. El veterinario puede exportar la historia clínica de una mascota a PDF
   4. Las entradas de historia clínica guardadas no se pueden editar ni borrar — las correcciones se hacen con una entrada nueva
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Schema delta (append-only consultas + RLS, atomic registrar_consulta RPC feeding mascota_pesos), 70-check RLS smoke test, apply to cloud project (BLOCKING human step)
+- [ ] 03-02-PLAN.md — PDF packages legitimacy gate (BLOCKING human step) + install exact pins pdf 3.12.0 / printing 5.14.3
+- [ ] 03-03-PLAN.md — Slice: 'Nueva consulta' from the pet ficha — reconciled Consulta entity, repository/RPC, 2-required-field form, weight feeds weight history (HIST-01, HIST-04, D-02, D-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-04-PLAN.md — Slice: clinical timeline inline in the pet ficha, newest first, expandable, no edit/delete (HIST-02, HIST-04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-05-PLAN.md — Slice: export the whole history to PDF via the native share sheet (HIST-03, D-04, D-05)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 03-06-PLAN.md — README + full gate + HIST-04 structural check + validation sign-off + human-verified device UAT against the live backend
 **UI hint**: yes
 
 ### Phase 4: Agenda y Citas
