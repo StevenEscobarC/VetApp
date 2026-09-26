@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clinical_history/domain/consulta_failure.dart';
 import 'package:vetapp/features/clinical_history/domain/entities/consulta.dart';
@@ -39,7 +40,7 @@ void main() {
       final repo = FakeConsultaRepository(
         consultas: [
           consultaOtitis,
-          const Consulta(
+          Consulta(
             id: 'con-otra',
             mascotaId: 'm-2',
             veterinarioId: 'vet-1',

@@ -127,7 +127,10 @@ class FakeConsultaRepository implements SupabaseConsultaRepository {
 /// Fixtures reused verbatim by later plans (03-04/03-05) — ids/fechas must
 /// not change. Dates deliberately distinct from the weight fixtures in
 /// mascota_detail_screen_test.dart. All belong to mascotaId 'm-1'.
-const consultaOtitis = Consulta(
+/// `DateTime`'s default constructor is not `const`, so these fixtures can't
+/// be `const` either — mirrors why `mascotaRocky` (fake_mascotas.dart) is
+/// `const` (no `DateTime` field) while these need `final`.
+final consultaOtitis = Consulta(
   id: 'con-1',
   mascotaId: 'm-1',
   veterinarioId: 'vet-1',
@@ -135,7 +138,7 @@ const consultaOtitis = Consulta(
   diagnostico: 'Otitis externa',
   tratamiento: 'Gotas óticas cada 12 horas',
   anamnesis: 'Se rasca la oreja derecha',
-  examenFisico: ExamenFisico(
+  examenFisico: const ExamenFisico(
     pesoKg: 4.2,
     temperaturaC: 38.5,
     frecuenciaCardiaca: 90,
@@ -145,7 +148,7 @@ const consultaOtitis = Consulta(
   evolucion: 'Mejoría a los 5 días',
 );
 
-const consultaGastro = Consulta(
+final consultaGastro = Consulta(
   id: 'con-2',
   mascotaId: 'm-1',
   veterinarioId: 'vet-1',
@@ -153,10 +156,10 @@ const consultaGastro = Consulta(
   diagnostico: 'Gastroenteritis leve',
   tratamiento: 'Dieta blanda 3 días',
   anamnesis: 'Vómito desde ayer',
-  examenFisico: ExamenFisico(temperaturaC: 39.1),
+  examenFisico: const ExamenFisico(temperaturaC: 39.1),
 );
 
-const consultaControl = Consulta(
+final consultaControl = Consulta(
   id: 'con-3',
   mascotaId: 'm-1',
   veterinarioId: 'vet-1',
@@ -167,4 +170,4 @@ const consultaControl = Consulta(
 
 /// Unsorted on purpose (Feb, Aug, Apr) — same "fake never sorts" reasoning
 /// as [FakeMascotaRepository.pesosPorMascota].
-const consultasRocky = [consultaOtitis, consultaGastro, consultaControl];
+final consultasRocky = [consultaOtitis, consultaGastro, consultaControl];

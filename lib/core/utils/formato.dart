@@ -57,6 +57,34 @@ String formatearFecha(DateTime fecha) => _formatoFecha.format(fecha);
   return (valor: valor, error: null);
 }
 
+/// Interpreta [texto] como un número positivo, aceptando coma o punto
+/// decimal (`38,5` o `38.5`) — usado por los signos vitales del examen
+/// físico (temperatura, frecuencias) que no comparten el rango de peso de
+/// [parsearPeso]. Vacío devuelve `(valor: null, error: null)` (campo
+/// opcional). Solo es válido si `0 < valor < [maximo]`; si [entero] es
+/// `true`, [texto] no puede tener parte fraccionaria (ej. frecuencia
+/// cardíaca). Cualquier otra condición devuelve el mismo mensaje en
+/// español, per UI-SPEC's Copywriting Contract (una sola redacción para
+/// todo campo numérico de la consulta).
+({double? valor, String? error}) parsearNumeroPositivo(
+  String texto, {
+  bool entero = false,
+  double maximo = 1000,
+}) {
+  final t = texto.trim();
+  if (t.isEmpty) return (valor: null, error: null);
+
+  const error = 'Ingresa un valor numérico válido';
+  final valor = double.tryParse(t.replaceAll(',', '.'));
+  if (valor == null || valor <= 0 || valor >= maximo) {
+    return (valor: null, error: error);
+  }
+  if (entero && valor != valor.truncateToDouble()) {
+    return (valor: null, error: error);
+  }
+  return (valor: valor, error: null);
+}
+
 /// Formatea [pesoKg] con coma como separador decimal y hasta 2 decimales,
 /// recortando ceros sobrantes (`12.5` -> `'12,5 kg'`, `12.0` -> `'12 kg'`).
 String formatearPeso(double pesoKg) {
