@@ -18,19 +18,19 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 
 ### Clientes (CLI)
 
-- [ ] **CLI-01**: El veterinario puede crear un cliente (dueño) con nombre y teléfono, sin que el cliente necesite cuenta
-- [ ] **CLI-02**: El veterinario puede ver y editar los datos de un cliente
-- [ ] **CLI-03**: El veterinario puede buscar/filtrar clientes por nombre o teléfono
-- [ ] **CLI-04**: El veterinario puede ver las mascotas asociadas a un cliente
-- [ ] **CLI-05**: El veterinario puede generar un código/enlace de vinculación desde la ficha del cliente, para que el dueño reclame acceso a sus mascotas registradas cuando cree su propia cuenta (agregado 2026-09-24 — ver DIR-06 en Fase 9 para el lado del cliente)
+- [x] **CLI-01**: El veterinario puede crear un cliente (dueño) con nombre y teléfono, sin que el cliente necesite cuenta
+- [x] **CLI-02**: El veterinario puede ver y editar los datos de un cliente
+- [x] **CLI-03**: El veterinario puede buscar/filtrar clientes por nombre o teléfono
+- [x] **CLI-04**: El veterinario puede ver las mascotas asociadas a un cliente
+- [x] **CLI-05**: El veterinario puede generar un código/enlace de vinculación desde la ficha del cliente, para que el dueño reclame acceso a sus mascotas registradas cuando cree su propia cuenta (agregado 2026-09-24 — ver DIR-06 en Fase 9 para el lado del cliente)
 
 ### Pacientes (PAT)
 
-- [ ] **PAT-01**: El veterinario puede crear una ficha de mascota (especie, raza, edad, peso, foto, dueño asociado)
-- [ ] **PAT-02**: El veterinario puede ver y editar la ficha de una mascota
-- [ ] **PAT-03**: El veterinario puede subir/cambiar la foto de una mascota (Supabase Storage privado + URL firmada)
-- [ ] **PAT-04**: El veterinario puede buscar/filtrar mascotas por nombre, dueño o especie
-- [ ] **PAT-05**: Una mascota puede tener más de un peso registrado en el tiempo (historial de peso)
+- [x] **PAT-01**: El veterinario puede crear una ficha de mascota (especie, raza, edad, peso, foto, dueño asociado)
+- [x] **PAT-02**: El veterinario puede ver y editar la ficha de una mascota
+- [x] **PAT-03**: El veterinario puede subir/cambiar la foto de una mascota (Supabase Storage privado + URL firmada)
+- [x] **PAT-04**: El veterinario puede buscar/filtrar mascotas por nombre, dueño o especie
+- [x] **PAT-05**: Una mascota puede tener más de un peso registrado en el tiempo (historial de peso)
 
 ### Historia clínica (HIST)
 
@@ -134,8 +134,8 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FOUND-01..06 | Phase 1 — Fundación | Complete |
-| CLI-01..05 | Phase 2 — Clientes y Pacientes | Pending |
-| PAT-01..05 | Phase 2 — Clientes y Pacientes | Pending |
+| CLI-01..05 | Phase 2 — Clientes y Pacientes | Complete |
+| PAT-01..05 | Phase 2 — Clientes y Pacientes | Complete |
 | HIST-01..04 | Phase 3 — Historia Clínica | Pending |
 | AGND-01..06 | Phase 4 — Agenda y Citas | Pending |
 | VAC-01..05 | Phase 5 — Vacunación y Desparasitación | Pending |
