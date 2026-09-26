@@ -1,7 +1,7 @@
 ---
 phase: 3
 slug: historia-clinica
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-09-26
@@ -39,7 +39,7 @@ created: 2026-09-26
 | Tool | none — Flutter mobile app, no shadcn/npm ecosystem (same as Phases 1–2) |
 | Preset | not applicable |
 | Component library | Existing `lib/core/widgets/**` (`AppButton`, `AppCard`, `AppTextField`, `AppTopBar`) reused as-is. **No new widget goes into `core/widgets/**` this phase** — the one new visual pattern (the consulta timeline entry) is feature-specific (only this screen needs it) and lives in `lib/features/clinical_history/presentation/widgets/**` per 03-RESEARCH.md's project structure, not the shared library. |
-| Icon library | Material Icons (`Icons.*`), same convention as Phases 1–2. New icons this phase: `Icons.picture_as_pdf_outlined` (Exportar PDF action), `Icons.add` (Nueva consulta button — same icon `AppButton` already uses for "Registrar peso," reinforcing "add a new record" as a consistent icon language), `Icons.expand_more`/`Icons.expand_less` (timeline card expand/collapse, same pair `MascotaCamposSection`'s disclosure already uses as `keyboard_arrow_down`/`keyboard_arrow_up` — use the same pair for visual consistency, not a mixed icon family). |
+| Icon library | Material Icons (`Icons.*`), same convention as Phases 1–2. New icons this phase: `Icons.picture_as_pdf_outlined` (Exportar PDF action), `Icons.add` (Nueva consulta button — same icon `AppButton` already uses for "Registrar peso," reinforcing "add a new record" as a consistent icon language), `Icons.keyboard_arrow_down`/`Icons.keyboard_arrow_up` (timeline card expand/collapse — the exact pair `MascotaCamposSection`'s disclosure already uses, verified in `lib/features/patients/presentation/widgets/mascota_campos_section.dart`; use the same pair for visual consistency, not a mixed icon family). |
 | Font | Caprasimo (headings) + Figtree (body/labels) — unchanged from Phase 1. No new font roles needed. |
 
 **Source of truth for tokens below:** `.planning/phases/01-fundaci-n/01-UI-SPEC.md` — values copied verbatim, not re-derived.
@@ -111,8 +111,8 @@ Accent is never applied to: timeline card backgrounds, body/detail text inside a
 **What it replaces:** nothing existing — this is Phase 3's first timeline-of-structured-records UI (Phase 2's "Historial de peso" is a flat list of single numbers, not applicable as a direct template beyond ordering/date-formatting conventions).
 
 - **Visual:** `AppCard`, one per consulta, stacked with `AppSpacing.sm` gaps (not a `Divider`-separated flat list like weight history — these entries carry enough content to warrant card boundaries).
-- **Collapsed state (default):** a single row — `formatearFecha(consulta.fecha)` on the left (Label role, `textSecondary`, same treatment as the weight-history date column), the diagnóstico text on the next line below (Body, single line, `TextOverflow.ellipsis` if it doesn't fit), and an expand chevron (`Icons.expand_more`, `textMuted`) aligned to the trailing edge of the date row.
-- **Expanded state (tap anywhere on the card to toggle — local `bool` per card, no navigation, no new screen):** chevron flips to `Icons.expand_less`; below the diagnóstico line, render in this fixed order, each as a Label heading + Body value pair:
+- **Collapsed state (default):** a single row — `formatearFecha(consulta.fecha)` on the left (Label role, `textSecondary`, same treatment as the weight-history date column), the diagnóstico text on the next line below (Body, single line, `TextOverflow.ellipsis` if it doesn't fit), and an expand chevron (`Icons.keyboard_arrow_down`, `textMuted`) aligned to the trailing edge of the date row.
+- **Expanded state (tap anywhere on the card to toggle — local `bool` per card, no navigation, no new screen):** chevron flips to `Icons.keyboard_arrow_up`; below the diagnóstico line, render in this fixed order, each as a Label heading + Body value pair:
   1. **Anamnesis** — value text, or `Sin registrar` (`textMuted`) if `null`.
   2. **Examen físico** — only rendered as a sub-block if `!examenFisico.estaVacio`; each present vital sign as its own `Label: value` line (e.g. "Peso: 4.2 kg", "Temperatura: 38.5 °C", "Frecuencia cardíaca: 90 lpm", "Frecuencia respiratoria: 24 rpm", "Mucosas: rosadas"). If `examenFisico.estaVacio` is `true`, render one line: "Examen físico: Sin registrar" instead of five empty rows — never show five "Sin registrar" lines for a skipped exam, one line covers it.
   3. **Diagnóstico** — repeated here in full (the collapsed summary may have been truncated) — always present, never "Sin registrar" (HIST-01/D-03 requires it).
@@ -203,14 +203,14 @@ Not applicable. Flutter/Dart mobile app — no shadcn/npm component registry eco
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS (icon-mismatch flag fixed in place — timeline chevron now genuinely matches `MascotaCamposSection`'s `keyboard_arrow_down`/`keyboard_arrow_up`)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS (not applicable — no registry ecosystem)
 
-**Approval:** pending
+**Approval:** approved (2026-09-26, gsd-ui-checker + in-place fix, no re-check cycle needed)
 
 ---
 
