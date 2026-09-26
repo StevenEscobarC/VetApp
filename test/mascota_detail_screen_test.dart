@@ -4,13 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/utils/captura_foto.dart';
+import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/clinical_history/presentation/providers/consultas_providers.dart';
 import 'package:vetapp/features/patients/domain/entities/peso_registro.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/features/patients/presentation/screens/mascota_detail_screen.dart';
 
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_consultas.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/router_harness.dart';
@@ -43,6 +46,7 @@ Widget _appUnderTest({
   required FakeMascotaRepository repo,
   FakeMascotaFotoDatasource? fotos,
   CapturadorFoto? capturador,
+  FakeConsultaRepository? consultaRepo,
   String initialLocation = '/pacientes/m-1',
 }) {
   return routerHarness(
@@ -58,6 +62,13 @@ Widget _appUnderTest({
               mascotaId: state.pathParameters['id']!,
               rutaBase: state.uri.path,
             ),
+            routes: [
+              GoRoute(
+                path: 'consultas/nueva',
+                builder: (_, state) =>
+                    Text('FORM CONSULTA ${state.pathParameters['id']}'),
+              ),
+            ],
           ),
         ],
       ),
@@ -77,6 +88,9 @@ Widget _appUnderTest({
       ),
       capturadorFotoProvider.overrideWithValue(
         capturador ?? capturadorFalso(null),
+      ),
+      consultaRepositoryProvider.overrideWithValue(
+        consultaRepo ?? FakeConsultaRepository(),
       ),
     ],
   );
@@ -227,4 +241,45 @@ void main() {
 
     expect(find.text('FICHA CLIENTE c-1'), findsOneWidget);
   });
+
+  testWidgets(
+    "muestra 'Historia clínica', demota 'Editar' a outline, y 'Nueva "
+    "consulta' es el único botón primario de la ficha",
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      await tester.pumpWidget(_appUnderTest(repo: repo));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Historia clínica'), findsOneWidget);
+
+      final editar = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, 'Editar'),
+      );
+      expect(editar.variant, AppButtonVariant.outline);
+
+      final botonesPrimarios = tester
+          .widgetList<AppButton>(find.byType(AppButton))
+          .where((b) => b.variant == AppButtonVariant.primary);
+      expect(botonesPrimarios, hasLength(1));
+      expect(botonesPrimarios.single.label, 'Nueva consulta');
+
+      expect(find.text('Grabar nota de voz'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    "tocar 'Nueva consulta' navega al formulario de consulta para esa "
+    'mascota',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      await tester.pumpWidget(_appUnderTest(repo: repo));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Nueva consulta'));
+      await tester.tap(find.text('Nueva consulta'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('FORM CONSULTA m-1'), findsOneWidget);
+    },
+  );
 }
