@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 2 planned and verified, ready to execute
-last_updated: "2026-09-25T02:49:18.329Z"
-last_activity: 2026-09-25 -- Phase 02 execution started
+status: ready_to_plan
+stopped_at: Phase 02 complete (10/10) — ready to discuss Phase 03
+last_updated: 2026-09-26T00:26:40.105Z
+last_activity: 2026-09-26 -- Phase 02 completed
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 16
-  completed_plans: 6
+  completed_plans: 16
   percent: 11
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** El veterinario puede llevar toda su consulta — pacientes, historia clínica, agenda — desde el celular, sin depender de un computador ni de una recepcionista.
-**Current focus:** Phase 02 — clientes-y-pacientes
+**Current focus:** Phase 03 — historia clínica
 
 ## Current Position
 
-Phase: 02 (clientes-y-pacientes) — EXECUTING
-Plan: 1 of 10
-Status: Executing Phase 02
-Last activity: 2026-09-25 -- Phase 02 execution started
+Phase: 03
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-26
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,7 +36,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 6
+- Total plans completed: 16
 - Average duration: - min
 - Total execution time: 0 hours
 
@@ -45,6 +45,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 6 | - | - |
+| 02 | 10 | - | - |
 
 **Recent Trend:**
 
@@ -75,6 +76,7 @@ None yet.
 - [Phase 1]: Gate automático `check.decision-coverage-plan` reportó 0/6 decisiones D-01..D-06 cubiertas al planear la Fase 1 — verificado como falso positivo (probablemente busca un campo YAML estructurado en vez del texto de las secciones "Must-Haves"): las 6 decisiones están citadas explícitamente en los planes (ej. `01-02-PLAN.md:249` "D-01/D-02: Inicio shows only the real nombre + clinic name..."). El usuario aprobó continuar sin replanear. Re-verificar en `/gsd:verify-work` si el gate se corrige.
 - [Phase 2]: `02-REVIEW.md` WR-03 — `ClienteDetailScreen`/`MascotaFormScreen` llenan `TextEditingController.text` directamente dentro de `build()`, lo cual dispara `setState()` síncrono mid-build. No falla hoy solo por un detalle interno no documentado de Flutter (el elemento que llama `setState()` es el mismo que está construyéndose) — es frágil ante cualquier refactor futuro (helper widget, `didUpdateWidget`, etc.). Documentado, no arreglado — requiere mover el llenado inicial a `ref.listen(...)` o `addPostFrameCallback`.
 - [Phase 2]: UAT en dispositivo (02-10) detectó un parpadeo visual (no fuga de datos, RLS sigue protegiendo todo) — al cambiar de cuenta de veterinario en el mismo dispositivo, la lista de Clientes muestra por una fracción de segundo los datos de la cuenta anterior antes de corregirse a la lista vacía correcta. Causa probable: providers de Riverpod no se invalidan al cambiar de sesión. Usuario decidió diferir el fix (candidato para Fase 8 o un ajuste rápido standalone). También se observó que la vista de Pacientes tarda un poco en cargar en emulador — no confirmado como problema real de producción.
+- [Phase 2]: El comando `gsd-sdk query phase.complete "02"` calculó `next_phase: "09"` en vez de `"03"` — parece elegir la siguiente carpeta de fase ya existente en disco (solo `01`, `02` y `09` tenían directorio creado) en vez de seguir el orden numérico/dependencias reales del ROADMAP.md ("Execution Order: 1 → 2 → 3 → ... → 9"; la Fase 9 además depende de la Fase 4, que no existe aún). Corregido manualmente en STATE.md a Fase 3. Verificar este comportamiento antes de confiar en `next_phase` de nuevo al cerrar futuras fases.
 
 ### Roadmap Evolution
 
@@ -91,6 +93,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-24T23:59:00.000Z
-Stopped at: Phase 2 planned and verified, ready to execute
-Resume file: .planning/phases/02-clientes-y-pacientes/02-01-PLAN.md
+Last session: 2026-09-26T00:26:40.105Z
+Stopped at: Phase 02 complete (10/10), verified, ready to discuss Phase 03
+Resume file: .planning/phases/02-clientes-y-pacientes/02-VERIFICATION.md
