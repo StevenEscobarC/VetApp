@@ -87,6 +87,27 @@ class MascotasNotifier extends AsyncNotifier<List<Mascota>> {
       state = result;
     });
   }
+
+  /// Vuelve a ejecutar la búsqueda ACTUAL ([_query], sin reiniciarla) —
+  /// misma razón que `ClientesNotifier.refrescar()` (ver su doc comment):
+  /// evita que `ref.invalidate(mascotasProvider)` desde una pantalla ajena
+  /// resetee `_query` a `''` y deje el buscador con texto pero la lista sin
+  /// filtrar (WR-02).
+  Future<void> refrescar() async {
+    final clinicaId = ref.read(authProfileProvider).value?.clinicaId;
+    if (clinicaId == null) {
+      state = const AsyncData<List<Mascota>>([]);
+      return;
+    }
+    final sequence = ++_sequence;
+    final result = await AsyncValue.guard(
+      () => ref
+          .read(mascotaRepositoryProvider)
+          .buscar(_query, clinicaId: clinicaId),
+    );
+    if (!ref.mounted || sequence != _sequence) return;
+    state = result;
+  }
 }
 
 final mascotasProvider =

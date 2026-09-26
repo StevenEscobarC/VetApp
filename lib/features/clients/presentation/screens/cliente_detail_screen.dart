@@ -130,7 +130,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
       if (!mounted) return;
       setState(() => _original = resultado);
       ref.invalidate(clienteProvider(widget.clienteId));
-      ref.invalidate(clientesProvider);
+      ref.read(clientesProvider.notifier).refrescar();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Cambios guardados')));

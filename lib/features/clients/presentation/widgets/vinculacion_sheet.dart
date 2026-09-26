@@ -16,7 +16,7 @@ String textoVigencia(DateTime expiraEn, DateTime ahora) {
   if (restante >= const Duration(hours: 23, minutes: 30)) {
     return 'Válido por 24 horas';
   }
-  if (restante < const Duration(hours: 1)) {
+  if (restante <= const Duration(hours: 1)) {
     return 'Válido por menos de 1 hora';
   }
   final horas = (restante.inMinutes / 60).ceil();

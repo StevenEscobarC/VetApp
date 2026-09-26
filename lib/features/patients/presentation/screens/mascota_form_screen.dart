@@ -181,8 +181,8 @@ class _MascotaFormScreenState extends ConsumerState<MascotaFormScreen> {
       if (!mounted) return;
       ref.invalidate(mascotasDeClienteProvider(clienteId));
       ref.invalidate(clienteProvider(clienteId));
-      ref.invalidate(clientesProvider);
-      ref.invalidate(mascotasProvider);
+      ref.read(clientesProvider.notifier).refrescar();
+      ref.read(mascotasProvider.notifier).refrescar();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Mascota guardada')));
@@ -264,7 +264,7 @@ class _MascotaFormScreenState extends ConsumerState<MascotaFormScreen> {
 
       if (!mounted) return;
       ref.invalidate(mascotaProvider(original.id));
-      ref.invalidate(mascotasProvider);
+      ref.read(mascotasProvider.notifier).refrescar();
       ref.invalidate(mascotasDeClienteProvider(original.duenoId));
       ScaffoldMessenger.of(
         context,

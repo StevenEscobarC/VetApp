@@ -78,6 +78,30 @@ class ClientesNotifier extends AsyncNotifier<List<Cliente>> {
       state = result;
     });
   }
+
+  /// Vuelve a ejecutar la búsqueda ACTUAL ([_query], sin reiniciarla) contra
+  /// el repositorio — para que pantallas ajenas (ficha de cliente, alta
+  /// combinada) puedan refrescar la lista tras guardar un cambio sin
+  /// descartar lo que el usuario ya tenía escrito en el buscador. A
+  /// diferencia de `ref.invalidate(clientesProvider)`, que descarta esta
+  /// instancia y crea una nueva con `_query` reseteado a `''` — dejando el
+  /// campo de búsqueda con texto pero la lista mostrando resultados sin
+  /// filtrar (WR-02).
+  Future<void> refrescar() async {
+    final clinicaId = ref.read(authProfileProvider).value?.clinicaId;
+    if (clinicaId == null) {
+      state = const AsyncData<List<Cliente>>([]);
+      return;
+    }
+    final sequence = ++_sequence;
+    final result = await AsyncValue.guard(
+      () => ref
+          .read(clienteRepositoryProvider)
+          .buscar(_query, clinicaId: clinicaId),
+    );
+    if (!ref.mounted || sequence != _sequence) return;
+    state = result;
+  }
 }
 
 final clientesProvider =

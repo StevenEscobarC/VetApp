@@ -75,7 +75,7 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
       }
 
       ref.invalidate(mascotaProvider(widget.mascotaId));
-      ref.invalidate(mascotasProvider);
+      ref.read(mascotasProvider.notifier).refrescar();
     } on MascotaFailure {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -164,7 +164,7 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
             valor: mascota.duenoNombre ?? 'Sin registrar',
             onTapValor: mascota.duenoNombre == null
                 ? null
-                : () => context.go('/clientes/${mascota.duenoId}'),
+                : () => context.push('/clientes/${mascota.duenoId}'),
           ),
           const SizedBox(height: AppSpacing.xl),
           Text('Historial de peso', style: textTheme.titleMedium),

@@ -149,7 +149,8 @@ class _NuevoClienteMascotaScreenState
       }
 
       if (!mounted) return;
-      ref.invalidate(clientesProvider);
+      ref.read(clientesProvider.notifier).refrescar();
+      ref.read(mascotasProvider.notifier).refrescar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cliente y mascota guardados')),
       );

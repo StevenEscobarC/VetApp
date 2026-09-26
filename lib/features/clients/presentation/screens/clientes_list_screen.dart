@@ -113,10 +113,7 @@ class _ClientesBody extends ConsumerWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: () {
-        ref.invalidate(clientesProvider);
-        return ref.read(clientesProvider.future);
-      },
+      onRefresh: () => ref.read(clientesProvider.notifier).refrescar(),
       child: ListView.separated(
         padding: const EdgeInsets.all(AppSpacing.md),
         itemCount: clientes.length,

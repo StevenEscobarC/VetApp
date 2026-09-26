@@ -154,10 +154,7 @@ class _PacientesBody extends ConsumerWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: () {
-        ref.invalidate(mascotasProvider);
-        return ref.read(mascotasProvider.future);
-      },
+      onRefresh: () => ref.read(mascotasProvider.notifier).refrescar(),
       child: ListView.separated(
         padding: const EdgeInsets.all(AppSpacing.md),
         itemCount: visibles.length,

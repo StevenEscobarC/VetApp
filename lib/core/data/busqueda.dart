@@ -4,6 +4,11 @@
 /// término de búsqueda que los contenga (ej. un apellido con paréntesis)
 /// nunca rompa ni altere la consulta. Colapsa espacios repetidos y recorta
 /// los extremos.
+///
+/// No neutraliza los comodines de `ILIKE` (`%`, `_`): un término que los
+/// contenga cambia el patrón de coincidencia en vez de buscarse como texto
+/// literal. Esto es una rareza funcional aceptada (no permite alterar la
+/// estructura del filtro), no un problema de seguridad.
 String sanitizarBusqueda(String raw) {
   final sinDelimitadores = raw.replaceAll(RegExp('[,()]'), ' ');
   return sinDelimitadores.replaceAll(RegExp(r'\s+'), ' ').trim();
