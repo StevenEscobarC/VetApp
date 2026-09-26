@@ -14,6 +14,41 @@ El proyecto ya existe en la nube (`apjonrmhkpyzbofupokb`). Para dejarlo listo de
 
 El trigger de `auth.users` crea automáticamente la fila en `perfiles`. Si el rol es `VETERINARIO`, también crea la clínica indicada durante el registro. Los dueños de mascotas viven en la tabla `clientes` (sin cuenta propia, sin fila en `auth.users`) — el veterinario los registra directamente. Las políticas RLS aíslan cada clínica por `clinica_id` en `clinicas`, `perfiles`, `clientes` y `mascotas`; esa es la única frontera de aislamiento multi-tenant (la app no filtra por clínica en el cliente).
 
+## Fase 2 — Clientes y Pacientes
+
+Esta fase agrega historia clínica básica de mascotas (fotos, peso, vinculación de cuenta). Requiere aplicar un delta de esquema sobre lo de la Fase 1 y cuatro paquetes nuevos con permisos de cámara.
+
+### Aplicar el delta de esquema (idempotente)
+
+1. En **SQL Editor**, vuelve a pegar y ejecutar el archivo completo [`supabase/schema.sql`](supabase/schema.sql) (incluye la Fase 1 y la Fase 2; es idempotente, seguro de re-ejecutar aunque ya tengas la Fase 1 aplicada).
+2. En una consulta nueva, pega y ejecuta el archivo completo [`supabase/tests/rls_smoke_test.sql`](supabase/tests/rls_smoke_test.sql) (también extendido con los checks de la Fase 2). Espera el mensaje `RLS SMOKE: PASS (53 checks)` (27 de la Fase 1 + 26 de la Fase 2); es intencional que termine en un error — el script fuerza una excepción al final para revertir automáticamente todos los datos de prueba que creó.
+3. Corre `bash supabase/tests/verify_live_schema.sh` — debe terminar con `LIVE_SCHEMA_OK` (ahora también prueba `mascota_pesos` y las 3 RPCs nuevas con la clave `anon`, esperando rechazo).
+4. En **Storage**, confirma que el bucket **`mascota-fotos`** existe, es **privado** (sin etiqueta "Public") y tiene exactamente 4 políticas (`mascota_fotos_select`/`insert`/`update`/`delete`, todas para el rol `authenticated`). El esquema las crea junto con el bucket en el paso 1; no se crean manualmente.
+
+### Paquetes nuevos (fotos de mascota)
+
+Instalados y fijados en `pubspec.yaml`:
+
+| Paquete | Versión | Uso |
+|---|---|---|
+| `image_picker` | `^1.2.3` | Abrir la cámara (o galería) para la foto de la mascota |
+| `flutter_image_compress` | `^2.5.1` | Comprimir la foto antes de subirla a Storage |
+| `permission_handler` | `^12.0.3` | Verificar/solicitar el permiso de cámara antes de abrirla |
+| `cached_network_image` | `^3.4.1` | Cachear y mostrar la foto de la mascota por su `foto_path` |
+
+`cached_network_image` se mantiene deliberadamente en `^3.4.1` (no `^4.x`) hasta un futuro bump del SDK de Dart — la versión 4 exige una constraint de SDK más nueva que la actual (`^3.11.1`).
+
+### Permisos de cámara
+
+- **Android**: `android/app/src/main/AndroidManifest.xml` ya declara `android.permission.CAMERA` y `android.permission.INTERNET`.
+- **iOS**: `ios/Runner/Info.plist` ya declara `NSCameraUsageDescription` y `NSPhotoLibraryUsageDescription`.
+- **macOS** (solo la primera vez que compiles para macOS): `permission_handler` requiere macros de preprocesador explícitas o siempre reporta la cámara como denegada. En el `Podfile` generado (`macos/Podfile`), dentro del bloque `post_install`, agrega a `GCC_PREPROCESSOR_DEFINITIONS`:
+  ```
+  'PERMISSION_CAMERA=1',
+  'PERMISSION_PHOTOS=1',
+  ```
+  (junto a las demás definiciones ya generadas por CocoaPods). No es necesario en Android/iOS — solo afecta el build de macOS.
+
 ## Ejecutar Flutter
 
 No se guardan claves en el código fuente. Crea un archivo `dart_define.json` en la raíz del repo (ya está en `.gitignore`, nunca se sube) con este contenido:
