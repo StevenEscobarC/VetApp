@@ -14,7 +14,7 @@ VetApp pasa de ser una app Flutter con UI mockeada a una herramienta real de ges
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Fundación** - Proyecto Supabase real, RLS probado y Riverpod/go_router realmente conectados (completed 2026-09-24)
-- [ ] **Phase 2: Clientes y Pacientes** - CRUD real de dueños y mascotas con foto y búsqueda
+- [x] **Phase 2: Clientes y Pacientes** - CRUD real de dueños y mascotas con foto y búsqueda (completed 2026-09-26)
 - [ ] **Phase 3: Historia Clínica** - Registro estructurado, línea de tiempo y exportación a PDF por paciente
 - [ ] **Phase 4: Agenda y Citas** - Calendario de citas con recordatorios locales y por WhatsApp
 - [ ] **Phase 5: Vacunación y Desparasitación** - Carné digital con cálculo automático de próxima dosis y enlace compartible
@@ -103,7 +103,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 02-10-PLAN.md — README + full gate + validation sign-off + human-verified device UAT against the live backend
+- [x] 02-10-PLAN.md — README + full gate + validation sign-off + human-verified device UAT against the live backend
 **UI hint**: yes
 
 ### Phase 3: Historia Clínica
@@ -212,7 +212,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
-| 2. Clientes y Pacientes | 9/10 | In Progress|  |
+| 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 0/TBD | Not started | - |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
