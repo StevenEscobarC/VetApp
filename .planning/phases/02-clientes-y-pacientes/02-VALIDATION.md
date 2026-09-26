@@ -53,7 +53,7 @@ Plan/task IDs are assigned by the planner — this table maps each phase require
 | 02-10-T1 | 10 | 6 | all | T-02-37 | Full suite + analyzer + live probe green | full suite | `flutter analyze && flutter test` | ✅ | ✅ green (111/111 tests, analyzer clean, `flutter build apk --debug` succeeded; `verify_live_schema.sh` needs `dart_define.json` on the user's machine — folded into the Task 2 device run) |
 | 02-01-T3 | 01 | 1 | PAT-03 | T-02-STOR | Cross-tenant Storage object read/write blocked (Vet A cannot touch Vet B's prefix) | manual (SQL Editor smoke D16-D18, E3, F3, F4; fallback UAT step 11) | n/a — extended RLS smoke test | n/a | ✅ green (RLS SMOKE: PASS (53 checks), confirmed by user in 02-01) |
 | 02-01-T3 | 01 | 1 | CLI-01..05, PAT-01..05 | T-02-RPC, T-02-PESO, T-02-VINC | RLS on `clientes`/`mascotas`/`mascota_pesos` + RPCs blocks cross-clinic access as `authenticated` (53 checks) | manual (SQL Editor, extends Phase 1 script) | n/a — extended RLS smoke test | n/a | ✅ green (RLS SMOKE: PASS (53 checks), confirmed by user in 02-01) |
-| 02-10-T2 | 10 | 6 | CLI-01..05, PAT-01..05 | — | End-to-end device UAT against live project (camera, Storage, signed URLs, debounce feel) | manual | n/a — UAT checklist in 02-10-PLAN | n/a | ⬜ pending (awaiting user device run) |
+| 02-10-T2 | 10 | 6 | CLI-01..05, PAT-01..05 | — | End-to-end device UAT against live project (camera, Storage, signed URLs, debounce feel) | manual | n/a — UAT checklist in 02-10-PLAN | n/a | ✅ green — APPROVED by user on Android emulator (Pixel 9 API 35) against apjonrmhkpyzbofupokb, 2026-09-25. All 12 steps passed; 2 non-blocking notes recorded (Pacientes list load latency; brief stale-cache flash of the previous clinic's list on account switch, RLS never actually exposed data) — see 02-10-SUMMARY.md |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -90,4 +90,4 @@ Each vertical slice creates its own failing tests as its Task 1 (MVP mode: faili
 - [x] Feedback latency < 30s
 - [x] `nyquist_compliant: true` set in frontmatter (set once planner confirms coverage)
 
-**Approval:** pending — awaiting Task 2 device UAT (`02-10-T2`)
+**Approval:** approved — 2026-09-25, device UAT (Android emulator, Pixel 9 API 35) against the live project `apjonrmhkpyzbofupokb`, all 12 steps passed. Two non-blocking polish items deferred by the user (not blockers): Pacientes list load latency on emulator; a brief stale-cache UI flash of the previous clinic's Clientes list when switching VETERINARIO accounts on the same device before RLS-correct data resolves (no data ever leaked — see 02-10-SUMMARY.md).
