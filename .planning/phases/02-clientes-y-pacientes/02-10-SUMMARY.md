@@ -75,7 +75,7 @@ completed: 2026-09-25
 
 1. **Task 1: Update README, run the full automated gate, finalize VALIDATION.md** - `530468d` (docs)
 2. **Task 1: checkpoint-state SUMMARY (interim, superseded by this final version)** - `f694698` (docs)
-3. **Task 2: Finalize VALIDATION.md approval + this SUMMARY after user-approved device UAT** - `<final-commit-hash>` (docs) — recorded below after commit
+3. **Task 2: Finalize VALIDATION.md approval + this SUMMARY after user-approved device UAT** - `805ab4a` (docs)
 
 ## Files Created/Modified
 
@@ -122,7 +122,8 @@ None further — the device UAT (the only remaining external/manual step this pl
 - Device UAT: all 12 steps APPROVED by the user on an Android emulator against `apjonrmhkpyzbofupokb` — confirmed via the orchestrator's relayed report
 - Commit `530468d` (Task 1): FOUND in `git log --oneline`
 - Commit `f694698` (Task 1 checkpoint-state SUMMARY): FOUND in `git log --oneline`
-- No unexpected file deletions in either commit: CONFIRMED (`git diff --diff-filter=D` empty)
+- Commit `805ab4a` (Task 2 finalization): FOUND in `git log --oneline`
+- No unexpected file deletions in any commit: CONFIRMED (`git diff --diff-filter=D` empty)
 
 ## Self-Check: PASSED
 
