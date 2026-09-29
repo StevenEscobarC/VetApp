@@ -1,109 +1,98 @@
 ---
 phase: 03-historia-cl-nica
 plan: 02
-subsystem: infra
-tags: [pubspec, pdf, printing, dependency-management, checkpoint]
+subsystem: dependencies
+tags: [pubspec, pdf, printing, android-build]
 
 # Dependency graph
 requires: []
 provides:
-  - "Package legitimacy findings for pdf 3.12.0 and printing 5.14.3, presented for human approval"
-affects: [03-05-pdf-export]
+  - "pdf: 3.12.0 (exact pin) - PDF document generation, publisher nfet.net, user-approved"
+  - "printing: 5.14.3 (exact pin) - native share/print sheet, publisher nfet.net, user-approved"
+affects: [03-05, 03-06]
 
 # Tech tracking
 tech-stack:
-  added: []
-  patterns: []
+  added:
+    - "pdf 3.12.0"
+    - "printing 5.14.3"
+  patterns:
+    - "Exact version pin (no caret) when a package's newer minors require a higher Dart SDK than the project's ^3.11.1 constraint - same pattern as cached_network_image in Phase 2"
 
 key-files:
   created: []
-  modified: []
+  modified:
+    - pubspec.yaml
+    - pubspec.lock
 
 key-decisions:
-  - "Plan paused at Task 1 (blocking checkpoint) — no pubspec changes made, awaiting explicit user approval before install"
+  - "Edited pubspec.yaml by hand instead of `flutter pub add pdf printing`, which would have written a caret constraint resolving to the SDK-incompatible pdf 3.13.x/printing 5.15.x"
+  - "No share_plus added - Printing.sharePdf already opens the native share sheet, confirmed absent from pubspec.yaml by the plan's grep gate"
 
-patterns-established: []
-
-requirements-completed: []  # HIST-03 prerequisite NOT yet complete — plan paused at approval gate
+requirements-completed: [HIST-03]
 
 # Metrics
-duration: <5min (paused at gate)
-completed: PAUSED — awaiting human approval
+duration: ~15min
+completed: 2026-09-28
 ---
 
-# Phase 3 Plan 02: PDF/Printing Legitimacy Checkpoint Summary
+# Phase 3 Plan 02: PDF/printing dependency install Summary
 
-**Plan paused at the mandatory blocking checkpoint (Task 1) — pub.dev legitimacy findings for `pdf` 3.12.0 and `printing` 5.14.3 presented, no dependency changes made yet.**
+**pdf 3.12.0 and printing 5.14.3 installed as exact pins after user approval of both packages' pub.dev legitimacy (publisher nfet.net). `flutter analyze` clean, `flutter test` 111/111 passing, debug APK build succeeds.**
 
 ## Performance
 
-- **Duration:** <5 min (setup + research review only)
-- **Started:** 2026-09-25 (session start)
-- **Completed:** N/A — plan not complete, stopped at checkpoint
-- **Tasks:** 0/2 completed (Task 1 is the checkpoint itself; Task 2 not started)
-- **Files modified:** 0
+- **Duration:** ~15 min
+- **Tasks:** 2 of 2 completed
 
 ## Accomplishments
 
-- Reviewed `03-RESEARCH.md` "Package Legitimacy Audit" section for `pdf` and `printing`.
-- Confirmed via research that both packages are `[ASSUMED]` (slopcheck has no pub.dev coverage) but independently corroborated by pub.dev registry metrics.
-- Presented findings to the user and is awaiting the required "aprobado" (or named rejection) before any `pubspec.yaml`/`pubspec.lock` change.
+- **Task 1 (human checkpoint):** User approved both `pdf` (v3.12.0) and `printing` (v5.14.3) after reviewing publisher `nfet.net` on pub.dev — verbatim approval: "Sí, apruebo" (via AskUserQuestion, recommended option).
+- **Task 2:** Added `pdf: 3.12.0` and `printing: 5.14.3` (no caret) to `pubspec.yaml` with an explanatory Spanish comment; ran `flutter pub get` (not `upgrade`) — `pubspec.lock` resolved exactly to those two versions. `flutter analyze` clean, full `flutter test` suite green, `flutter build apk --debug` succeeded (`build/app/outputs/flutter-apk/app-debug.apk`), confirming the `printing` plugin's Android side builds against the current compileSdk/minSdk with no manifest changes needed.
 
 ## Task Commits
 
-No task commits yet — Task 1 is a blocking human-verify checkpoint with no automated action, and Task 2 (the actual install) has not started because it depends on Task 1's approval.
-
-**Plan metadata:** this SUMMARY.md commit only (docs).
+1. **Task 1: BLOCKING — verify pdf and printing are legitimate before install** - no code commit (human approval only, recorded above)
+2. **Task 2: Install pdf 3.12.0 and printing 5.14.3 as exact pins and prove the build** - `68a73aa` (feat)
 
 ## Files Created/Modified
 
-None. `pubspec.yaml` / `pubspec.lock` untouched.
+- `pubspec.yaml` - added `pdf: 3.12.0` and `printing: 5.14.3` under `dependencies:`, with a comment explaining the exact-pin reasoning
+- `pubspec.lock` - resolved 12 changed dependencies (pdf, printing, and their transitive deps)
 
 ## Decisions Made
 
-- Followed the plan's explicit instruction: "Do not install anything yet... This checkpoint is never auto-approved (workflow.auto_advance ignored)." No auto-approval was applied regardless of any active auto-mode configuration, per the plan's own gate override and the executor's `gate="blocking-human"` handling rule.
+- Manual `pubspec.yaml` edit instead of `flutter pub add`, to avoid a caret constraint that would resolve to a Dart-SDK-incompatible version — the exact same trap `cached_network_image` hit in Phase 2.
 
 ## Deviations from Plan
 
-None — plan executed exactly as written up to the checkpoint. No auto-fixes were needed or applied.
+None. Both tasks executed exactly as written.
 
 ## Issues Encountered
 
-None. The worktree's initial HEAD was behind the expected base commit (`7254250...`); it was fast-forwarded via `git reset --hard` to the specified base commit per the mandatory worktree branch check (HEAD was a strict ancestor of the base — no divergent work was discarded).
-
-## Checkpoint Details (for resumer)
-
-**Type:** human-verify
-**Gate:** blocking-human (package legitimacy — never auto-approved)
-
-**What was found (from `03-RESEARCH.md` "Package Legitimacy Audit"):**
-
-| Package | Exact pin required | Publisher | Repo | Pub points | Downloads (30d) | First published | Verdict |
-|---|---|---|---|---|---|---|---|
-| `pdf` | `3.12.0` (no caret) | `nfet.net` (verified publisher) | github.com/DavBfr/dart_pdf | 160/160 | 1,550,137 | 2018 (major-version history back to 3.6.x in 2021) | `[ASSUMED]` by slopcheck (ecosystem unsupported) — pub.dev metrics leave essentially no plausible typosquat/hallucination risk |
-| `printing` | `5.14.3` (no caret) | `nfet.net` (same publisher/monorepo as `pdf`) | github.com/DavBfr/dart_pdf | 160/160 | 932,893 | Same monorepo as `pdf` | Same disposition as above |
-
-**Why exact pins, not caret ranges:** `pdf: ^3.12.0` and `printing: ^5.14.3` would both resolve to their newest 3.13.x/5.15.x releases (published 2026-06-16), which raise the minimum Dart SDK to `>=3.12.0` — incompatible with this project's locked `sdk: ^3.11.1`. This is the identical failure shape to the `cached_network_image` incident in Phase 2. Exact pins (no `^`) avoid the trap.
-
-**Verification links presented to the user (per plan's `<how-to-verify>`):**
-1. https://pub.dev/packages/pdf/versions — verify publisher `nfet.net` (verified badge), repo `github.com/DavBfr/dart_pdf`, version `3.12.0` exists.
-2. https://pub.dev/packages/printing/versions — verify same publisher/repo, version `5.14.3` exists.
-3. Optional note: 3.13.x/5.15.x require Dart 3.12 — hence the exact pin.
-
-**Resume signal:** user must reply "aprobado" (approve both) or name the specific package they reject. If rejected, the plan must stop and be reported — Plan 03-05 (PDF export feature) depends on both packages.
-
-**Next step once approved:** Execute Task 2 — hand-edit `pubspec.yaml` to add `pdf: 3.12.0` and `printing: 5.14.3` (no caret) under `dependencies:` with a Spanish comment explaining the exact-pin rationale, run `flutter pub get` (not `upgrade`), then `flutter analyze`, `flutter test`, and `flutter build apk --debug`, verifying the automated gate string `DEPS3_OK`.
+None.
 
 ## User Setup Required
 
-None yet — the only "setup" required is the user's explicit approval reply, which is the substance of this checkpoint.
+None further — approval already given and recorded above.
 
 ## Next Phase Readiness
 
-- Plan 03-02 is **not** complete. HIST-03's dependency prerequisite is still pending.
-- Plan 03-05 (PDF export feature, which imports `pdf`/`printing`) cannot start until this plan's Task 2 lands.
-- STATE.md and ROADMAP.md were intentionally left untouched per this execution's scope (checkpoint pause, not plan completion) — the orchestrator/user must resume this plan explicitly with the approval reply.
+- Plan 03-05 (PDF export service) can now import `package:pdf` and `package:printing` directly.
+- No blockers.
+
+## Self-Check
+
+- `pdf: 3.12.0` / `printing: 5.14.3` present, no caret: CONFIRMED via grep
+- `pubspec.lock` resolved to exactly those versions: CONFIRMED via grep
+- `share_plus` absent from pubspec.yaml: CONFIRMED via grep
+- `flutter analyze`: No issues found
+- `flutter test`: 111/111 passing
+- `flutter build apk --debug`: succeeded
+- Commit `68a73aa`: FOUND in `git log --oneline`
+
+## Self-Check: PASSED
 
 ---
 *Phase: 03-historia-cl-nica*
-*Status: PAUSED at blocking checkpoint (Task 1) — awaiting user approval*
+*Completed: 2026-09-28*
