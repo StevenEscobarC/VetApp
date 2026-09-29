@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 Waves 1-2 complete (03-01..03-04 merged) — ready for Wave 3 (03-05 PDF export)
-last_updated: "2026-09-29T04:00:00.000Z"
-last_activity: 2026-09-29 -- Plan 03-04 (clinical timeline) merged to master, 142/142 tests passing
+stopped_at: Phase 3 Waves 1-3 complete (03-01..03-05 merged) — ready for Wave 4 (03-06 close-out, device UAT)
+last_updated: "2026-09-29T04:20:00.000Z"
+last_activity: 2026-09-29 -- Plan 03-05 (PDF export) merged to master, 154/154 tests passing
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 22
-  completed_plans: 20
+  completed_plans: 21
   percent: 22
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 03 (historia-cl-nica) — EXECUTING
-Plan: 5 of 6 (Waves 1-2 complete — 03-01/03-02/03-03/03-04 all merged; Wave 3 next: 03-05 PDF export)
+Plan: 6 of 6 (Waves 1-3 complete — 03-01..03-05 all merged; Wave 4 next: 03-06 close-out + device UAT, human checkpoint)
 Status: Executing Phase 03
-Last activity: 2026-09-29 -- Plan 03-04 (clinical timeline) merged to master
+Last activity: 2026-09-29 -- Plan 03-05 (PDF export) merged to master
 
-Progress: [██████░░░░] 67%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 

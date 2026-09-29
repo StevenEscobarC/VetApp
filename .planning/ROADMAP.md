@@ -134,7 +134,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-05-PLAN.md — Slice: export the whole history to PDF via the native share sheet (HIST-03, D-04, D-05)
+- [x] 03-05-PLAN.md — Slice: export the whole history to PDF via the native share sheet (HIST-03, D-04, D-05)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -232,7 +232,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
-| 3. Historia Clínica | 4/6 | In Progress|  |
+| 3. Historia Clínica | 5/6 | In Progress|  |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
 | 6. Inventario | 0/TBD | Not started | - |
