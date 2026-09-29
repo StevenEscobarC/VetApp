@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/utils/formato.dart';
 import '../../domain/consulta_failure.dart';
 import '../../domain/entities/consulta.dart';
 
@@ -62,13 +63,13 @@ class SupabaseConsultaRepository {
         'p_mascota_id': mascotaId,
         'p_diagnostico': diagnostico.trim(),
         'p_tratamiento': tratamiento.trim(),
-        'p_anamnesis': _blancoANull(anamnesis),
-        'p_evolucion': _blancoANull(evolucion),
+        'p_anamnesis': blancoANull(anamnesis),
+        'p_evolucion': blancoANull(evolucion),
         'p_peso_kg': pesoKg,
         'p_temperatura_c': temperaturaC,
         'p_frecuencia_cardiaca': frecuenciaCardiaca,
         'p_frecuencia_respiratoria': frecuenciaRespiratoria,
-        'p_mucosas': _blancoANull(mucosas),
+        'p_mucosas': blancoANull(mucosas),
       });
       return id as String;
     } on PostgrestException catch (e) {
@@ -78,12 +79,6 @@ class SupabaseConsultaRepository {
         'No pudimos guardar la consulta. Intenta de nuevo.',
       );
     }
-  }
-
-  /// `null` para un texto opcional vacío/blanco — nunca `''` (D-03).
-  String? _blancoANull(String? texto) {
-    final t = texto?.trim();
-    return (t == null || t.isEmpty) ? null : t;
   }
 
   Consulta _fromRow(Map<String, dynamic> row) => Consulta(
@@ -114,6 +109,7 @@ class SupabaseConsultaRepository {
         return 'La mascota no existe en tu clínica.';
       case '23514':
       case '23502':
+      case '22003':
         return 'Revisa los datos ingresados.';
       default:
         return 'No pudimos guardar la consulta. Intenta de nuevo.';

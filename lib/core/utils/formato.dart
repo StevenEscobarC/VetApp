@@ -1,5 +1,18 @@
 import 'package:intl/intl.dart';
 
+/// Mensaje único para cualquier campo numérico inválido de la consulta
+/// (peso, temperatura, frecuencias) — una sola redacción reutilizada tanto
+/// por [parsearNumeroPositivo] como por quien la llama, per UI-SPEC's
+/// Copywriting Contract.
+const String kErrorNumericoInvalido = 'Ingresa un valor numérico válido';
+
+/// `null` para [texto] vacío o solo espacios — nunca `''` (D-03). Usado al
+/// normalizar campos opcionales antes de enviarlos al backend.
+String? blancoANull(String? texto) {
+  final t = texto?.trim();
+  return (t == null || t.isEmpty) ? null : t;
+}
+
 /// `dd/mm/aaaa` — sin argumento de locale: el patrón es puramente numérico
 /// (no depende de nombres de mes/día localizados), así que no dispara
 /// `LocaleDataException` — la app nunca llama `initializeDateFormatting`.
@@ -74,13 +87,12 @@ String formatearFecha(DateTime fecha) => _formatoFecha.format(fecha);
   final t = texto.trim();
   if (t.isEmpty) return (valor: null, error: null);
 
-  const error = 'Ingresa un valor numérico válido';
   final valor = double.tryParse(t.replaceAll(',', '.'));
   if (valor == null || valor <= 0 || valor >= maximo) {
-    return (valor: null, error: error);
+    return (valor: null, error: kErrorNumericoInvalido);
   }
   if (entero && valor != valor.truncateToDouble()) {
-    return (valor: null, error: error);
+    return (valor: null, error: kErrorNumericoInvalido);
   }
   return (valor: valor, error: null);
 }

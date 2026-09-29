@@ -77,9 +77,12 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
       _tratamientoCtrl.text.trim().isNotEmpty;
 
   Future<void> _submit() async {
-    const errorNumerico = 'Ingresa un valor numérico válido';
+    if (_loading) return;
     final peso = parsearPeso(_pesoCtrl.text);
-    final temperatura = parsearNumeroPositivo(_temperaturaCtrl.text);
+    final temperatura = parsearNumeroPositivo(
+      _temperaturaCtrl.text,
+      maximo: 999.9,
+    );
     final frecuenciaCardiaca = parsearNumeroPositivo(
       _frecuenciaCardiacaCtrl.text,
       entero: true,
@@ -94,14 +97,16 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
         frecuenciaCardiaca.error != null ||
         frecuenciaRespiratoria.error != null) {
       setState(() {
-        _pesoError = peso.error == null ? null : errorNumerico;
-        _temperaturaError = temperatura.error == null ? null : errorNumerico;
+        _pesoError = peso.error == null ? null : kErrorNumericoInvalido;
+        _temperaturaError = temperatura.error == null
+            ? null
+            : kErrorNumericoInvalido;
         _frecuenciaCardiacaError = frecuenciaCardiaca.error == null
             ? null
-            : errorNumerico;
+            : kErrorNumericoInvalido;
         _frecuenciaRespiratoriaError = frecuenciaRespiratoria.error == null
             ? null
-            : errorNumerico;
+            : kErrorNumericoInvalido;
         _detallesExpandidos = true;
       });
       return;

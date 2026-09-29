@@ -174,7 +174,7 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: 'Exportar historia clínica a PDF',
-              onPressed: _exportarPdf,
+              onPressed: mascotaAsync.hasValue ? _exportarPdf : null,
             ),
         ],
       ),
@@ -413,6 +413,7 @@ class _RegistrarPesoSheetState extends ConsumerState<_RegistrarPesoSheet> {
   }
 
   Future<void> _guardar() async {
+    if (_guardando) return;
     final peso = parsearPeso(_pesoCtrl.text);
     if (peso.error != null || peso.valor == null) {
       setState(() => _error = peso.error ?? 'Ingresa un peso válido en kg');

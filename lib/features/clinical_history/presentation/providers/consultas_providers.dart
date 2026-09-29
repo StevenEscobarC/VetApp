@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/data/supabase_client_provider.dart';
+import '../../../../core/utils/formato.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../data/repositories/supabase_consulta_repository.dart';
 import '../../domain/entities/consulta.dart';
@@ -57,24 +58,19 @@ class RegistrarConsulta {
       mascotaId: mascotaId,
       diagnostico: diagnostico.trim(),
       tratamiento: tratamiento.trim(),
-      anamnesis: _blancoANull(anamnesis),
-      evolucion: _blancoANull(evolucion),
+      anamnesis: blancoANull(anamnesis),
+      evolucion: blancoANull(evolucion),
       pesoKg: pesoKg,
       temperaturaC: temperaturaC,
       frecuenciaCardiaca: frecuenciaCardiaca,
       frecuenciaRespiratoria: frecuenciaRespiratoria,
-      mucosas: _blancoANull(mucosas),
+      mucosas: blancoANull(mucosas),
     );
     _ref.invalidate(consultasProvider(mascotaId));
     if (pesoKg != null) {
       _ref.invalidate(pesosProvider(mascotaId));
     }
     return id;
-  }
-
-  String? _blancoANull(String? texto) {
-    final t = texto?.trim();
-    return (t == null || t.isEmpty) ? null : t;
   }
 }
 
