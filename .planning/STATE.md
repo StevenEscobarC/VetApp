@@ -73,6 +73,8 @@ None yet.
 
 ### Blockers/Concerns
 
+- [Phase 3]: Plan 03-06 Task 2 (device UAT, 10 manual steps against the live backend) is blocked — the user is on their phone, not physically at the Windows PC that runs the Android emulator. Remote Control connects the chat session, not the OS desktop/emulator window. The app is already built (debug APK with real Supabase credentials via `--dart-define-from-file=dart_define.json`), installed and launched on `emulator-5554` (Pixel 9 API 35) — the 10 UAT steps are listed in `.planning/phases/03-historia-cl-nica/03-06-PLAN.md` Task 2. Resume by asking the user to sign in on the emulator screen (cannot enter their real password on their behalf) and walk through the steps once they are at the PC.
+
 - [Phase 1]: El usuario aún no tiene cuenta creada en supabase.com — bloqueante para FOUND-01, debe resolverse al inicio de la Phase 1.
 - [Phase 1]: RLS del proyecto no tiene pruebas contra el rol `authenticated` (solo service-role) y `perfiles` permite auto-escalación de privilegios — debe corregirse antes de que cualquier otra fase confíe en el límite multi-tenant.
 - [Phase 7]: Tratamiento de IVA para servicios veterinarios en Colombia es de confianza MEDIA (una sola fuente secundaria) — verificar con un contador antes de fijar la lógica de impuestos en la factura.
