@@ -1,13 +1,18 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 import 'package:vetapp/core/utils/captura_foto.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/clinical_history/data/services/historia_clinica_pdf_service.dart';
 import 'package:vetapp/features/clinical_history/domain/consulta_failure.dart';
 import 'package:vetapp/features/clinical_history/presentation/providers/consultas_providers.dart';
+import 'package:vetapp/features/clinical_history/presentation/providers/historia_clinica_pdf_providers.dart';
 import 'package:vetapp/features/clinical_history/presentation/screens/consulta_form_screen.dart';
 import 'package:vetapp/features/clinical_history/presentation/widgets/historia_clinica_timeline.dart';
 import 'package:vetapp/features/patients/domain/entities/peso_registro.dart';
@@ -19,6 +24,7 @@ import 'helpers/fake_auth.dart';
 import 'helpers/fake_consultas.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_pdf.dart';
 import 'helpers/router_harness.dart';
 
 /// Historial de peso de Rocky (m-1), seedeado deliberadamente fuera de
@@ -50,6 +56,8 @@ Widget _appUnderTest({
   FakeMascotaFotoDatasource? fotos,
   CapturadorFoto? capturador,
   FakeConsultaRepository? consultaRepo,
+  HistoriaClinicaPdfService? pdf,
+  CompartirPdfFalso? compartir,
   String initialLocation = '/pacientes/m-1',
   bool formularioReal = false,
 }) {
@@ -99,6 +107,10 @@ Widget _appUnderTest({
       consultaRepositoryProvider.overrideWithValue(
         consultaRepo ?? FakeConsultaRepository(),
       ),
+      historiaClinicaPdfServiceProvider.overrideWithValue(
+        pdf ?? HistoriaClinicaPdfService(cargarFuentes: fuentesDePrueba),
+      ),
+      compartirPdfProvider.overrideWithValue(compartir ?? CompartirPdfFalso()),
     ],
   );
 }
@@ -550,6 +562,141 @@ void main() {
       expect(find.text('Consulta guardada'), findsOneWidget);
       expect(find.text('Dermatitis'), findsOneWidget);
       expect(find.text('13,4 kg'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    "la ficha tiene un botón 'Exportar historia clínica a PDF' en la barra "
+    'superior (HIST-03)',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      await tester.pumpWidget(_appUnderTest(repo: repo));
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Exportar historia clínica a PDF'), findsOneWidget);
+      expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'tocar el botón de exportar genera el PDF y lo comparte con el nombre '
+    'de archivo correcto',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: consultasRocky);
+      final compartir = CompartirPdfFalso();
+      await tester.pumpWidget(
+        _appUnderTest(
+          repo: repo,
+          consultaRepo: consultaRepo,
+          compartir: compartir,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
+      });
+      await tester.pumpAndSettle();
+
+      expect(compartir.llamadas, hasLength(1));
+      expect(compartir.llamadas.single.filename, 'historia_clinica_Rocky.pdf');
+      expect(
+        String.fromCharCodes(compartir.llamadas.single.bytes.take(4)),
+        '%PDF',
+      );
+    },
+  );
+
+  testWidgets(
+    'para una mascota sin consultas el botón de exportar sigue habilitado '
+    'y comparte igual (D-04)',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaLuna]);
+      final compartir = CompartirPdfFalso();
+      await tester.pumpWidget(
+        _appUnderTest(
+          repo: repo,
+          compartir: compartir,
+          initialLocation: '/pacientes/m-2',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Exportar historia clínica a PDF'), findsOneWidget);
+
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
+      });
+      await tester.pumpAndSettle();
+
+      expect(compartir.llamadas, hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'mientras se genera el PDF el ícono se convierte en un spinner y no se '
+    'puede volver a tocar; al completar la carga de fuentes se comparte '
+    'exactamente una vez',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final compartir = CompartirPdfFalso();
+      final completer = Completer<({pw.Font regular, pw.Font bold})>();
+      final pdf = HistoriaClinicaPdfService(
+        cargarFuentes: () => completer.future,
+      );
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, pdf: pdf, compartir: compartir),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
+      await tester.pump();
+
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.picture_as_pdf_outlined), findsNothing);
+      expect(find.byTooltip('Exportar historia clínica a PDF'), findsNothing);
+
+      completer.complete((
+        regular: pw.Font.helvetica(),
+        bold: pw.Font.helveticaBold(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(compartir.llamadas, hasLength(1));
+      expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'si falla la generación del PDF se muestra el error, no se comparte '
+    'nada y el ícono vuelve a aparecer',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final compartir = CompartirPdfFalso();
+      final pdf = HistoriaClinicaPdfService(cargarFuentes: fuentesQueFallan);
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, pdf: pdf, compartir: compartir),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
+      });
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No pudimos generar el PDF. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+      expect(compartir.llamadas, isEmpty);
+      expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
     },
   );
 }
