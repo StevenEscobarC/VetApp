@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 Wave 1 complete (03-01/03-02/03-03 merged) — 03-01 checkpoint pending live confirmation
-last_updated: "2026-09-28T00:00:00.000Z"
-last_activity: 2026-09-28 -- Plans 03-02 and 03-03 merged to master; 133/133 tests passing
+stopped_at: Phase 3 Wave 1 complete (03-01/03-02/03-03 all merged) — ready for Wave 2 (03-04)
+last_updated: "2026-09-28T00:15:00.000Z"
+last_activity: 2026-09-28 -- Plan 03-01 checkpoint closed (RLS SMOKE PASS 70 checks, live); merged to master
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 22
-  completed_plans: 18
-  percent: 27
+  completed_plans: 19
+  percent: 30
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 03 (historia-cl-nica) — EXECUTING
-Plan: 3 of 6 (Wave 1 code complete; 03-01's live-Supabase checkpoint still needs verbatim confirmation before Wave 1 closes)
+Plan: 4 of 6 (Wave 1 complete — 03-01/03-02/03-03 all merged; Wave 2 next: 03-04 clinical timeline)
 Status: Executing Phase 03
-Last activity: 2026-09-28 -- Plans 03-02 (pdf/printing exact pins) and 03-03 (Nueva consulta slice) merged to master
+Last activity: 2026-09-28 -- Plan 03-01 checkpoint closed on user's live RLS confirmation; Wave 1 done
 
-Progress: [███░░░░░░░] 27%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
