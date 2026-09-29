@@ -43,6 +43,10 @@ dependencies:
   flutter_image_compress: ^2.5.1
   permission_handler: ^12.0.3
   cached_network_image: ^3.4.1
+  # pdf 3.13+/printing 5.15+ requieren Dart >=3.12.0; el SDK del proyecto está
+  # fijado en ^3.11.1, así que se fijan sin caret. Relajar solo tras subir el SDK.
+  pdf: 3.12.0
+  printing: 5.14.3
 
 dev_dependencies:
   flutter_test:
