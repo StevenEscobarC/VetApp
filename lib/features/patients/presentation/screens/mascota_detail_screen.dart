@@ -9,6 +9,10 @@ import '../../../../core/utils/formato.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../clinical_history/data/services/historia_clinica_pdf_service.dart';
+import '../../../clinical_history/domain/consulta_failure.dart';
+import '../../../clinical_history/presentation/providers/consultas_providers.dart';
+import '../../../clinical_history/presentation/providers/historia_clinica_pdf_providers.dart';
 import '../../../clinical_history/presentation/widgets/historia_clinica_timeline.dart';
 import '../../domain/entities/mascota.dart';
 import '../../domain/entities/peso_registro.dart';
@@ -18,15 +22,18 @@ import '../providers/mascotas_providers.dart';
 import '../widgets/mascota_foto_avatar.dart';
 
 /// Ficha de mascota (PAT-02 ver, PAT-03 cambiar foto, PAT-05 historial de
-/// peso, HIST-01 historia clínica). Alcanzable desde `PacientesListScreen`
-/// (`/pacientes/:id`) y desde la ficha de un cliente
-/// (`/clientes/:id/mascotas/:mascotaId`) — [rutaBase] guarda la ubicación
-/// donde se abrió esta ficha (`state.uri.path` en la ruta que la construyó)
-/// para que las rutas hijas (`editar`, `consultas/nueva`) puedan empujar
-/// `'$rutaBase/...'` sin importar desde cuál lista se llegó. La sección
-/// "Historia clínica" es el único CTA de acento de esta pantalla ("Editar"
-/// quedó demotado a `outline`, UI-SPEC Fase 3) — Plan 03-04 inserta la
-/// línea de tiempo entre el encabezado y el botón "Nueva consulta".
+/// peso, HIST-01 historia clínica, HIST-03 exportar a PDF). Alcanzable
+/// desde `PacientesListScreen` (`/pacientes/:id`) y desde la ficha de un
+/// cliente (`/clientes/:id/mascotas/:mascotaId`) — [rutaBase] guarda la
+/// ubicación donde se abrió esta ficha (`state.uri.path` en la ruta que la
+/// construyó) para que las rutas hijas (`editar`, `consultas/nueva`)
+/// puedan empujar `'$rutaBase/...'` sin importar desde cuál lista se
+/// llegó. La sección "Historia clínica" es el único CTA de acento de esta
+/// pantalla ("Editar" quedó demotado a `outline`, UI-SPEC Fase 3) — Plan
+/// 03-04 inserta la línea de tiempo entre el encabezado y el botón "Nueva
+/// consulta"; Plan 03-05 agrega la acción "Exportar PDF" en la barra
+/// superior (D-04: siempre exporta TODA la historia, nunca deshabilitada;
+/// D-05: solo share sheet nativo, sin previsualización ni diálogo).
 class MascotaDetailScreen extends ConsumerStatefulWidget {
   const MascotaDetailScreen({
     super.key,
@@ -44,6 +51,51 @@ class MascotaDetailScreen extends ConsumerStatefulWidget {
 
 class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
   bool _subiendoFoto = false;
+  bool _exportando = false;
+
+  /// Exporta TODA la historia clínica del paciente a PDF y la entrega al
+  /// share sheet nativo del sistema operativo (HIST-03, D-04, D-05) — sin
+  /// pantalla de previsualización ni diálogo de confirmación. Nunca
+  /// deshabilitada, ni siquiera sin consultas (D-04: un historial vacío
+  /// también se exporta). Mientras `_exportando` es `true` el ícono se
+  /// reemplaza por un spinner, así que un segundo toque no es posible.
+  Future<void> _exportarPdf() async {
+    if (_exportando) return;
+    setState(() => _exportando = true);
+    try {
+      final mascota = await ref.read(
+        mascotaProvider(widget.mascotaId).future,
+      );
+      final consultas = await ref.read(
+        consultasProvider(widget.mascotaId).future,
+      );
+      final bytes = await ref
+          .read(historiaClinicaPdfServiceProvider)
+          .generar(mascota: mascota, consultas: consultas);
+      await ref.read(compartirPdfProvider)(
+        bytes: bytes,
+        filename: HistoriaClinicaPdfService.nombreArchivo(mascota.nombre),
+      );
+    } on ConsultaFailure {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No pudimos generar el PDF. Intenta de nuevo.'),
+          ),
+        );
+      }
+    } on MascotaFailure {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No pudimos generar el PDF. Intenta de nuevo.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportando = false);
+    }
+  }
 
   /// Reemplaza la foto (D-05, camera-first): sube la nueva, actualiza
   /// `foto_path`, y solo entonces intenta borrar la anterior en su propio
@@ -106,7 +158,26 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
   Widget build(BuildContext context) {
     final mascotaAsync = ref.watch(mascotaProvider(widget.mascotaId));
     return Scaffold(
-      appBar: const AppTopBar(title: 'Paciente'),
+      appBar: AppTopBar(
+        title: 'Paciente',
+        actions: [
+          if (_exportando)
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: 'Exportar historia clínica a PDF',
+              onPressed: _exportarPdf,
+            ),
+        ],
+      ),
       body: mascotaAsync.when(
         data: (mascota) => _buildBody(context, mascota),
         loading: () => const Center(child: CircularProgressIndicator()),

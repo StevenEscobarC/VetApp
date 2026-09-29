@@ -596,9 +596,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.runAsync(() async {
-        await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
-      });
+      await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
       await tester.pumpAndSettle();
 
       expect(compartir.llamadas, hasLength(1));
@@ -627,9 +625,7 @@ void main() {
 
       expect(find.byTooltip('Exportar historia clínica a PDF'), findsOneWidget);
 
-      await tester.runAsync(() async {
-        await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
-      });
+      await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
       await tester.pumpAndSettle();
 
       expect(compartir.llamadas, hasLength(1));
@@ -688,9 +684,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.runAsync(() async {
-        await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
-      });
+      await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
       await tester.pumpAndSettle();
 
       expect(
