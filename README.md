@@ -49,6 +49,30 @@ Instalados y fijados en `pubspec.yaml`:
   ```
   (junto a las demás definiciones ya generadas por CocoaPods). No es necesario en Android/iOS — solo afecta el build de macOS.
 
+## Fase 3 — Historia Clínica
+
+Esta fase agrega el registro estructurado de consultas (historia clínica), la línea de tiempo por paciente y la exportación a PDF. Requiere aplicar un delta de esquema sobre lo de la Fase 1-2 y dos paquetes nuevos para generar/compartir el PDF.
+
+### Aplicar el delta de esquema (idempotente)
+
+1. En **SQL Editor**, vuelve a pegar y ejecutar el archivo completo [`supabase/schema.sql`](supabase/schema.sql) (incluye las Fases 1-3; es idempotente, seguro de re-ejecutar aunque ya tengas las fases anteriores aplicadas).
+2. En una consulta nueva, pega y ejecuta el archivo completo [`supabase/tests/rls_smoke_test.sql`](supabase/tests/rls_smoke_test.sql) (también extendido con los checks de la Fase 3). Espera el mensaje `RLS SMOKE: PASS (70 checks)` (53 de las Fases 1-2 + 17 de la Fase 3); es intencional que termine en un error — el script fuerza una excepción al final para revertir automáticamente todos los datos de prueba que creó.
+3. Corre `bash supabase/tests/verify_live_schema.sh` — debe terminar con `LIVE_SCHEMA_OK` (ahora también prueba `consultas` y la RPC `registrar_consulta` con la clave `anon`, esperando rechazo).
+4. La tabla `consultas` es de solo-append por diseño: no existe política de `update` ni `delete` — una corrección se registra siempre como una consulta nueva, nunca editando o borrando la anterior (HIST-04). La RPC `registrar_consulta` inserta la consulta y, si se envía un peso, también una fila en `mascota_pesos` en la misma transacción (D-02) — nunca dos escrituras separadas.
+
+### Paquetes nuevos (exportar a PDF)
+
+Instalados y fijados en `pubspec.yaml` como versiones **exactas** (sin `^`):
+
+| Paquete | Versión | Uso |
+|---|---|---|
+| `pdf` | `3.12.0` | Generar el documento PDF de la historia clínica |
+| `printing` | `5.14.3` | Abrir la hoja de compartir/guardar nativa del sistema |
+
+Es decir, `pubspec.yaml` fija `pdf: 3.12.0` y `printing: 5.14.3` exactos. Las versiones `3.13+`/`5.15+` de estos paquetes requieren Dart `>=3.12.0`, mientras el proyecto sigue fijado en `^3.11.1` — por eso están pineadas sin caret. **No** correr `flutter pub upgrade` sobre estos dos paquetes; relajar el pin solo después de subir el SDK del proyecto.
+
+La primera exportación descarga la tipografía Noto Sans desde Google Fonts (requiere internet una sola vez; luego queda cacheada localmente). El PDF se comparte solo mediante la hoja nativa del dispositivo — no genera ningún link público ni sube nada a un servidor (D-05, uso exclusivo del veterinario).
+
 ## Ejecutar Flutter
 
 No se guardan claves en el código fuente. Crea un archivo `dart_define.json` en la raíz del repo (ya está en `.gitignore`, nunca se sube) con este contenido:
