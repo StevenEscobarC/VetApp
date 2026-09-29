@@ -21,6 +21,9 @@
 -- (registrar_cliente_con_mascota, registrar_mascota, generar_codigo_vinculacion),
 -- las columnas de código de vinculación en clientes, y storage.objects del bucket
 -- privado mascota-fotos -- todo scoped por clínica.
+-- Fase 3: consultas (historia clínica append-only) + registrar_consulta, scoped
+-- por clínica, incluyendo la atomicidad consulta+peso (D-02) y HIST-04
+-- (update/delete siempre 0 filas, incluso para el propio veterinario autor).
 
 do $$
 declare
@@ -36,6 +39,7 @@ declare
   failures text[] := '{}';
   checks int := 0;
   n int;
+  n_pesos int;
   v_codigo text;
   v_codigo2 text;
   v_expira timestamptz;
@@ -43,6 +47,8 @@ declare
   v_uuid uuid;
   v_cli uuid;
   v_masc uuid;
+  v_consulta uuid;
+  v_texto text;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -96,6 +102,12 @@ begin
 
   insert into public.mascota_pesos (mascota_id, peso_kg) values (mascota_a_id, 10.00);
   insert into public.mascota_pesos (mascota_id, peso_kg) values (mascota_b_id, 20.00);
+
+  -- Fase 3: una consulta seed por clínica.
+  insert into public.consultas (mascota_id, veterinario_id, diagnostico, tratamiento)
+    values (mascota_a_id, vet_a_id, 'Smoke dx A', 'Smoke tx A');
+  insert into public.consultas (mascota_id, veterinario_id, diagnostico, tratamiento)
+    values (mascota_b_id, vet_b_id, 'Smoke dx B', 'Smoke tx B');
 
   insert into storage.objects (bucket_id, name)
     values ('mascota-fotos', clinica_a_id::text || '/' || mascota_a_id::text || '/smoke-a.jpg');
@@ -580,6 +592,196 @@ begin
   exception
     when insufficient_privilege then null;
     when others then failures := failures || ('F4 error inesperado: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- Fase 3: impersonar vet A -- registrar_consulta (positivo + negativo) y
+  -- HIST-04 (update/delete siempre 0 filas, incluso para el autor).
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- G1: registrar_consulta sin peso -> éxito; anamnesis/evolucion/peso_kg quedan null; sin nueva fila de peso.
+  checks := checks + 1;
+  begin
+    select count(*) into n_pesos from public.mascota_pesos where mascota_id = mascota_a_id;
+    v_consulta := public.registrar_consulta(mascota_a_id, 'Smoke Otitis', 'Smoke Gotas');
+    if not exists (
+      select 1 from public.consultas
+      where id = v_consulta and veterinario_id = vet_a_id
+        and anamnesis is null and evolucion is null and peso_kg is null
+    ) then
+      failures := failures || 'G1 la consulta creada no quedó con veterinario_id/anamnesis/evolucion/peso_kg esperados';
+    end if;
+    select count(*) into n from public.mascota_pesos where mascota_id = mascota_a_id;
+    if n <> n_pesos then
+      failures := failures || format('G1 registrar_consulta sin peso alteró mascota_pesos (%s -> %s)', n_pesos, n);
+    end if;
+  exception when others then
+    failures := failures || ('G1 registrar_consulta sin peso debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- G2: registrar_consulta con peso -> consulta.peso_kg = 7.25 y mascota_pesos crece en exactamente 1.
+  checks := checks + 1;
+  begin
+    select count(*) into n_pesos from public.mascota_pesos where mascota_id = mascota_a_id;
+    v_consulta := public.registrar_consulta(mascota_a_id, 'Smoke Control', 'Smoke Nada', p_peso_kg => 7.25);
+    if not exists (select 1 from public.consultas where id = v_consulta and peso_kg = 7.25) then
+      failures := failures || 'G2 la consulta creada no quedó con peso_kg = 7.25';
+    end if;
+    select count(*) into n from public.mascota_pesos where mascota_id = mascota_a_id and peso_kg = 7.25;
+    if n <> 1 then
+      failures := failures || format('G2 esperaba exactamente 1 fila nueva de peso 7.25, vio %s', n);
+    end if;
+    select count(*) into n from public.mascota_pesos where mascota_id = mascota_a_id;
+    if n <> n_pesos + 1 then
+      failures := failures || format('G2 mascota_pesos debía crecer en 1 (%s -> %s)', n_pesos, n);
+    end if;
+  exception when others then
+    failures := failures || ('G2 registrar_consulta con peso debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- G3: anamnesis/evolucion en blanco quedan null (nunca '').
+  checks := checks + 1;
+  begin
+    v_consulta := public.registrar_consulta(mascota_a_id, 'Smoke Dx', 'Smoke Tx', p_anamnesis => '   ', p_evolucion => '');
+    select anamnesis into v_texto from public.consultas where id = v_consulta;
+    if v_texto is not null then
+      failures := failures || format('G3 anamnesis en blanco no quedó null, quedó %L', v_texto);
+    end if;
+    select evolucion into v_texto from public.consultas where id = v_consulta;
+    if v_texto is not null then
+      failures := failures || format('G3 evolucion en blanco no quedó null, quedó %L', v_texto);
+    end if;
+  exception when others then
+    failures := failures || ('G3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- G4: registrar_consulta contra mascota de otra clinica -> foreign_key_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_b_id, 'Smoke Intruso', 'Smoke Tx');
+    failures := failures || 'G4 registrar_consulta contra mascota de otra clinica debía fallar pero tuvo éxito';
+  exception
+    when foreign_key_violation then null;
+    when others then failures := failures || ('G4 error inesperado: ' || sqlerrm);
+  end;
+
+  -- G5: diagnostico en blanco -> check_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_a_id, '   ', 'Smoke Tx');
+    failures := failures || 'G5 registrar_consulta con diagnostico en blanco debía fallar pero tuvo éxito';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('G5 error inesperado: ' || sqlerrm);
+  end;
+
+  -- G6: signo vital inválido (temperatura negativa) -> check_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_a_id, 'Smoke Dx', 'Smoke Tx', p_temperatura_c => -1);
+    failures := failures || 'G6 registrar_consulta con temperatura negativa debía fallar pero tuvo éxito';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('G6 error inesperado: ' || sqlerrm);
+  end;
+
+  -- G7: insert directo con veterinario_id suplantado (vet B) -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    insert into public.consultas (mascota_id, veterinario_id, diagnostico, tratamiento)
+      values (mascota_a_id, vet_b_id, 'x', 'y');
+    failures := failures || 'G7 insert directo con veterinario_id suplantado debía fallar pero tuvo éxito';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('G7 error inesperado: ' || sqlerrm);
+  end;
+
+  -- G8: insert directo contra mascota de otra clinica -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    insert into public.consultas (mascota_id, veterinario_id, diagnostico, tratamiento)
+      values (mascota_b_id, vet_a_id, 'x', 'y');
+    failures := failures || 'G8 insert directo contra mascota de otra clinica debía fallar pero tuvo éxito';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('G8 error inesperado: ' || sqlerrm);
+  end;
+
+  -- G9: select consultas de mascota B -> 0.
+  checks := checks + 1;
+  select count(*) into n from public.consultas where mascota_id = mascota_b_id;
+  if n <> 0 then failures := failures || format('G9 vet A ve %s consultas de mascota B, esperaba 0', n); end if;
+
+  -- G10: update consultas propias -> 0 filas (append-only, HIST-04).
+  checks := checks + 1;
+  update public.consultas set diagnostico = 'editado' where mascota_id = mascota_a_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('G10 update consultas afectó %s filas, esperaba 0 (append-only)', n); end if;
+
+  -- G11: delete consultas propias -> 0 filas (append-only, HIST-04).
+  checks := checks + 1;
+  delete from public.consultas where mascota_id = mascota_a_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('G11 delete consultas afectó %s filas, esperaba 0 (append-only)', n); end if;
+
+  -------------------------------------------------------------------------
+  -- Fase 3: impersonar vet B -- negativo cruzado contra datos de A y
+  -- HIST-04 sobre la propia consulta.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- H1: select consultas de mascota A -> 0.
+  checks := checks + 1;
+  select count(*) into n from public.consultas where mascota_id = mascota_a_id;
+  if n <> 0 then failures := failures || format('H1 vet B ve %s consultas de mascota A, esperaba 0', n); end if;
+
+  -- H2: registrar_consulta contra mascota A -> foreign_key_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_a_id, 'x', 'y');
+    failures := failures || 'H2 vet B pudo registrar consulta contra mascota de otra clinica';
+  exception
+    when foreign_key_violation then null;
+    when others then failures := failures || ('H2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- H3: update de su propia consulta (mascota B) -> 0 filas (append-only, ni el propio autor).
+  checks := checks + 1;
+  update public.consultas set diagnostico = 'editado' where mascota_id = mascota_b_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('H3 vet B update sobre su propia consulta afectó %s filas, esperaba 0', n); end if;
+
+  -- H4: delete de su propia consulta (mascota B) -> 0 filas (append-only, ni el propio autor).
+  checks := checks + 1;
+  delete from public.consultas where mascota_id = mascota_b_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('H4 vet B delete sobre su propia consulta afectó %s filas, esperaba 0', n); end if;
+
+  -------------------------------------------------------------------------
+  -- Fase 3: impersonar cliente (sin clinica) -- sin acceso alguno a consultas.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', cliente_c_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- I1: select consultas -> 0.
+  checks := checks + 1;
+  select count(*) into n from public.consultas;
+  if n <> 0 then failures := failures || format('I1 cliente ve %s filas de consultas, esperaba 0', n); end if;
+
+  -- I2: registrar_consulta -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_a_id, 'x', 'y');
+    failures := failures || 'I2 cliente pudo ejecutar registrar_consulta';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('I2 error inesperado: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------

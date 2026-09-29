@@ -457,3 +457,128 @@ using (
 -- Nota: reclamar_codigo_cliente (el lado CLIENTE, security definer, que consume el
 -- código generado arriba) ya está diseñado en 02-RESEARCH.md pero se construye en la
 -- Fase 9 (DIR-06) -- no se crea todavía en este archivo.
+
+-- ===== Fase 3: Historia Clínica (delta idempotente; se puede re-ejecutar el archivo completo) =====
+
+-- HIST-01/04: historia clínica -- append-only, misma filosofía que mascota_pesos.
+-- Examen físico como columnas planas (no jsonb): forma fija conocida (5 campos),
+-- nunca dinámica; permite check() de validación y selects directos, igual que
+-- el resto del schema. Sin campo corrige_a (D-01): una corrección es siempre una
+-- fila nueva, sin vínculo formal con la entrada que corrige.
+create table if not exists public.consultas (
+  id uuid primary key default gen_random_uuid(),
+  mascota_id uuid not null references public.mascotas(id) on delete cascade,
+  -- veterinario_id referencia auth.users(id) directamente (igual que perfiles.id),
+  -- on delete cascade para mantener la misma convención del resto del schema --
+  -- si en el futuro se construye borrado de cuenta de veterinario, revisar si
+  -- cascade sigue siendo correcto para un registro clínico/legal (ver A2 en
+  -- 03-RESEARCH.md); hoy no existe esa funcionalidad, así que el riesgo es teórico.
+  veterinario_id uuid not null references auth.users(id) on delete cascade,
+  fecha timestamptz not null default now(),
+
+  anamnesis text,
+
+  -- Examen físico (D-03: todos opcionales; el peso también alimenta mascota_pesos, ver RPC).
+  peso_kg numeric(6,2) check (peso_kg is null or peso_kg > 0),
+  temperatura_c numeric(4,1) check (temperatura_c is null or temperatura_c > 0),
+  frecuencia_cardiaca integer check (frecuencia_cardiaca is null or frecuencia_cardiaca > 0),
+  frecuencia_respiratoria integer check (frecuencia_respiratoria is null or frecuencia_respiratoria > 0),
+  mucosas text,
+
+  diagnostico text not null check (length(trim(diagnostico)) > 0),
+  tratamiento text not null check (length(trim(tratamiento)) > 0),
+  evolucion text,
+
+  created_at timestamptz not null default now()
+);
+
+create index if not exists consultas_mascota_id_idx
+  on public.consultas(mascota_id, fecha desc);
+
+alter table public.consultas enable row level security;
+
+drop policy if exists consultas_select on public.consultas;
+create policy consultas_select on public.consultas for select to authenticated
+using (
+  public.es_veterinario()
+  and exists (
+    select 1 from public.mascotas m
+    where m.id = consultas.mascota_id and m.clinica_id = public.mi_clinica_id()
+  )
+);
+
+drop policy if exists consultas_insert on public.consultas;
+create policy consultas_insert on public.consultas for insert to authenticated
+with check (
+  public.es_veterinario()
+  and veterinario_id = auth.uid()
+  and exists (
+    select 1 from public.mascotas m
+    where m.id = consultas.mascota_id and m.clinica_id = public.mi_clinica_id()
+  )
+);
+
+-- Sin política update/delete: la historia clínica es de solo-append (HIST-04) --
+-- una corrección se registra como una fila nueva, nunca editando ni borrando.
+
+-- HIST-01/D-02: única forma de crear una consulta -- nunca un insert directo del
+-- cliente sobre consultas. security invoker: el veterinario que llama ya tiene
+-- permisos de insert vía RLS sobre consultas/mascota_pesos; esta función solo
+-- aporta atomicidad (consulta + peso en una sola transacción, D-02) y una guarda
+-- explícita de pertenencia de la mascota que falla con un mensaje claro antes de
+-- chocar contra la política de RLS.
+create or replace function public.registrar_consulta(
+  p_mascota_id uuid,
+  p_diagnostico text,
+  p_tratamiento text,
+  p_anamnesis text default null,
+  p_evolucion text default null,
+  p_peso_kg numeric default null,
+  p_temperatura_c numeric default null,
+  p_frecuencia_cardiaca integer default null,
+  p_frecuencia_respiratoria integer default null,
+  p_mucosas text default null
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_clinica_id uuid := public.mi_clinica_id();
+  v_consulta_id uuid;
+begin
+  if not public.es_veterinario() or v_clinica_id is null then
+    raise exception 'Solo un veterinario con clínica asignada puede registrar consultas.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if not exists (
+    select 1 from public.mascotas m where m.id = p_mascota_id and m.clinica_id = v_clinica_id
+  ) then
+    raise exception 'La mascota no existe en tu clínica.' using errcode = 'foreign_key_violation';
+  end if;
+
+  insert into public.consultas (
+    mascota_id, veterinario_id, anamnesis, peso_kg, temperatura_c,
+    frecuencia_cardiaca, frecuencia_respiratoria, mucosas, diagnostico, tratamiento, evolucion
+  ) values (
+    p_mascota_id, auth.uid(), nullif(trim(p_anamnesis), ''), p_peso_kg, p_temperatura_c,
+    p_frecuencia_cardiaca, p_frecuencia_respiratoria, nullif(trim(p_mucosas), ''),
+    trim(p_diagnostico), trim(p_tratamiento), nullif(trim(p_evolucion), '')
+  ) returning id into v_consulta_id;
+
+  if p_peso_kg is not null then
+    insert into public.mascota_pesos (mascota_id, peso_kg) values (p_mascota_id, p_peso_kg);
+  end if;
+
+  return v_consulta_id;
+end;
+$$;
+
+revoke all on function public.registrar_consulta(
+  uuid, text, text, text, text, numeric, numeric, integer, integer, text
+) from public, anon;
+grant execute on function public.registrar_consulta(
+  uuid, text, text, text, text, numeric, numeric, integer, integer, text
+) to authenticated;
