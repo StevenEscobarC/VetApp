@@ -125,8 +125,8 @@ Plans:
 **Wave 1**
 
 - [ ] 03-01-PLAN.md — Schema delta (append-only consultas + RLS, atomic registrar_consulta RPC feeding mascota_pesos), 70-check RLS smoke test, apply to cloud project (BLOCKING human step)
-- [ ] 03-02-PLAN.md — PDF packages legitimacy gate (BLOCKING human step) + install exact pins pdf 3.12.0 / printing 5.14.3
-- [ ] 03-03-PLAN.md — Slice: 'Nueva consulta' from the pet ficha — reconciled Consulta entity, repository/RPC, 2-required-field form, weight feeds weight history (HIST-01, HIST-04, D-02, D-03)
+- [x] 03-02-PLAN.md — PDF packages legitimacy gate (BLOCKING human step) + install exact pins pdf 3.12.0 / printing 5.14.3
+- [x] 03-03-PLAN.md — Slice: 'Nueva consulta' from the pet ficha — reconciled Consulta entity, repository/RPC, 2-required-field form, weight feeds weight history (HIST-01, HIST-04, D-02, D-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
