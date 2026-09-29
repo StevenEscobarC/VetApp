@@ -110,7 +110,9 @@ Widget _appUnderTest({
       historiaClinicaPdfServiceProvider.overrideWithValue(
         pdf ?? HistoriaClinicaPdfService(cargarFuentes: fuentesDePrueba),
       ),
-      compartirPdfProvider.overrideWithValue(compartir ?? CompartirPdfFalso()),
+      compartirPdfProvider.overrideWithValue(
+        (compartir ?? CompartirPdfFalso()).call,
+      ),
     ],
   );
 }
