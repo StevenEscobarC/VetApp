@@ -8,6 +8,7 @@ import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clients/presentation/clientes_routes.dart';
 import 'package:vetapp/features/clients/presentation/providers/clientes_providers.dart';
+import 'package:vetapp/features/clinical_history/presentation/providers/consultas_providers.dart';
 import 'package:vetapp/features/patients/domain/entities/mascota.dart';
 import 'package:vetapp/features/patients/domain/mascota_failure.dart';
 import 'package:vetapp/features/patients/presentation/pacientes_routes.dart';
@@ -16,6 +17,7 @@ import 'package:vetapp/features/patients/presentation/providers/mascotas_provide
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_clientes.dart';
+import 'helpers/fake_consultas.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/router_harness.dart';
@@ -49,6 +51,7 @@ Widget _appUnderTest({
         fotoDatasource ?? FakeMascotaFotoDatasource(),
       ),
       capturadorFotoProvider.overrideWithValue(capturadorFalso(fotoCapturada)),
+      consultaRepositoryProvider.overrideWithValue(FakeConsultaRepository()),
     ],
   );
 }
