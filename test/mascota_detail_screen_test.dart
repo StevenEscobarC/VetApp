@@ -6,7 +6,10 @@ import 'package:go_router/go_router.dart';
 import 'package:vetapp/core/utils/captura_foto.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/clinical_history/domain/consulta_failure.dart';
 import 'package:vetapp/features/clinical_history/presentation/providers/consultas_providers.dart';
+import 'package:vetapp/features/clinical_history/presentation/screens/consulta_form_screen.dart';
+import 'package:vetapp/features/clinical_history/presentation/widgets/historia_clinica_timeline.dart';
 import 'package:vetapp/features/patients/domain/entities/peso_registro.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
@@ -48,6 +51,7 @@ Widget _appUnderTest({
   CapturadorFoto? capturador,
   FakeConsultaRepository? consultaRepo,
   String initialLocation = '/pacientes/m-1',
+  bool formularioReal = false,
 }) {
   return routerHarness(
     initialLocation: initialLocation,
@@ -65,8 +69,11 @@ Widget _appUnderTest({
             routes: [
               GoRoute(
                 path: 'consultas/nueva',
-                builder: (_, state) =>
-                    Text('FORM CONSULTA ${state.pathParameters['id']}'),
+                builder: (_, state) => formularioReal
+                    ? ConsultaFormScreen(
+                        mascotaId: state.pathParameters['id']!,
+                      )
+                    : Text('FORM CONSULTA ${state.pathParameters['id']}'),
               ),
             ],
           ),
@@ -280,6 +287,253 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('FORM CONSULTA m-1'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'la historia clínica se muestra del más reciente al más antiguo, sin '
+    'importar el orden en que la fuente de datos entrega las consultas',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: consultasRocky);
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, consultaRepo: consultaRepo),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('05/08/2026'), findsOneWidget);
+      expect(find.text('12/04/2026'), findsOneWidget);
+      expect(find.text('20/02/2026'), findsOneWidget);
+
+      final yGastro = tester.getTopLeft(find.text('Gastroenteritis leve')).dy;
+      final yControl = tester.getTopLeft(find.text('Control general')).dy;
+      final yOtitis = tester.getTopLeft(find.text('Otitis externa')).dy;
+      expect(yGastro, lessThan(yControl));
+      expect(yControl, lessThan(yOtitis));
+    },
+  );
+
+  testWidgets(
+    "el orden de secciones es 'Historial de peso' -> 'Historia clínica' -> "
+    "la primera tarjeta de consulta -> el botón 'Nueva consulta'",
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: consultasRocky);
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, consultaRepo: consultaRepo),
+      );
+      await tester.pumpAndSettle();
+
+      final yPeso = tester.getTopLeft(find.text('Historial de peso')).dy;
+      final yHistoria = tester.getTopLeft(find.text('Historia clínica')).dy;
+      final yPrimeraConsulta = tester
+          .getTopLeft(find.text('Gastroenteritis leve'))
+          .dy;
+      final yBoton = tester
+          .getTopLeft(find.widgetWithText(AppButton, 'Nueva consulta'))
+          .dy;
+
+      expect(yPeso, lessThan(yHistoria));
+      expect(yHistoria, lessThan(yPrimeraConsulta));
+      expect(yPrimeraConsulta, lessThan(yBoton));
+    },
+  );
+
+  testWidgets(
+    'mascota sin consultas registradas muestra el estado vacío de historia '
+    'clínica',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaLuna]);
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, initialLocation: '/pacientes/m-2'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Aún no hay consultas registradas'), findsOneWidget);
+      expect(
+        find.text('Usa “Nueva consulta” para agregar la primera.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'si falla la carga de la historia clínica se muestra el error y el '
+    'resto de la ficha sigue renderizando',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(
+        error: const ConsultaFailure('boom'),
+      );
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, consultaRepo: consultaRepo),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No pudimos cargar la historia clínica. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+      expect(find.text('Rocky'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'las tarjetas de consulta empiezan colapsadas: sin Anamnesis ni '
+    'Tratamiento visibles, con el chevron hacia abajo',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: consultasRocky);
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, consultaRepo: consultaRepo),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Anamnesis'), findsNothing);
+      expect(find.text('Tratamiento'), findsNothing);
+      expect(
+        find.byIcon(Icons.keyboard_arrow_down),
+        findsNWidgets(consultasRocky.length),
+      );
+    },
+  );
+
+  testWidgets(
+    'expandir la tarjeta de Otitis muestra el registro completo con signos '
+    'vitales, y tocarla otra vez la colapsa de nuevo',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: consultasRocky);
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, consultaRepo: consultaRepo),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Otitis externa'));
+      await tester.tap(find.text('Otitis externa'));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.keyboard_arrow_up), findsOneWidget);
+      expect(find.text('Se rasca la oreja derecha'), findsOneWidget);
+      expect(find.text('Peso: 4,2 kg'), findsOneWidget);
+      expect(find.text('Temperatura: 38,5 °C'), findsOneWidget);
+      expect(find.text('Frecuencia cardíaca: 90 lpm'), findsOneWidget);
+      expect(find.text('Frecuencia respiratoria: 24 rpm'), findsOneWidget);
+      expect(find.text('Mucosas: rosadas'), findsOneWidget);
+      expect(find.text('Gotas óticas cada 12 horas'), findsOneWidget);
+      expect(find.text('Mejoría a los 5 días'), findsOneWidget);
+
+      await tester.tap(find.text('Otitis externa').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.keyboard_arrow_up), findsNothing);
+      expect(
+        find.byIcon(Icons.keyboard_arrow_down),
+        findsNWidgets(consultasRocky.length),
+      );
+    },
+  );
+
+  testWidgets(
+    "expandir la tarjeta de Control general muestra 'Examen físico: Sin "
+    "registrar' una sola vez y 'Sin registrar' para Anamnesis y Evolución",
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: consultasRocky);
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, consultaRepo: consultaRepo),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Control general'));
+      await tester.tap(find.text('Control general'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Examen físico: Sin registrar'), findsOneWidget);
+      expect(find.text('Sin registrar'), findsNWidgets(2));
+      expect(find.textContaining('Peso:'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'la línea de tiempo de historia clínica no ofrece ningún ícono de '
+    'editar o borrar (HIST-04)',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: consultasRocky);
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, consultaRepo: consultaRepo),
+      );
+      await tester.pumpAndSettle();
+
+      final timeline = find.byType(HistoriaClinicaTimeline);
+      expect(
+        find.descendant(of: timeline, matching: find.byIcon(Icons.edit)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: timeline,
+          matching: find.byIcon(Icons.edit_outlined),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: timeline, matching: find.byIcon(Icons.delete)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: timeline,
+          matching: find.byIcon(Icons.delete_outline),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'al registrar una consulta desde la ficha, el vet vuelve y la ve arriba '
+    'de la historia clínica y del historial de peso, sin refrescar a mano',
+    (tester) async {
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(mascotas: repo);
+      await tester.pumpWidget(
+        _appUnderTest(
+          repo: repo,
+          consultaRepo: consultaRepo,
+          formularioReal: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Nueva consulta'));
+      await tester.tap(find.text('Nueva consulta'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField).at(0), 'Dermatitis');
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'Champú medicado',
+      );
+      await tester.pump();
+
+      await tester.ensureVisible(find.text('Agregar más detalles'));
+      await tester.tap(find.text('Agregar más detalles'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField).at(3), '13,4');
+      await tester.pump();
+
+      await tester.ensureVisible(
+        find.widgetWithText(AppButton, 'Guardar consulta'),
+      );
+      await tester.tap(find.widgetWithText(AppButton, 'Guardar consulta'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Consulta guardada'), findsOneWidget);
+      expect(find.text('Dermatitis'), findsOneWidget);
+      expect(find.text('13,4 kg'), findsOneWidget);
     },
   );
 }
