@@ -83,6 +83,62 @@ void main() {
     });
   });
 
+  group('parsearNumeroPositivo', () {
+    test('vacío no es error', () {
+      final resultado = parsearNumeroPositivo('');
+      expect(resultado.valor, isNull);
+      expect(resultado.error, isNull);
+    });
+
+    test('coma decimal', () {
+      final resultado = parsearNumeroPositivo('38,5');
+      expect(resultado.valor, 38.5);
+      expect(resultado.error, isNull);
+    });
+
+    test('punto decimal', () {
+      final resultado = parsearNumeroPositivo('38.5');
+      expect(resultado.valor, 38.5);
+      expect(resultado.error, isNull);
+    });
+
+    test('texto no numérico es inválido', () {
+      final resultado = parsearNumeroPositivo('abc');
+      expect(resultado.valor, isNull);
+      expect(resultado.error, 'Ingresa un valor numérico válido');
+    });
+
+    test('cero es inválido', () {
+      final resultado = parsearNumeroPositivo('0');
+      expect(resultado.valor, isNull);
+      expect(resultado.error, 'Ingresa un valor numérico válido');
+    });
+
+    test('negativo es inválido', () {
+      final resultado = parsearNumeroPositivo('-3');
+      expect(resultado.valor, isNull);
+      expect(resultado.error, 'Ingresa un valor numérico válido');
+    });
+
+    test('igual al máximo es inválido', () {
+      final resultado = parsearNumeroPositivo('1000');
+      expect(resultado.valor, isNull);
+      expect(resultado.error, 'Ingresa un valor numérico válido');
+    });
+
+    test('entero: valor sin parte fraccionaria es válido', () {
+      final resultado = parsearNumeroPositivo('90', entero: true);
+      expect(resultado.valor, 90.0);
+      expect(resultado.error, isNull);
+    });
+
+    test('entero: valor con parte fraccionaria es inválido', () {
+      final resultado = parsearNumeroPositivo('90,5', entero: true);
+      expect(resultado.valor, isNull);
+      expect(resultado.error, 'Ingresa un valor numérico válido');
+    });
+  });
+
   group('formatearEdad', () {
     test('0 años', () {
       expect(formatearEdad(0), 'Menos de 1 año');

@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 
+import '../../clinical_history/presentation/screens/consulta_form_screen.dart';
 import 'screens/mascota_detail_screen.dart';
 import 'screens/mascota_form_screen.dart';
 import 'screens/pacientes_list_screen.dart';
@@ -22,6 +23,11 @@ final GoRoute pacientesRoute = GoRoute(
           path: 'editar',
           builder: (_, state) =>
               MascotaFormScreen(mascotaId: state.pathParameters['id']!),
+        ),
+        GoRoute(
+          path: 'consultas/nueva',
+          builder: (_, state) =>
+              ConsultaFormScreen(mascotaId: state.pathParameters['id']!),
         ),
       ],
     ),

@@ -17,11 +17,15 @@ import '../providers/mascotas_providers.dart';
 import '../widgets/mascota_foto_avatar.dart';
 
 /// Ficha de mascota (PAT-02 ver, PAT-03 cambiar foto, PAT-05 historial de
-/// peso). Alcanzable desde `PacientesListScreen` (`/pacientes/:id`) y desde
-/// la ficha de un cliente (`/clientes/:id/mascotas/:mascotaId`) —
-/// [rutaBase] guarda la ubicación donde se abrió esta ficha (`state.uri.path`
-/// en la ruta que la construyó) para que Plan 09 pueda empujar
-/// `'$rutaBase/editar'` sin importar desde cuál lista se llegó.
+/// peso, HIST-01 historia clínica). Alcanzable desde `PacientesListScreen`
+/// (`/pacientes/:id`) y desde la ficha de un cliente
+/// (`/clientes/:id/mascotas/:mascotaId`) — [rutaBase] guarda la ubicación
+/// donde se abrió esta ficha (`state.uri.path` en la ruta que la construyó)
+/// para que las rutas hijas (`editar`, `consultas/nueva`) puedan empujar
+/// `'$rutaBase/...'` sin importar desde cuál lista se llegó. La sección
+/// "Historia clínica" es el único CTA de acento de esta pantalla ("Editar"
+/// quedó demotado a `outline`, UI-SPEC Fase 3) — Plan 03-04 inserta la
+/// línea de tiempo entre el encabezado y el botón "Nueva consulta".
 class MascotaDetailScreen extends ConsumerStatefulWidget {
   const MascotaDetailScreen({
     super.key,
@@ -144,6 +148,7 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
           AppButton(
             label: 'Editar',
             icon: Icons.edit_outlined,
+            variant: AppButtonVariant.outline,
             onPressed: () => context.push('$rutaBase/editar'),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -177,6 +182,17 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
             variant: AppButtonVariant.text,
             expand: false,
             onPressed: _abrirRegistrarPeso,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text('Historia clínica', style: textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.md),
+          // Plan 03-04 inserta aquí la línea de tiempo de consultas
+          // (HistoriaClinicaTimeline) — este slice solo abre el punto de
+          // entrada al formulario de creación (HIST-01).
+          AppButton(
+            label: 'Nueva consulta',
+            icon: Icons.add,
+            onPressed: () => context.push('$rutaBase/consultas/nueva'),
           ),
         ],
       ),
