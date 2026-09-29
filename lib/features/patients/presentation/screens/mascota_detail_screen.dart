@@ -9,6 +9,7 @@ import '../../../../core/utils/formato.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../clinical_history/presentation/widgets/historia_clinica_timeline.dart';
 import '../../domain/entities/mascota.dart';
 import '../../domain/entities/peso_registro.dart';
 import '../../domain/mascota_failure.dart';
@@ -186,9 +187,8 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
           const SizedBox(height: AppSpacing.lg),
           Text('Historia clínica', style: textTheme.titleMedium),
           const SizedBox(height: AppSpacing.md),
-          // Plan 03-04 inserta aquí la línea de tiempo de consultas
-          // (HistoriaClinicaTimeline) — este slice solo abre el punto de
-          // entrada al formulario de creación (HIST-01).
+          HistoriaClinicaTimeline(mascotaId: widget.mascotaId),
+          const SizedBox(height: AppSpacing.md),
           AppButton(
             label: 'Nueva consulta',
             icon: Icons.add,

@@ -449,8 +449,24 @@ void main() {
       await tester.tap(find.text('Control general'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Examen físico: Sin registrar'), findsOneWidget);
-      expect(find.text('Sin registrar'), findsNWidgets(2));
+      final timeline = find.byType(HistoriaClinicaTimeline);
+      expect(
+        find.descendant(
+          of: timeline,
+          matching: find.text('Examen físico: Sin registrar'),
+        ),
+        findsOneWidget,
+      );
+      // Scoped to the timeline: the ficha itself also uses "Sin registrar"
+      // for its own blank fields (e.g. "Fecha de nacimiento"), which is
+      // unrelated to this card.
+      expect(
+        find.descendant(
+          of: timeline,
+          matching: find.text('Sin registrar'),
+        ),
+        findsNWidgets(2),
+      );
       expect(find.textContaining('Peso:'), findsNothing);
     },
   );
