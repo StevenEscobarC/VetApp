@@ -137,6 +137,22 @@ Future<void> _guardar() async {
 
 ---
 
+## Resolution (2026-09-29)
+
+| Finding | Outcome |
+|---------|---------|
+| WR-01 | ✅ Fixed — re-entrancy guard added to `_submit()` and `_guardar()` |
+| WR-02 | ✅ Fixed — "Exportar PDF" gated on `mascotaAsync.hasValue` |
+| WR-03 | ✅ Fixed — temperature capped to 999.9 client-side, SQLSTATE `22003` mapped server-error-side |
+| WR-04 | ⏸ Deferred — requires another live Supabase migration; tracked in `STATE.md` Blockers/Concerns, must be revisited before any account-deletion feature ships |
+| IN-01 | ✅ Fixed — `kErrorNumericoInvalido` shared constant in `formato.dart` |
+| IN-02 | ✅ Fixed — `blancoANull` shared helper in `formato.dart` |
+| IN-03 | ❌ Reverted — a `TextEditingController` listener attempt caused a real bug (fires on non-text `notifyListeners()` calls, clearing the error the same frame it was set); left as-is rather than ship a broken fix |
+
+See `git log` commit `5bd9d80` for the fix diff. `flutter analyze` clean, `flutter test` 154/154 passing after fixes.
+
+---
+
 _Reviewed: 2026-09-29_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
