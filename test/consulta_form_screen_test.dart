@@ -125,7 +125,8 @@ void main() {
 
       await tester.ensureVisible(find.text('Guardar consulta'));
       await tester.tap(find.text('Guardar consulta'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
 
       expect(repo.registros, hasLength(1));
       final registro = repo.registros.single;
@@ -136,6 +137,8 @@ void main() {
 
       expect(find.text('FICHA m-1'), findsOneWidget);
       expect(find.text('Consulta guardada'), findsOneWidget);
+
+      await tester.pumpAndSettle();
     },
   );
 
