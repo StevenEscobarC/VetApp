@@ -35,9 +35,9 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 ### Historia clínica (HIST)
 
 - [ ] **HIST-01**: El veterinario puede registrar una consulta con campos estructurados (anamnesis, examen físico, diagnóstico, tratamiento, evolución)
-- [ ] **HIST-02**: El veterinario puede ver la línea de tiempo de consultas de una mascota
+- [x] **HIST-02**: El veterinario puede ver la línea de tiempo de consultas de una mascota
 - [ ] **HIST-03**: El veterinario puede exportar la historia clínica de una mascota a PDF
-- [ ] **HIST-04**: Los registros de historia clínica son de solo-append (no se editan/borran después de guardados; se corrigen con una entrada nueva)
+- [x] **HIST-04**: Los registros de historia clínica son de solo-append (no se editan/borran después de guardados; se corrigen con una entrada nueva)
 
 ### Agenda (AGND)
 

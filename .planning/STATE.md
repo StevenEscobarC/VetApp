@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 Wave 1 complete (03-01/03-02/03-03 all merged) — ready for Wave 2 (03-04)
-last_updated: "2026-09-28T00:15:00.000Z"
-last_activity: 2026-09-28 -- Plan 03-01 checkpoint closed (RLS SMOKE PASS 70 checks, live); merged to master
+stopped_at: Phase 3 UI-SPEC approved
+last_updated: "2026-09-29T03:47:32.590Z"
+last_activity: 2026-09-29
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 22
-  completed_plans: 19
-  percent: 30
+  completed_plans: 20
+  percent: 22
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 03 (historia-cl-nica) — EXECUTING
-Plan: 4 of 6 (Wave 1 complete — 03-01/03-02/03-03 all merged; Wave 2 next: 03-04 clinical timeline)
-Status: Executing Phase 03
-Last activity: 2026-09-28 -- Plan 03-01 checkpoint closed on user's live RLS confirmation; Wave 1 done
+Plan: 5 of 6 (Wave 1 complete — 03-01/03-02/03-03 all merged; Wave 2 next: 03-04 clinical timeline)
+Status: Ready to execute
+Last activity: 2026-09-29
 
-Progress: [███░░░░░░░] 30%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [███░░░░░░░] 30%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 03-historia-cl-nica P04 | 35min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,8 @@ Recent decisions affecting current work:
 
 - [Roadmap]: Fase 1 (Fundación) asume la decisión de arquitectura pendiente de crear una tabla `clientes` independiente de `perfiles` (recomendación de research, no confirmada aún con el usuario) — debe validarse al planear la Phase 1.
 - [Roadmap]: AGND-05 (recordatorio por WhatsApp) y VAC-04/VAC-05 (carné compartible) se agrupan dentro de sus fases naturales (Agenda, Vacunación) en vez de una fase de "diferenciadores" separada, siguiendo las categorías de REQUIREMENTS.md.
+- [Phase 03-historia-cl-nica]: Scoped the Control-general widget test's Sin registrar count assertion to the HistoriaClinicaTimeline descendant tree, since the ficha's own blank fields (e.g. Fecha de nacimiento) also use that copy
+- [Phase 03-historia-cl-nica]: The collapsed diagnostico summary line stays visible when a consulta card expands, per UI-SPEC's repeated-here-in-full wording for the Diagnostico block
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-26T02:34:30.710Z
+Last session: 2026-09-29T03:46:42.532Z
 Stopped at: Phase 3 UI-SPEC approved
-Resume file: .planning/phases/03-historia-cl-nica/03-UI-SPEC.md
+Resume file: None
