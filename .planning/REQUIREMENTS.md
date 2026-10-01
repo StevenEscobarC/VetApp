@@ -48,6 +48,14 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 - [x] **AGND-05**: El veterinario puede enviar un recordatorio de cita por WhatsApp con un toque (deep-link `wa.me` con mensaje prellenado)
 - [x] **AGND-06**: Al completar una cita, se puede crear una entrada de historia clínica vinculada
 
+### Equipo de la clínica (TEAM)
+
+- [ ] **TEAM-01**: El admin de la clínica puede invitar a otro veterinario con un código de un solo uso que vence (el vet invitado lo ingresa al registrarse y queda en la misma clínica)
+- [ ] **TEAM-02**: Dentro de una clínica existen dos roles — admin y veterinario — y solo el admin invita, retira y cambia roles (sin auto-escalación de privilegios; nunca queda una clínica sin admin)
+- [ ] **TEAM-03**: Al retirar a un veterinario pierde el acceso de inmediato, pero sus consultas/citas/vacunas se conservan con su autoría (desactivar, nunca borrar)
+- [ ] **TEAM-04**: Cada cita tiene un veterinario asignado (por defecto quien la crea, reasignable); la agenda muestra "Mías" por defecto con filtro "Todas", y los cruces y recordatorios locales se calculan por veterinario
+- [ ] **TEAM-05**: El perfil del veterinario incluye matrícula profesional opcional (Comvezcol), usada en documentos como el carné de vacunación
+
 ### Vacunación (VAC)
 
 - [ ] **VAC-01**: El veterinario puede registrar una vacuna/desparasitación aplicada a una mascota (biológico, fecha aplicada)
@@ -112,7 +120,7 @@ Reconocidos pero diferidos — no forman parte del roadmap actual.
 ### Escalamiento
 
 - **SCALE-01**: App complementaria para el dueño de la mascota (ver historial, citas, carné) — el subconjunto de directorio + reseñas (DIR-*, REV-*) ya se adelantó a la Fase 9; lo que queda diferido aquí es ver historial clínico/carné propio y gestionar citas desde el lado del dueño
-- **SCALE-02**: Multi-usuario / multi-veterinario por clínica
+- **SCALE-02**: ~~Multi-usuario / multi-veterinario por clínica~~ — adelantado a v1 como TEAM-01..05 (Fase 4.1, 2026-10-01); queda diferido aquí: rol auxiliar/recepcionista y un veterinario en varias clínicas a la vez
 - **SCALE-03**: Telemedicina veterinaria (videollamada de seguimiento)
 
 ## Out of Scope
@@ -121,7 +129,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| Agenda multi-veterinario/multi-recurso | Contradice la premisa de veterinario independiente sin recepcionista; sobre-ingeniería para esta etapa |
+| Agenda multi-recurso (salas, equipos) | Sobre-ingeniería para esta etapa. Nota: varios veterinarios por clínica SÍ entra en v1 (TEAM-*, Fase 4.1, decidido 2026-10-01) |
 | App para dueños de mascotas (login propio) | Duplica superficie de producto (segunda app, segundo auth) antes de validar el producto core del veterinario. Distinto del directorio+reseñas (DIR-*/REV-*, Fase 9): eso reutiliza el rol CLIENTE ya existente en la misma app, no crea una app ni un login separado |
 | Telemedicina / videollamada | Conflicto directo con el perfil rural/offline objetivo; infraestructura de video no es prioridad |
 | DIAN construido in-house (sin proveedor autorizado) | Requiere habilitación legal/técnica compleja; se integra vía proveedor autorizado, nunca se construye desde cero |
@@ -138,6 +146,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | PAT-01..05 | Phase 2 — Clientes y Pacientes | Complete |
 | HIST-01..04 | Phase 3 — Historia Clínica | Complete |
 | AGND-01..06 | Phase 4 — Agenda y Citas | Pending |
+| TEAM-01..05 | Phase 4.1 — Equipo de la clínica | Pending |
 | VAC-01..05 | Phase 5 — Vacunación y Desparasitación | Pending |
 | INV-01..03 | Phase 6 — Inventario | Pending |
 | BILL-01..04 | Phase 7 — Facturación | Pending |
@@ -146,10 +155,10 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | REV-01..05 | Phase 9 — Directorio de Veterinarias | Pending |
 
 **Coverage:**
-- v1 requirements: 53 total (41 originales + 10 de DIR/REV + CLI-05/DIR-06 de vinculación de cuenta, agregadas 2026-09-24)
-- Mapped to phases: 53/53 ✓
+- v1 requirements: 58 total (41 originales + 10 de DIR/REV + CLI-05/DIR-06 de vinculación de cuenta, agregadas 2026-09-24 + TEAM-01..05, agregadas 2026-10-01)
+- Mapped to phases: 58/58 ✓
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-09-24 after adding Phase 9 (Directorio de Veterinarias)*
+*Last updated: 2026-10-01 after adding Phase 4.1 (Equipo de la clínica)*

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 4 complete (11/11) — ready to discuss Phase 05 (Vacunación y Desparasitación)
-last_updated: 2026-10-01T20:39:17.182Z
-last_activity: 2026-10-01 -- Phase 4 closed (QA PASS tras VET-25); next_phase routing bug (3ra vez) corregido manualmente de 09 a 05
+status: Ready to discuss (gsd-discuss-phase)
+stopped_at: Phase 4 UI-SPEC approved
+last_updated: "2026-10-01T20:53:36.279Z"
+last_activity: 2026-10-01
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 4
   total_plans: 33
   completed_plans: 33
-  percent: 44
+  percent: 40
 ---
 
 # Project State
@@ -91,6 +91,7 @@ None yet.
 
 - Phase 9 added (2026-09-24): Directorio de Veterinarias — el cliente explora, busca y califica las clínicas de la plataforma, con reseñas públicas. Origen: propuesta del usuario durante la discusión de la Fase 2, colocada al final por su dependencia de Agenda (Fase 4). Requisitos DIR-01..05, REV-01..05 agregados a REQUIREMENTS.md.
 - Vinculación de cuenta cliente↔mascotas agregada (2026-09-24): `clientes` (vet-managed) y `perfiles` (cuenta CLIENTE autenticada) no tenían vínculo — decisión del usuario: el veterinario invita/vincula desde la ficha del cliente. Lado veterinario = CLI-05 (Fase 2, esta fase); lado cliente (reclamar el código, ver "Mis mascotas") = DIR-06 (Fase 9). Requiere columna nueva `clientes.perfiles_id` (nullable).
+- Phase 4.1 inserted after Phase 4: Equipo de la clínica (varios veterinarios por clínica: invitación por código, roles admin/veterinario, agenda por vet) — decidido en discuss de Fase 5 para que 5-8 nazcan multi-vet (URGENT)
 
 ### Quick Tasks Completed
 

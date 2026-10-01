@@ -21,6 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-10-01)
 
 - [x] **Phase 4: Agenda y Citas** - Calendario de citas con recordatorios locales y por WhatsApp (completed 2026-10-01)
+- [ ] **Phase 4.1: Equipo de la clínica** (INSERTED) - Varios veterinarios por clínica: invitación por código, roles admin/veterinario, agenda por veterinario
 - [ ] **Phase 5: Vacunación y Desparasitación** - Carné digital con cálculo automático de próxima dosis y enlace compartible
 - [ ] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo
 - [ ] **Phase 7: Facturación** - Cotizaciones/facturas en PDF con descuento automático de inventario
@@ -196,11 +197,30 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 04.1: Equipo de la clínica (INSERTED)
+
+**Goal**: Una clínica puede tener varios veterinarios que comparten pacientes, clientes, historia clínica y agenda, sin que nadie pueda escalar privilegios ni borrar la autoría clínica de otro, y sin agregar fricción al veterinario independiente que trabaja solo.
+**Mode:** mvp
+**Depends on**: Phase 4
+**Requirements**: TEAM-01, TEAM-02, TEAM-03, TEAM-04, TEAM-05
+**Success Criteria** (what must be TRUE):
+
+  1. El admin genera un código de invitación (un solo uso, vence en 72 h) y un veterinario nuevo que se registra con él queda en la misma clínica viendo sus datos
+  2. Un veterinario no-admin no puede cambiar su propio rol, unirse a otra clínica ni retirar a otros (probado en `rls_smoke_test.sql`)
+  3. Al retirar a un veterinario pierde acceso de inmediato; sus consultas, citas y vacunas siguen visibles con "Atendió: Dr(a). X" (ya no hay `ON DELETE CASCADE` que borre historia clínica)
+  4. La agenda muestra "Mías" por defecto con filtro "Todas" (solo visible con 2+ veterinarios); cruces y recordatorios locales son por veterinario asignado; el WhatsApp va firmado por el veterinario asignado
+  5. Un veterinario que trabaja solo no ve ningún cambio en su flujo (sin selectores ni filtros nuevos)
+**Plans:** 0 plans
+**UI hint**: yes
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 04.1 to break down)
+
 ### Phase 5: Vacunación y Desparasitación
 
 **Goal**: El veterinario puede llevar el carné de vacunación/desparasitación de cada mascota con alertas automáticas, y compartirlo sin exponer la historia clínica completa.
 **Mode:** mvp
-**Depends on**: Phase 2
+**Depends on**: Phase 2, Phase 4.1 (las dosis registran qué veterinario las aplicó; matrícula del vet en el carné)
 **Requirements**: VAC-01, VAC-02, VAC-03, VAC-04, VAC-05
 **Success Criteria** (what must be TRUE):
 
