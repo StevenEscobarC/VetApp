@@ -7,8 +7,12 @@ import 'package:vetapp/features/appointments/domain/cita_failure.dart';
 import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 import 'package:vetapp/features/appointments/presentation/agenda_routes.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
+import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
+import 'package:vetapp/features/appointments/presentation/screens/agenda_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_recordatorios.dart';
 import 'helpers/router_harness.dart';
 
 Widget _agenda(FakeCitaRepository repo, {DateTime? ahora}) => routerHarness(
@@ -222,6 +226,90 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Se cruza con'), findsNothing);
+    });
+  });
+
+  group('AgendaScreen - banner de notificaciones', () {
+    Widget conServicio(FakeRecordatoriosService fake) => routerHarness(
+      initialLocation: '/agenda',
+      routes: [agendaRoute],
+      overrides: [
+        citaRepositoryProvider.overrideWithValue(
+          FakeCitaRepository(citas: citasSemanaFixture),
+        ),
+        clockProvider.overrideWithValue(() => deBogota(2026, 9, 30, 9, 35)),
+        recordatoriosServiceProvider.overrideWithValue(fake),
+      ],
+    );
+
+    setUp(
+      () => SharedPreferences.setMockInitialValues({
+        'permiso_notificaciones_explicado': true,
+      }),
+    );
+
+    testWidgets('sin permiso y ya explicado muestra el banner persistente', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        conServicio(FakeRecordatoriosService()..permiso = false),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recordatorios desactivados'), findsOneWidget);
+      expect(
+        find.text(
+          'Activa las notificaciones para que te avisemos antes de cada cita.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(TextButton, 'Activar'), findsOneWidget);
+      expect(find.byIcon(Icons.close), findsNothing);
+    });
+
+    testWidgets('con permiso no hay banner', (tester) async {
+      await tester.pumpWidget(conServicio(FakeRecordatoriosService()));
+      await tester.pumpAndSettle();
+      expect(find.text('Recordatorios desactivados'), findsNothing);
+    });
+
+    testWidgets('sin explicar todavía no hay banner', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(
+        conServicio(FakeRecordatoriosService()..permiso = false),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Recordatorios desactivados'), findsNothing);
+    });
+
+    testWidgets('Activar sin éxito abre ajustes una vez', (tester) async {
+      final fake = FakeRecordatoriosService()
+        ..permiso = false
+        ..resultadoSolicitud = false;
+      await tester.pumpWidget(conServicio(fake));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(TextButton, 'Activar'));
+      await tester.pumpAndSettle();
+
+      expect(fake.solicitudes, 1);
+      expect(fake.ajustesAbiertos, 1);
+      expect(find.text('Recordatorios desactivados'), findsOneWidget);
+    });
+
+    testWidgets('desaparece al conceder el permiso', (tester) async {
+      final fake = FakeRecordatoriosService()..permiso = false;
+      await tester.pumpWidget(conServicio(fake));
+      await tester.pumpAndSettle();
+      expect(find.text('Recordatorios desactivados'), findsOneWidget);
+
+      fake.permiso = true;
+      ProviderScope.containerOf(
+        tester.element(find.byType(AgendaScreen)),
+      ).invalidate(permisoNotificacionesProvider);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recordatorios desactivados'), findsNothing);
     });
   });
 }

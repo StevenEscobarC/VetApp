@@ -9,6 +9,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/reset_password_screen.dart';
 import '../../features/clients/presentation/clientes_routes.dart';
+import '../../features/appointments/presentation/screens/recordatorios_screen.dart';
 import '../../features/home/presentation/app_shell.dart';
 import '../../features/home/presentation/screens/inicio_screen.dart';
 import '../../features/home/presentation/screens/mas_screen.dart';
@@ -88,7 +89,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [clientesRoute]),
           StatefulShellBranch(
             routes: [
-              GoRoute(path: '/mas', builder: (_, _) => const MasScreen()),
+              GoRoute(
+                path: '/mas',
+                builder: (_, _) => const MasScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'recordatorios',
+                    builder: (_, _) => const RecordatoriosScreen(),
+                  ),
+                ],
+              ),
             ],
           ),
         ],

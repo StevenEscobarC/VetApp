@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
+import '../../../../core/widgets/cards/app_card.dart';
+import '../../../appointments/presentation/providers/recordatorios_providers.dart';
+import '../../../appointments/presentation/screens/recordatorios_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 
 /// Sign-out lives here (no confirmation dialog — out of scope per
@@ -13,6 +18,8 @@ class MasScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final anticipacion =
+        ref.watch(anticipacionRecordatorioProvider).value ?? 60;
     return Scaffold(
       appBar: const AppTopBar(title: 'Más'),
       body: Padding(
@@ -20,9 +27,29 @@ class MasScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Próximamente',
-              style: Theme.of(context).textTheme.titleMedium,
+            AppCard(
+              onTap: () => context.push('/mas/recordatorios'),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Row(
+                  children: [
+                    const Icon(Icons.notifications_outlined),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Recordatorios',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                    Text(
+                      etiquetaAnticipacion(anticipacion),
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             AppButton(
