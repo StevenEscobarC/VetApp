@@ -249,6 +249,19 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
             onPressed: () =>
                 context.push('/clientes/${widget.clienteId}/nueva-mascota'),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          // `go` (no push): el destino vive en la rama Agenda del shell (D-07).
+          AppButton(
+            label: 'Agendar cita',
+            icon: Icons.event_outlined,
+            variant: AppButtonVariant.outline,
+            onPressed: () => context.go(
+              Uri(
+                path: '/agenda/nueva',
+                queryParameters: {'clienteId': cliente.id},
+              ).toString(),
+            ),
+          ),
           const SizedBox(height: AppSpacing.lg),
           _buildVinculacionRow(context, cliente),
         ],

@@ -42,6 +42,10 @@ Widget _appUnderTest({
           ),
         ],
       ),
+      GoRoute(
+        path: '/agenda/nueva',
+        builder: (_, state) => Text('nueva-cita ${state.uri.query}'),
+      ),
     ],
     overrides: [
       authProfileProvider.overrideWith(
@@ -67,6 +71,33 @@ Future<void> _abrirVinculacion(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    '"Agendar cita" es outline y navega a /agenda/nueva con clienteId',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_appUnderTest());
+      await tester.pumpAndSettle();
+
+      final boton = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, 'Agendar cita'),
+      );
+      expect(boton.variant, AppButtonVariant.outline);
+      final primarios = tester
+          .widgetList<AppButton>(find.byType(AppButton))
+          .where((b) => b.variant == AppButtonVariant.primary);
+      expect(primarios, hasLength(1));
+
+      await tester.ensureVisible(find.text('Agendar cita'));
+      await tester.tap(find.text('Agendar cita'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('nueva-cita clienteId=c-1'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'muestra el nombre como encabezado y el teléfono precargado',
     (tester) async {
