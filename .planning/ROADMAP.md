@@ -178,8 +178,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 04-06-PLAN.md — Estados + detalle + editar: Confirmar/No asistió/Cancelar/Reabrir with Deshacer, CitaDetailScreen, edit mode
-- [ ] 04-07-PLAN.md — Local reminders core: plan builder, flutter_local_notifications service, idempotent resync, sign-out cancel, tap-to-open
+- [x] 04-06-PLAN.md — Estados + detalle + editar: Confirmar/No asistió/Cancelar/Reabrir with Deshacer, CitaDetailScreen, edit mode
+- [x] 04-07-PLAN.md — Local reminders core: plan builder, flutter_local_notifications service, idempotent resync, sign-out cancel, tap-to-open
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -270,7 +270,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
-| 4. Agenda y Citas | 5/11 | In Progress|  |
+| 4. Agenda y Citas | 7/11 | In Progress|  |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
