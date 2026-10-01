@@ -151,6 +151,10 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
       return (minutos: _minutosManual, ayuda: 'Hora elegida');
     }
     final ahora = ref.read(clockProvider)();
+    // Hora de respaldo cuando no hay hueco: siempre dentro del selector.
+    final respaldo = minutosDelDia(
+      inicioBusquedaHueco(dia: _dia, ahora: ahora),
+    );
     final citas = _citasDelDia(semana);
     if (citas != null) {
       final h = primerHuecoLibre(
@@ -159,17 +163,17 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
         ahora: ahora,
         duracionMin: _duracion,
       );
+      if (h == null) {
+        return (
+          minutos: respaldo,
+          ayuda: 'No hay huecos libres este día; elige la hora u otro día.',
+        );
+      }
       return (minutos: minutosDelDia(h), ayuda: 'Primer hueco libre sugerido');
     }
     if (semana.hasError) {
-      final h = primerHuecoLibre(
-        citas: const [],
-        dia: _dia,
-        ahora: ahora,
-        duracionMin: _duracion,
-      );
       return (
-        minutos: minutosDelDia(h),
+        minutos: respaldo,
         ayuda: 'No pudimos revisar tu agenda; elige la hora.',
       );
     }
