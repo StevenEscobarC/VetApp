@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/captura_foto.dart';
 import '../../../../core/utils/formato.dart';
+import '../../../../core/utils/telefono_co.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
@@ -26,7 +28,11 @@ import '../providers/clientes_providers.dart';
 /// `registrar_cliente_con_mascota` RPC exactly once on submit. This is the
 /// phase's primary path (CLI-01, PAT-01 create half).
 class NuevoClienteMascotaScreen extends ConsumerStatefulWidget {
-  const NuevoClienteMascotaScreen({super.key});
+  const NuevoClienteMascotaScreen({super.key, this.devolverResultado = false});
+
+  /// Usado por el flujo de nueva cita de la Agenda (D-04): al guardar, en
+  /// vez de solo cerrar, devuelve `(clienteId, mascotaId)` a quien llamó.
+  final bool devolverResultado;
 
   @override
   ConsumerState<NuevoClienteMascotaScreen> createState() =>
@@ -37,6 +43,7 @@ class _NuevoClienteMascotaScreenState
     extends ConsumerState<NuevoClienteMascotaScreen> {
   final _clienteNombreCtrl = TextEditingController();
   final _telefonoCtrl = TextEditingController();
+  bool _telefonoTocado = false;
   final _mascotaNombreCtrl = TextEditingController();
   final _razaCtrl = TextEditingController();
   final _fechaCtrl = TextEditingController();
@@ -70,6 +77,9 @@ class _NuevoClienteMascotaScreenState
   }
 
   void _onCamposCambiaron() => setState(() {});
+
+  bool get _avisoTelefono =>
+      _telefonoTocado && requiereAvisoTelefono(_telefonoCtrl.text);
 
   bool get _puedeGuardar =>
       _clienteNombreCtrl.text.trim().isNotEmpty &&
@@ -106,7 +116,7 @@ class _NuevoClienteMascotaScreenState
           .read(mascotaRepositoryProvider)
           .registrarClienteConMascota(
             clienteNombre: _clienteNombreCtrl.text.trim(),
-            clienteTelefono: _telefonoCtrl.text.trim(),
+            clienteTelefono: normalizarTelefono(_telefonoCtrl.text).guardado,
             mascotaNombre: _mascotaNombreCtrl.text.trim(),
             mascotaEspecie: _especie!,
             mascotaRaza: _razaCtrl.text,
@@ -154,7 +164,14 @@ class _NuevoClienteMascotaScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cliente y mascota guardados')),
       );
-      context.pop();
+      if (widget.devolverResultado) {
+        context.pop((
+          clienteId: resultado.clienteId,
+          mascotaId: resultado.mascotaId,
+        ));
+      } else {
+        context.pop();
+      }
     } on MascotaFailure catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -183,11 +200,28 @@ class _NuevoClienteMascotaScreenState
                     controller: _clienteNombreCtrl,
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  AppTextField(
-                    label: 'Teléfono *',
-                    controller: _telefonoCtrl,
-                    keyboardType: TextInputType.phone,
+                  Focus(
+                    onFocusChange: (tiene) {
+                      if (!tiene && !_telefonoTocado) {
+                        setState(() => _telefonoTocado = true);
+                      }
+                    },
+                    child: AppTextField(
+                      label: 'Teléfono *',
+                      controller: _telefonoCtrl,
+                      keyboardType: TextInputType.phone,
+                      helperText: _avisoTelefono ? null : 'Ej. 300 123 4567',
+                    ),
                   ),
+                  if (_avisoTelefono) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      kAvisoTelefono,
+                      style: textTheme.labelLarge?.copyWith(
+                        color: AppColors.warning,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -1,6 +1,12 @@
 /// Clasificación de un teléfono según el plan de numeración colombiano.
 enum ClaseTelefono { celularCo, fijoCo, internacional, desconocido, vacio }
 
+/// Aviso suave (no bloqueante) cuando el número no parece un celular
+/// colombiano; lo muestran las pantallas de cliente tras salir del campo.
+const String kAvisoTelefono =
+    'Parece que este número no es un celular colombiano. '
+    'Revísalo o guárdalo así.';
+
 /// Normaliza un teléfono escrito a mano (D-16): se guarda como
 /// `573001234567` para números colombianos y `+<dígitos>` para extranjeros
 /// (el `+` evita que re-normalizar confunda un número extranjero con uno

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:vetapp/core/utils/telefono_co.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clients/domain/cliente_failure.dart';
@@ -126,8 +127,58 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(clienteRepo.actualizados, hasLength(1));
-      expect(clienteRepo.actualizados.single.telefono, '3005550000');
+      expect(clienteRepo.actualizados.single.telefono, '573005550000');
       expect(find.text('Cambios guardados'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'editar el teléfono a "+57 300 123 4567" guarda 573001234567',
+    (tester) async {
+      final clienteRepo = FakeClienteRepository(
+        clientes: [clienteRita, clientePedro],
+      );
+      await tester.pumpWidget(_appUnderTest(clienteRepo: clienteRepo));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoTelefono),
+        '+57 300 123 4567',
+      );
+      await tester.pump();
+      await tester.ensureVisible(find.text('Guardar cambios'));
+      await tester.tap(find.text('Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      expect(clienteRepo.actualizados.single.telefono, '573001234567');
+    },
+  );
+
+  testWidgets(
+    'un teléfono de 7 dígitos muestra el aviso suave tras salir del campo',
+    (tester) async {
+      await tester.pumpWidget(_appUnderTest());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ej. 300 123 4567'), findsOneWidget);
+
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoTelefono),
+        '2345678',
+      );
+      await tester.pump();
+      expect(find.text(kAvisoTelefono), findsNothing);
+
+      await tester.tap(find.byType(TextFormField).at(_campoNombre));
+      await tester.pump();
+
+      expect(find.text(kAvisoTelefono), findsOneWidget);
+      expect(
+        tester
+            .widget<AppButton>(find.widgetWithText(AppButton, 'Guardar cambios'))
+            .onPressed,
+        isNotNull,
+      );
     },
   );
 

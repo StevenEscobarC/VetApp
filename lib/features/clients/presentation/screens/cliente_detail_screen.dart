@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/telefono_co.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
@@ -32,6 +33,7 @@ class ClienteDetailScreen extends ConsumerStatefulWidget {
 class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
   final _nombreCtrl = TextEditingController();
   final _telefonoCtrl = TextEditingController();
+  bool _telefonoTocado = false;
   final _correoCtrl = TextEditingController();
   final _direccionCtrl = TextEditingController();
   final _notasCtrl = TextEditingController();
@@ -68,6 +70,9 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
   }
 
   void _onCamposCambiaron() => setState(() {});
+
+  bool get _avisoTelefono =>
+      _telefonoTocado && requiereAvisoTelefono(_telefonoCtrl.text);
 
   void _llenarControladores(Cliente cliente) {
     _nombreCtrl.text = cliente.nombre;
@@ -111,7 +116,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
       id: original.id,
       clinicaId: original.clinicaId,
       nombre: _nombreCtrl.text.trim(),
-      telefono: _telefonoCtrl.text.trim(),
+      telefono: normalizarTelefono(_telefonoCtrl.text).guardado,
       email: _correoCtrl.text.trim().isEmpty ? null : _correoCtrl.text.trim(),
       direccion: _direccionCtrl.text.trim().isEmpty
           ? null
@@ -128,7 +133,12 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           .read(clienteRepositoryProvider)
           .actualizar(actualizado);
       if (!mounted) return;
-      setState(() => _original = resultado);
+      setState(() {
+        _original = resultado;
+        // Refleja el valor normalizado para que el formulario no quede
+        // "sucio" tras guardar.
+        _telefonoCtrl.text = resultado.telefono;
+      });
       ref.invalidate(clienteProvider(widget.clienteId));
       ref.read(clientesProvider.notifier).refrescar();
       ScaffoldMessenger.of(
@@ -182,11 +192,26 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           const SizedBox(height: AppSpacing.lg),
           AppTextField(label: 'Nombre *', controller: _nombreCtrl),
           const SizedBox(height: AppSpacing.md),
-          AppTextField(
-            label: 'Teléfono *',
-            controller: _telefonoCtrl,
-            keyboardType: TextInputType.phone,
+          Focus(
+            onFocusChange: (tiene) {
+              if (!tiene && !_telefonoTocado) {
+                setState(() => _telefonoTocado = true);
+              }
+            },
+            child: AppTextField(
+              label: 'Teléfono *',
+              controller: _telefonoCtrl,
+              keyboardType: TextInputType.phone,
+              helperText: _avisoTelefono ? null : 'Ej. 300 123 4567',
+            ),
           ),
+          if (_avisoTelefono) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              kAvisoTelefono,
+              style: textTheme.labelLarge?.copyWith(color: AppColors.warning),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           AppTextField(
             label: 'Correo',
