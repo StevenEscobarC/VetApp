@@ -167,10 +167,10 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Backend: citas + cita_mascotas, RLS, crear_cita/actualizar_cita, registrar_consulta(p_cita_id), 95-check smoke test + human apply (vetapp-supabase)
-- [ ] 04-02-PLAN.md — Platform: notification/url_launcher/prefs deps, es_CO localization, Android desugaring + receivers, APK build spike
-- [ ] 04-03-PLAN.md — Ver agenda: Bogotá time utils, Cita entity, read repository, AgendaScreen (day strip, hourly list, Próxima, states)
-- [ ] 04-04-PLAN.md — Phone normalization (+57) with soft warning, 'Agendar cita' on fichas, combined-alta return mode
+- [x] 04-01-PLAN.md — Backend: citas + cita_mascotas, RLS, crear_cita/actualizar_cita, registrar_consulta(p_cita_id), 95-check smoke test + human apply (vetapp-supabase)
+- [x] 04-02-PLAN.md — Platform: notification/url_launcher/prefs deps, es_CO localization, Android desugaring + receivers, APK build spike
+- [x] 04-03-PLAN.md — Ver agenda: Bogotá time utils, Cita entity, read repository, AgendaScreen (day strip, hourly list, Próxima, states)
+- [x] 04-04-PLAN.md — Phone normalization (+57) with soft warning, 'Agendar cita' on fichas, combined-alta return mode
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -270,7 +270,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
-| 4. Agenda y Citas | 0/11 | Planned | - |
+| 4. Agenda y Citas | 4/11 | In Progress|  |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
