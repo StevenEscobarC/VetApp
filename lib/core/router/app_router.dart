@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/appointments/presentation/agenda_routes.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/client_home_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
@@ -9,7 +10,6 @@ import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/reset_password_screen.dart';
 import '../../features/clients/presentation/clientes_routes.dart';
 import '../../features/home/presentation/app_shell.dart';
-import '../../features/home/presentation/screens/coming_soon_screen.dart';
 import '../../features/home/presentation/screens/inicio_screen.dart';
 import '../../features/home/presentation/screens/mas_screen.dart';
 import '../../features/patients/presentation/pacientes_routes.dart';
@@ -84,14 +84,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(routes: [pacientesRoute]),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/agenda',
-                builder: (_, _) => const ComingSoonScreen(title: 'Agenda'),
-              ),
-            ],
-          ),
+          StatefulShellBranch(routes: [agendaRoute]),
           StatefulShellBranch(routes: [clientesRoute]),
           StatefulShellBranch(
             routes: [

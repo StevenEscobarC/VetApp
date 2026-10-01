@@ -43,7 +43,11 @@ void main() {
       find.descendant(of: navigationBar, matching: find.text('Agenda')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Próximamente'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Agenda')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Hoy, '), findsOneWidget);
 
     await tester.tap(
       find.descendant(of: navigationBar, matching: find.text('Inicio')),

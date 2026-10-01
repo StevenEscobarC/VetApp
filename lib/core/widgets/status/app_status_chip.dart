@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 
-enum AppStatus { confirmed, pending, cancelled, completed }
+enum AppStatus { confirmed, pending, cancelled, completed, noShow }
 
 /// Status indicator for appointments/records. Per accessibility rule
 /// `color-not-only`, status is conveyed by icon + label, never color alone.
@@ -36,6 +36,11 @@ class AppStatusChip extends StatelessWidget {
             color: AppColors.primary,
             icon: Icons.task_alt_outlined,
             label: 'Completada',
+          ),
+        AppStatus.noShow => (
+            color: AppColors.textMuted,
+            icon: Icons.person_off_outlined,
+            label: 'No asistió',
           ),
       };
 

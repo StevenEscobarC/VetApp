@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/main.dart';
+
+import 'fake_citas.dart';
 
 /// Fake [AuthProfileNotifier] used by widget tests so no test ever touches
 /// a real Supabase client. Either returns a fixed [profile] from `build()`
@@ -56,6 +59,7 @@ Widget appUnderTest({AuthProfile? profile}) {
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: profile),
       ),
+      citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     ],
     child: const VetApp(),
   );
