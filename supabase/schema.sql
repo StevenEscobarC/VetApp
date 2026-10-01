@@ -521,12 +521,288 @@ with check (
 -- Sin política update/delete: la historia clínica es de solo-append (HIST-04) --
 -- una corrección se registra como una fila nueva, nunca editando ni borrando.
 
--- HIST-01/D-02: única forma de crear una consulta -- nunca un insert directo del
--- cliente sobre consultas. security invoker: el veterinario que llama ya tiene
--- permisos de insert vía RLS sobre consultas/mascota_pesos; esta función solo
--- aporta atomicidad (consulta + peso en una sola transacción, D-02) y una guarda
--- explícita de pertenencia de la mascota que falla con un mensaje claro antes de
--- chocar contra la política de RLS.
+-- registrar_consulta se redefine en la sección Fase 4 (agrega p_cita_id).
+
+-- ===== Fase 4: Agenda y Citas (delta idempotente; se puede re-ejecutar el archivo completo) =====
+
+-- Pitfall 7: la FK compuesta cita_mascotas -> mascotas(id, clinica_id) necesita una
+-- unique sobre (id, clinica_id) en mascotas.
+do $$
+begin
+  alter table public.mascotas
+    add constraint mascotas_id_clinica_id_key unique (id, clinica_id);
+exception
+  when duplicate_object or duplicate_table then null;
+end;
+$$;
+
+-- AGND-01/02: citas. estado es text + check (no enum, D-10); 'solicitada' queda
+-- reservado para la Fase 9. Sin exclusion constraint de solapes: D-09 solo advierte
+-- en la app.
+create table if not exists public.citas (
+  id uuid primary key default gen_random_uuid(),
+  clinica_id uuid not null references public.clinicas(id) on delete cascade,
+  cliente_id uuid not null,
+  veterinario_id uuid not null references auth.users(id) on delete cascade,
+  fecha_hora timestamptz not null,
+  duracion_min integer not null default 30
+    constraint citas_duracion_check check (duracion_min between 5 and 480),
+  modalidad text not null default 'consultorio'
+    constraint citas_modalidad_check check (modalidad in ('consultorio', 'domicilio')),
+  direccion text not null default '',
+  motivo text not null default 'Consulta general'
+    constraint citas_motivo_check check (length(trim(motivo)) > 0),
+  notas text not null default '',
+  estado text not null default 'pendiente',
+  recordatorio_enviado_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint citas_estado_check check (
+    estado in ('solicitada', 'pendiente', 'confirmada', 'completada', 'cancelada', 'no_asistio')
+  ),
+  constraint citas_id_clinica_id_key unique (id, clinica_id),
+  -- D-20: borrar un cliente borra sus citas en cascada.
+  constraint citas_cliente_misma_clinica_fkey foreign key (cliente_id, clinica_id)
+    references public.clientes(id, clinica_id) on delete cascade,
+  constraint citas_domicilio_requiere_direccion check (
+    modalidad <> 'domicilio' or length(trim(direccion)) > 0
+  )
+);
+
+create index if not exists citas_clinica_fecha_idx
+  on public.citas(clinica_id, fecha_hora);
+
+drop trigger if exists citas_tocar_updated_at on public.citas;
+create trigger citas_tocar_updated_at before update on public.citas
+for each row execute procedure public.tocar_updated_at();
+
+-- D-03: tabla puente; una cita puede cubrir varias mascotas del mismo cliente.
+create table if not exists public.cita_mascotas (
+  cita_id uuid not null,
+  mascota_id uuid not null,
+  clinica_id uuid not null,
+  primary key (cita_id, mascota_id),
+  constraint cita_mascotas_cita_fkey foreign key (cita_id, clinica_id)
+    references public.citas(id, clinica_id) on delete cascade,
+  constraint cita_mascotas_mascota_fkey foreign key (mascota_id, clinica_id)
+    references public.mascotas(id, clinica_id) on delete cascade
+);
+
+create index if not exists cita_mascotas_mascota_idx
+  on public.cita_mascotas(mascota_id);
+
+-- D-18/D-19: vínculo consulta -> cita; una consulta por (cita, mascota).
+alter table public.consultas
+  add column if not exists cita_id uuid references public.citas(id) on delete set null;
+
+create unique index if not exists consultas_cita_mascota_key
+  on public.consultas(cita_id, mascota_id) where cita_id is not null;
+
+alter table public.citas enable row level security;
+alter table public.cita_mascotas enable row level security;
+
+drop policy if exists citas_select on public.citas;
+create policy citas_select on public.citas for select to authenticated
+using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+drop policy if exists citas_insert on public.citas;
+create policy citas_insert on public.citas for insert to authenticated
+with check (
+  public.es_veterinario()
+  and clinica_id = public.mi_clinica_id()
+  and veterinario_id = auth.uid()
+);
+
+drop policy if exists citas_update on public.citas;
+create policy citas_update on public.citas for update to authenticated
+using (public.es_veterinario() and clinica_id = public.mi_clinica_id())
+with check (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+-- Sin política delete en citas: cancelar es un cambio de estado, nunca un borrado.
+-- (Solo se borran en cascada al borrar el cliente, D-20.)
+
+drop policy if exists cita_mascotas_select on public.cita_mascotas;
+create policy cita_mascotas_select on public.cita_mascotas for select to authenticated
+using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+drop policy if exists cita_mascotas_insert on public.cita_mascotas;
+create policy cita_mascotas_insert on public.cita_mascotas for insert to authenticated
+with check (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+drop policy if exists cita_mascotas_delete on public.cita_mascotas;
+create policy cita_mascotas_delete on public.cita_mascotas for delete to authenticated
+using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+-- Sin política update en cita_mascotas ni ninguna política para CLIENTE
+-- (la Fase 9 / DIR-05 agrega la suya).
+
+-- AGND-01/D-03: crea la cita y sus mascotas en una sola transacción.
+create or replace function public.crear_cita(
+  p_cliente_id uuid,
+  p_mascota_ids uuid[],
+  p_fecha_hora timestamptz,
+  p_duracion_min integer default 30,
+  p_modalidad text default 'consultorio',
+  p_direccion text default '',
+  p_motivo text default 'Consulta general',
+  p_notas text default ''
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_clinica_id uuid := public.mi_clinica_id();
+  v_cita_id uuid;
+begin
+  if not public.es_veterinario() or v_clinica_id is null then
+    raise exception 'Solo un veterinario con clínica asignada puede crear citas.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if p_mascota_ids is null or coalesce(array_length(p_mascota_ids, 1), 0) = 0 then
+    raise exception 'Elige al menos una mascota.' using errcode = 'check_violation';
+  end if;
+
+  -- Misma guarda de dueño: todas las mascotas deben ser del cliente y de la clínica.
+  if exists (
+    select 1
+    from unnest(p_mascota_ids) as x(id)
+    where not exists (
+      select 1 from public.mascotas m
+      where m.id = x.id and m.dueno_id = p_cliente_id and m.clinica_id = v_clinica_id
+    )
+  ) or not exists (
+    select 1 from public.clientes c
+    where c.id = p_cliente_id and c.clinica_id = v_clinica_id
+  ) then
+    raise exception 'El cliente o la mascota no existe en tu clínica.'
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  insert into public.citas (
+    clinica_id, cliente_id, veterinario_id, fecha_hora, duracion_min,
+    modalidad, direccion, motivo, notas
+  ) values (
+    v_clinica_id, p_cliente_id, auth.uid(), p_fecha_hora, p_duracion_min,
+    p_modalidad, trim(p_direccion), trim(p_motivo), trim(p_notas)
+  ) returning id into v_cita_id;
+
+  insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+  select v_cita_id, d.id, v_clinica_id
+  from (select distinct unnest(p_mascota_ids) as id) d;
+
+  return v_cita_id;
+end;
+$$;
+
+revoke all on function public.crear_cita(
+  uuid, uuid[], timestamptz, integer, text, text, text, text
+) from public, anon;
+grant execute on function public.crear_cita(
+  uuid, uuid[], timestamptz, integer, text, text, text, text
+) to authenticated;
+
+-- AGND-02: edita una cita pendiente/confirmada (el cliente no cambia al editar).
+create or replace function public.actualizar_cita(
+  p_cita_id uuid,
+  p_mascota_ids uuid[],
+  p_fecha_hora timestamptz,
+  p_duracion_min integer default 30,
+  p_modalidad text default 'consultorio',
+  p_direccion text default '',
+  p_motivo text default 'Consulta general',
+  p_notas text default ''
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_clinica_id uuid := public.mi_clinica_id();
+  v_cliente_id uuid;
+  v_estado text;
+begin
+  if not public.es_veterinario() or v_clinica_id is null then
+    raise exception 'Solo un veterinario con clínica asignada puede editar citas.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  select c.cliente_id, c.estado into v_cliente_id, v_estado
+  from public.citas c
+  where c.id = p_cita_id and c.clinica_id = v_clinica_id;
+
+  if not found then
+    raise exception 'La cita no existe en tu clínica.' using errcode = 'foreign_key_violation';
+  end if;
+
+  if v_estado not in ('pendiente', 'confirmada') then
+    raise exception 'Solo se pueden editar citas pendientes o confirmadas.'
+      using errcode = 'check_violation';
+  end if;
+
+  if p_mascota_ids is null or coalesce(array_length(p_mascota_ids, 1), 0) = 0 then
+    raise exception 'Elige al menos una mascota.' using errcode = 'check_violation';
+  end if;
+
+  if exists (
+    select 1
+    from unnest(p_mascota_ids) as x(id)
+    where not exists (
+      select 1 from public.mascotas m
+      where m.id = x.id and m.dueno_id = v_cliente_id and m.clinica_id = v_clinica_id
+    )
+  ) then
+    raise exception 'El cliente o la mascota no existe en tu clínica.'
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  if exists (
+    select 1
+    from public.cita_mascotas cm
+    join public.consultas co
+      on co.cita_id = cm.cita_id and co.mascota_id = cm.mascota_id
+    where cm.cita_id = p_cita_id
+      and cm.mascota_id <> all (p_mascota_ids)
+  ) then
+    raise exception 'No puedes quitar una mascota que ya tiene consulta registrada en esta cita.'
+      using errcode = 'check_violation';
+  end if;
+
+  update public.citas set
+    fecha_hora = p_fecha_hora,
+    duracion_min = p_duracion_min,
+    modalidad = p_modalidad,
+    direccion = trim(p_direccion),
+    motivo = trim(p_motivo),
+    notas = trim(p_notas)
+  where id = p_cita_id and clinica_id = v_clinica_id;
+
+  delete from public.cita_mascotas
+  where cita_id = p_cita_id and mascota_id <> all (p_mascota_ids);
+
+  insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+  select p_cita_id, d.id, v_clinica_id
+  from (select distinct unnest(p_mascota_ids) as id) d
+  on conflict (cita_id, mascota_id) do nothing;
+end;
+$$;
+
+revoke all on function public.actualizar_cita(
+  uuid, uuid[], timestamptz, integer, text, text, text, text
+) from public, anon;
+grant execute on function public.actualizar_cita(
+  uuid, uuid[], timestamptz, integer, text, text, text, text
+) to authenticated;
+
+-- HIST-01 + AGND-06: registrar_consulta gana p_cita_id (último parámetro, default null).
+-- Se elimina la firma de 10 argumentos para evitar ambigüedad de sobrecarga en PostgREST.
+drop function if exists public.registrar_consulta(
+  uuid, text, text, text, text, numeric, numeric, integer, integer, text
+);
+
 create or replace function public.registrar_consulta(
   p_mascota_id uuid,
   p_diagnostico text,
@@ -537,7 +813,8 @@ create or replace function public.registrar_consulta(
   p_temperatura_c numeric default null,
   p_frecuencia_cardiaca integer default null,
   p_frecuencia_respiratoria integer default null,
-  p_mucosas text default null
+  p_mucosas text default null,
+  p_cita_id uuid default null
 )
 returns uuid
 language plpgsql
@@ -559,13 +836,25 @@ begin
     raise exception 'La mascota no existe en tu clínica.' using errcode = 'foreign_key_violation';
   end if;
 
+  if p_cita_id is not null and not exists (
+    select 1
+    from public.cita_mascotas cm
+    join public.citas c on c.id = cm.cita_id
+    where cm.cita_id = p_cita_id
+      and cm.mascota_id = p_mascota_id
+      and c.clinica_id = v_clinica_id
+  ) then
+    raise exception 'La mascota no pertenece a esta cita.' using errcode = 'foreign_key_violation';
+  end if;
+
   insert into public.consultas (
     mascota_id, veterinario_id, anamnesis, peso_kg, temperatura_c,
-    frecuencia_cardiaca, frecuencia_respiratoria, mucosas, diagnostico, tratamiento, evolucion
+    frecuencia_cardiaca, frecuencia_respiratoria, mucosas, diagnostico, tratamiento,
+    evolucion, cita_id
   ) values (
     p_mascota_id, auth.uid(), nullif(trim(p_anamnesis), ''), p_peso_kg, p_temperatura_c,
     p_frecuencia_cardiaca, p_frecuencia_respiratoria, nullif(trim(p_mucosas), ''),
-    trim(p_diagnostico), trim(p_tratamiento), nullif(trim(p_evolucion), '')
+    trim(p_diagnostico), trim(p_tratamiento), nullif(trim(p_evolucion), ''), p_cita_id
   ) returning id into v_consulta_id;
 
   if p_peso_kg is not null then
@@ -577,8 +866,8 @@ end;
 $$;
 
 revoke all on function public.registrar_consulta(
-  uuid, text, text, text, text, numeric, numeric, integer, integer, text
+  uuid, text, text, text, text, numeric, numeric, integer, integer, text, uuid
 ) from public, anon;
 grant execute on function public.registrar_consulta(
-  uuid, text, text, text, text, numeric, numeric, integer, integer, text
+  uuid, text, text, text, text, numeric, numeric, integer, integer, text, uuid
 ) to authenticated;
