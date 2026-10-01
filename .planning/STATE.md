@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 Waves 1-3 complete (03-01..03-05 merged) — ready for Wave 4 (03-06 close-out, device UAT)
-last_updated: "2026-09-29T04:20:00.000Z"
-last_activity: 2026-09-29 -- Plan 03-05 (PDF export) merged to master, 154/154 tests passing
+stopped_at: Phase 3 execution complete (6/6 plans) — device UAT approved, ready for verify-phase/phase.complete
+last_updated: "2026-09-30T00:00:00.000Z"
+last_activity: 2026-09-30 -- Plan 03-06 closed (device UAT approved by user), Phase 3 execution done
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 22
-  completed_plans: 21
+  completed_plans: 22
   percent: 22
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 
 ## Current Position
 
-Phase: 03 (historia-cl-nica) — EXECUTING
-Plan: 6 of 6 (Waves 1-3 complete — 03-01..03-05 all merged; Wave 4 next: 03-06 close-out + device UAT, human checkpoint)
-Status: Executing Phase 03
-Last activity: 2026-09-29 -- Plan 03-05 (PDF export) merged to master
+Phase: 03 (historia-cl-nica) — EXECUTION COMPLETE
+Plan: 6 of 6 (all plans merged; device UAT approved by user 2026-09-30; awaiting verify-phase/phase.complete)
+Status: Ready for phase closure (verify-phase, phase.complete, then secure-phase)
+Last activity: 2026-09-30 -- Plan 03-06 closed, Phase 3 execution done
 
-Progress: [████████░░] 83%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -74,7 +74,6 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 3]: `03-REVIEW.md` WR-04 — `consultas.veterinario_id references auth.users(id) on delete cascade` (`supabase/schema.sql`) means deleting a vet's `auth.users` row would silently delete every consulta they ever authored, for every patient — legally-relevant clinical records destroyed as a side effect of an unrelated account-lifecycle action, the opposite of HIST-04's append-only guarantee. Accepted as theoretical risk for now (no account-deletion feature exists yet, already flagged in a schema comment citing 03-RESEARCH.md A2) — but must be revisited (`on delete restrict` or a placeholder-user pattern) before any account-deletion feature ships. Not fixed this session because it requires another live SQL Editor paste, and the user was on their phone, away from the PC.
-- [Phase 3]: Plan 03-06 Task 2 (device UAT, 10 manual steps against the live backend) is blocked — the user is on their phone, not physically at the Windows PC that runs the Android emulator. Remote Control connects the chat session, not the OS desktop/emulator window. The app is already built (debug APK with real Supabase credentials via `--dart-define-from-file=dart_define.json`), installed and launched on `emulator-5554` (Pixel 9 API 35) — the 10 UAT steps are listed in `.planning/phases/03-historia-cl-nica/03-06-PLAN.md` Task 2. Resume by asking the user to sign in on the emulator screen (cannot enter their real password on their behalf) and walk through the steps once they are at the PC.
 
 - [Phase 1]: El usuario aún no tiene cuenta creada en supabase.com — bloqueante para FOUND-01, debe resolverse al inicio de la Phase 1.
 - [Phase 1]: RLS del proyecto no tiene pruebas contra el rol `authenticated` (solo service-role) y `perfiles` permite auto-escalación de privilegios — debe corregirse antes de que cualquier otra fase confíe en el límite multi-tenant.

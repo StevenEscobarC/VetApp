@@ -138,7 +138,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 03-06-PLAN.md — README + full gate + HIST-04 structural check + validation sign-off + human-verified device UAT against the live backend
+- [x] 03-06-PLAN.md — README + full gate + HIST-04 structural check + validation sign-off + human-verified device UAT against the live backend
 **UI hint**: yes
 
 ### Phase 4: Agenda y Citas
@@ -232,7 +232,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
-| 3. Historia Clínica | 5/6 | In Progress|  |
+| 3. Historia Clínica | 6/6 | Complete   | 2026-09-30 |
 | 4. Agenda y Citas | 0/TBD | Not started | - |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
 | 6. Inventario | 0/TBD | Not started | - |
