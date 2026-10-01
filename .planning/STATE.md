@@ -95,6 +95,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260930-tu9 | Agentes especializados VetApp (opportunity-research, supabase, brand-ui, gate) + guía de looping `.claude/LOOPING.md` | 2026-09-30 | (this commit) | [260930-tu9-crear-agentes-especializados-vetapp-y-gu](./quick/260930-tu9-crear-agentes-especializados-vetapp-y-gu/) |
+| 261001-g9e | Agente `vetapp-qa` (UAT en emulador Android vía adb + uiautomator) y receta QA loop en `.claude/LOOPING.md` | 2026-10-01 | 1f88e7f | [261001-g9e-crear-agente-vetapp-qa-para-pruebas-en-e](./quick/261001-g9e-crear-agente-vetapp-qa-para-pruebas-en-e/) |
 
 ## Deferred Items
 
