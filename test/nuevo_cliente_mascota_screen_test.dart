@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:vetapp/core/utils/telefono_co.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
@@ -220,7 +221,7 @@ void main() {
       expect(repo.registros, hasLength(1));
       final registro = repo.registros.single;
       expect(registro.clienteNombre, 'Rita Gómez');
-      expect(registro.clienteTelefono, '3001234567');
+      expect(registro.clienteTelefono, '573001234567');
       expect(registro.mascotaNombre, 'Rocky');
       expect(registro.mascotaEspecie, Especie.perro);
 
@@ -313,6 +314,147 @@ void main() {
       expect(fotos.uploads, [('cli-1', 'm-nuevo')]);
       expect(repo.fotoPathsActualizados['m-nuevo'], 'cli-1/m-nuevo/fake.jpg');
       expect(find.text('LISTA'), findsOneWidget);
+    },
+  );
+
+  testWidgets('teléfono "300 123 4567" se envía normalizado una sola vez', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final repo = FakeMascotaRepository();
+    await tester.pumpWidget(_appUnderTest(mascotaRepo: repo));
+    await tester.pumpAndSettle();
+
+    await _llenarCamposRequeridos(tester);
+    await tester.enterText(
+      find.byType(TextFormField).at(_campoTelefono),
+      '300 123 4567',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Guardar cliente y mascota'));
+    await tester.tap(find.text('Guardar cliente y mascota'));
+    await tester.pumpAndSettle();
+
+    expect(repo.registros, hasLength(1));
+    expect(repo.registros.single.clienteTelefono, '573001234567');
+  });
+
+  testWidgets(
+    'un fijo muestra el aviso suave tras salir del campo y no bloquea el '
+    'guardado',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final repo = FakeMascotaRepository();
+      await tester.pumpWidget(_appUnderTest(mascotaRepo: repo));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ej. 300 123 4567'), findsOneWidget);
+      expect(find.text(kAvisoTelefono), findsNothing);
+
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoTelefono),
+        '6012345678',
+      );
+      await tester.pump();
+      expect(
+        find.text(kAvisoTelefono),
+        findsNothing,
+        reason: 'el aviso aparece solo tras salir del campo',
+      );
+
+      await tester.tap(find.byType(TextFormField).at(_campoMascotaNombre));
+      await tester.pump();
+
+      expect(find.text(kAvisoTelefono), findsOneWidget);
+      expect(find.text('Ej. 300 123 4567'), findsNothing);
+
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoClienteNombre),
+        'Rita Gómez',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoMascotaNombre),
+        'Rocky',
+      );
+      await tester.ensureVisible(find.text('Perro'));
+      await tester.tap(find.text('Perro'));
+      await tester.pump();
+      expect(
+        tester
+            .widget<AppButton>(
+              find.widgetWithText(AppButton, 'Guardar cliente y mascota'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+
+      await tester.ensureVisible(find.text('Guardar cliente y mascota'));
+      await tester.tap(find.text('Guardar cliente y mascota'));
+      await tester.pumpAndSettle();
+      expect(repo.registros.single.clienteTelefono, '576012345678');
+    },
+  );
+
+  testWidgets(
+    'con devolverResultado, el llamador recibe (clienteId, mascotaId); sin '
+    'la bandera solo se cierra',
+    (tester) async {
+      ({String clienteId, String mascotaId})? recibido;
+      final repo = FakeMascotaRepository();
+      await tester.pumpWidget(
+        routerHarness(
+          initialLocation: '/padre',
+          routes: [
+            GoRoute(
+              path: '/padre',
+              builder: (context, _) => Scaffold(
+                body: TextButton(
+                  onPressed: () async {
+                    recibido = await context
+                        .push<({String clienteId, String mascotaId})>(
+                          '/hijo',
+                        );
+                  },
+                  child: const Text('ABRIR'),
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/hijo',
+              builder: (_, _) =>
+                  const NuevoClienteMascotaScreen(devolverResultado: true),
+            ),
+          ],
+          overrides: [
+            authProfileProvider.overrideWith(
+              () => FakeAuthProfileNotifier(profile: vetProfile),
+            ),
+            mascotaRepositoryProvider.overrideWithValue(repo),
+            clienteRepositoryProvider.overrideWithValue(
+              FakeClienteRepository(),
+            ),
+            mascotaFotoDatasourceProvider.overrideWithValue(
+              FakeMascotaFotoDatasource(),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ABRIR'));
+      await tester.pumpAndSettle();
+
+      await _llenarCamposRequeridos(tester);
+      await tester.ensureVisible(find.text('Guardar cliente y mascota'));
+      await tester.tap(find.text('Guardar cliente y mascota'));
+      await tester.pumpAndSettle();
+
+      expect(recibido, (clienteId: 'c-nuevo', mascotaId: 'm-nuevo'));
     },
   );
 

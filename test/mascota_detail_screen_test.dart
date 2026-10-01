@@ -92,6 +92,10 @@ Widget _appUnderTest({
         builder: (_, state) =>
             Text('FICHA CLIENTE ${state.pathParameters['id']}'),
       ),
+      GoRoute(
+        path: '/agenda/nueva',
+        builder: (_, state) => Text('nueva-cita ${state.uri.query}'),
+      ),
     ],
     overrides: [
       authProfileProvider.overrideWith(
@@ -118,6 +122,40 @@ Widget _appUnderTest({
 }
 
 void main() {
+  testWidgets(
+    '"Agendar cita" es un botón outline que navega a /agenda/nueva con '
+    'clienteId y mascotaId',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      await tester.pumpWidget(_appUnderTest(repo: repo));
+      await tester.pumpAndSettle();
+
+      final boton = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, 'Agendar cita'),
+      );
+      expect(boton.variant, AppButtonVariant.outline);
+      final primarios = tester
+          .widgetList<AppButton>(find.byType(AppButton))
+          .where((b) => b.variant == AppButtonVariant.primary);
+      expect(primarios, hasLength(1));
+
+      await tester.ensureVisible(find.text('Agendar cita'));
+      await tester.tap(find.text('Agendar cita'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'nueva-cita clienteId=${mascotaRocky.duenoId}&mascotaId=m-1',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('muestra los datos de la mascota y el nombre del dueño', (
     tester,
   ) async {

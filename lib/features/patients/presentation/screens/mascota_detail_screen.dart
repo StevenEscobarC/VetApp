@@ -265,6 +265,23 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
             icon: Icons.add,
             onPressed: () => context.push('$rutaBase/consultas/nueva'),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          // `go` (no push): el destino vive en la rama Agenda del shell y,
+          // al guardar, el formulario regresa a la AgendaScreen (D-07).
+          AppButton(
+            label: 'Agendar cita',
+            icon: Icons.event_outlined,
+            variant: AppButtonVariant.outline,
+            onPressed: () => context.go(
+              Uri(
+                path: '/agenda/nueva',
+                queryParameters: {
+                  'clienteId': mascota.duenoId,
+                  'mascotaId': mascota.id,
+                },
+              ).toString(),
+            ),
+          ),
         ],
       ),
     );
