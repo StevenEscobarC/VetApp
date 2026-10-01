@@ -63,6 +63,8 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   // null = el usuario aún no tocó las casillas (se usa la selección por defecto).
   Set<String>? _mascotasSel;
   bool _quitoUltima = false;
+  // Edición: mascotas con consulta registrada en la cita; no se pueden quitar.
+  Set<String> _conConsulta = const {};
 
   late DateTime _dia;
   String _motivo = motivoPorDefecto;
@@ -85,6 +87,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
       _prefilled = true;
       _clienteId = c.clienteId;
       _mascotasSel = c.mascotas.map((m) => m.id).toSet();
+      _conConsulta = c.mascotasConConsulta;
       final conocido = motivosCita.any((m) => m.label == c.motivo);
       if (conocido) {
         _motivo = c.motivo;
@@ -476,7 +479,9 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
                   mascotas: mascotas,
                   seleccionadas: seleccion,
                   mostrarError: _quitoUltima,
+                  bloqueadas: _conConsulta,
                   onCambio: (id, marcada) => setState(() {
+                    if (!marcada && _conConsulta.contains(id)) return;
                     final nueva = {...seleccion};
                     marcada ? nueva.add(id) : nueva.remove(id);
                     _mascotasSel = nueva;

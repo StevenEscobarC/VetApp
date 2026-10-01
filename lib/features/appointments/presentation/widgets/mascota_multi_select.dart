@@ -15,6 +15,7 @@ class MascotaMultiSelect extends StatelessWidget {
     required this.onCambio,
     required this.onAgregarMascota,
     this.mostrarError = false,
+    this.bloqueadas = const {},
   });
 
   final List<Mascota> mascotas;
@@ -25,6 +26,10 @@ class MascotaMultiSelect extends StatelessWidget {
   /// `true` cuando el usuario desmarcó la última mascota.
   final bool mostrarError;
 
+  /// Mascotas que ya tienen consulta registrada en la cita (modo edición):
+  /// el servidor rechaza quitarlas, así que su casilla queda fija.
+  final Set<String> bloqueadas;
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -33,14 +38,18 @@ class MascotaMultiSelect extends StatelessWidget {
       children: [
         for (final m in mascotas)
           InkWell(
-            onTap: () => onCambio(m.id, !seleccionadas.contains(m.id)),
+            onTap: bloqueadas.contains(m.id)
+                ? null
+                : () => onCambio(m.id, !seleccionadas.contains(m.id)),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 56),
               child: Row(
                 children: [
                   Checkbox(
                     value: seleccionadas.contains(m.id),
-                    onChanged: (v) => onCambio(m.id, v ?? false),
+                    onChanged: bloqueadas.contains(m.id)
+                        ? null
+                        : (v) => onCambio(m.id, v ?? false),
                   ),
                   MascotaFotoAvatar(fotoPath: m.fotoPath, size: 40),
                   const SizedBox(width: AppSpacing.sm),
@@ -54,7 +63,12 @@ class MascotaMultiSelect extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        Text(m.especie.etiqueta, style: textTheme.bodyMedium),
+                        Text(
+                          bloqueadas.contains(m.id)
+                              ? '${m.especie.etiqueta} · Consulta registrada'
+                              : m.especie.etiqueta,
+                          style: textTheme.bodyMedium,
+                        ),
                       ],
                     ),
                   ),

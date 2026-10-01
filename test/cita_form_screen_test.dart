@@ -699,6 +699,32 @@ void main() {
       expect(find.text('Revisión post-operatoria'), findsOneWidget);
     });
 
+    testWidgets('una mascota con consulta registrada no se puede desmarcar', (
+      tester,
+    ) async {
+      _grande(tester);
+      final cita = citaRockyLunaHoy.copyWith(mascotasConConsulta: {'m-rocky'});
+      final repo = FakeCitaRepository(citas: [cita]);
+      await tester.pumpWidget(editar(repo, 'cita-2'));
+      await tester.pumpAndSettle();
+
+      // Orden de la lista: Luna, Rocky. Rocky queda fija y marcada.
+      final casillas = tester.widgetList<Checkbox>(find.byType(Checkbox));
+      expect(casillas.map((c) => c.value).toList(), [true, true]);
+      expect(casillas.map((c) => c.onChanged == null).toList(), [false, true]);
+      expect(find.text('Perro · Consulta registrada'), findsOneWidget);
+
+      await tester.tap(find.text('Rocky'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      expect(repo.actualizadas.single.mascotaIds.toSet(), {
+        'm-rocky',
+        'm-luna',
+      });
+    });
+
     testWidgets('una cita terminal no se puede editar', (tester) async {
       _grande(tester);
       await tester.pumpWidget(
