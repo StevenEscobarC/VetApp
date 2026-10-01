@@ -44,6 +44,10 @@ Insumo previo: informe de `vetapp-opportunity-research` (2026-09-30) — las rec
 - **D-18:** Con varias mascotas: **una consulta por mascota** — se muestra la lista de mascotas de la cita y se registra cada una (se puede saltar alguna). La cita queda completada al cerrar ese flujo.
 - **D-19:** La consulta se **precarga con el motivo (y notas) de la cita en anamnesis**, editable antes de guardar. La consulta guarda referencia a la cita (vínculo formal cita→consulta). Las consultas siguen siendo solo-append (HIST-04 / Fase 3 D-01): solo se agrega la referencia al crearla.
 
+### Respuestas posteriores al research (2026-09-30)
+- **D-20:** Al eliminar un cliente, **sus citas se eliminan con él** (`ON DELETE CASCADE`, igual que `mascotas`).
+- **D-21:** Una cita en estado **`no_asistio` libera el horario**, igual que `cancelada`: no cuenta para avisos de cruce (D-09) ni para el primer hueco sugerido (D-06).
+
 ### Claude's Discretion
 - Esquema exacto: tablas `citas` / `cita_mascotas`, columnas (`fecha_hora timestamptz`, `duracion_min`, `modalidad`, `direccion`, `motivo`, `notas`, `estado`, `recordatorio_enviado_at`), FK compuestas por `clinica_id` como en `mascotas`, índices, RLS (via agente `vetapp-supabase`) y extensión de `supabase/tests/rls_smoke_test.sql`.
 - Mecanismo del vínculo cita→consulta (p. ej. `consultas.cita_id` nullable + parámetro nuevo en `registrar_consulta`, o RPC nueva) y si completar la cita va en la misma transacción.
