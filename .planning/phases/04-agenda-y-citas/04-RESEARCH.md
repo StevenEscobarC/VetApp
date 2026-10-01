@@ -577,16 +577,22 @@ Not a rename/refactor/migration phase — omitted. (One data note: existing `cli
 | A9 | `shared_preferences` major version locked transitively is compatible with direct promotion | Standard Stack | `flutter pub add shared_preferences` resolves to the locked version; trivial |
 | A10 | wa.me format (international number, no `+`, no leading zeros, URL-encoded text) | Pattern 7 | Wrong links; widely documented |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does PostgREST need the relationship hint for composite-FK embeds?**
    - Known: `mascotas` uses composite FK to `clientes` today; existing repositories select `mascotas` with owner data (not verified in this session to use embeds).
    - Unclear: behavior with two embeds and a composite FK in the live project.
    - Recommendation: Task 1 of the repository plan = write the week query, run it against the live project (or `vetapp-supabase` verifies via REST), fall back to two simple queries or hint syntax.
+   - RESOLVED: the repository uses the hint syntax from the start (`clientes!citas_cliente_misma_clinica_fkey(...)`, `mascotas!cita_mascotas_mascota_fkey(...)`); Plan 04-01 adds an anon REST probe of that exact select string to `verify_live_schema.sh`, run right after the schema checkpoint; Plan 04-11 re-runs it. If the probe fails, the hint is adjusted in both repository and probe (fallback: two simple queries).
 2. **Android build with AGP 8.11.1 + plugin 22.3.1?**
    - Recommendation: Wave 0 spike `flutter build apk --debug` after the Gradle/manifest edits, before building any scheduling logic.
+   - RESOLVED: Plan 04-02 Task 2 is the build spike (Wave 1); an AGP failure is reported as BLOCKED, not fixed by upgrading AGP blindly.
 3. **iOS/desktop targets:** project scaffolds all platforms but VetApp's users are on Android phones. Recommendation: support Android only in this phase; notification service no-ops on other platforms; document iOS Darwin init as a follow-up.
+   - RESOLVED: Android only this phase; `RecordatoriosNoop` is used on every non-Android target (Plan 04-07).
 4. **Cascade policy on `clientes` delete** (A7) — default to cascade for consistency; user may prefer `restrict` for citas.
+   - RESOLVED: D-20 — `ON DELETE CASCADE` (Plan 04-01, smoke check M3).
+5. **Does `no_asistio` free the slot?** (A8)
+   - RESOLVED: D-21 — yes, like `cancelada`: ignored by overlap warnings and by the first-free-slot suggestion (`ocupaHorario`, Plan 04-05).
 
 ## Environment Availability
 
