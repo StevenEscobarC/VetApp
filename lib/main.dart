@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/appointments/presentation/providers/recordatorios_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +28,8 @@ class VetApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    // Mantiene los recordatorios sincronizados durante toda la sesión.
+    ref.watch(recordatoriosSyncProvider);
     return MaterialApp.router(
       title: 'VetApp',
       debugShowCheckedModeBanner: false,

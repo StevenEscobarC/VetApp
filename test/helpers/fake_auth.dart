@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
+import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/main.dart';
 
 import 'fake_citas.dart';
+import 'fake_recordatorios.dart';
 
 /// Fake [AuthProfileNotifier] used by widget tests so no test ever touches
 /// a real Supabase client. Either returns a fixed [profile] from `build()`
@@ -53,6 +56,7 @@ const clienteProfile = AuthProfile(
 /// [FakeAuthProfileNotifier] seeded with [profile] — no live Supabase
 /// dependency anywhere in the widget tree.
 Widget appUnderTest({AuthProfile? profile}) {
+  SharedPreferences.setMockInitialValues({});
   return ProviderScope(
     retry: (retryCount, error) => null,
     overrides: [
@@ -60,6 +64,7 @@ Widget appUnderTest({AuthProfile? profile}) {
         () => FakeAuthProfileNotifier(profile: profile),
       ),
       citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
+      recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
     ],
     child: const VetApp(),
   );
