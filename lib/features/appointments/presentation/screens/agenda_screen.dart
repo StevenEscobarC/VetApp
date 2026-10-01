@@ -223,7 +223,11 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
               .firstOrNull;
           if (proxima != null) {
             widgets
-              ..add(ProximaBanner(cita: proxima, ahora: ahora))
+              ..add(ProximaBanner(
+                  cita: proxima,
+                  ahora: ahora,
+                  onTap: () => context.push('/agenda/${proxima.id}'),
+                ))
               ..add(const SizedBox(height: AppSpacing.md));
           }
         }

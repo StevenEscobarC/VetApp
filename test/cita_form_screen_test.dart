@@ -459,4 +459,130 @@ void main() {
       expect(find.text('Rocky'), findsOneWidget);
     });
   });
+
+  group('CitaFormScreen - edición', () {
+    final mascotasDeMaria = FakeMascotaRepository(mascotas: [_luna, _rocky]);
+
+    Widget editar(FakeCitaRepository repo, String id) => _app(
+      repo: repo,
+      mascotas: mascotasDeMaria,
+      initial: '/agenda/$id/editar',
+    );
+
+    VoidCallback? guardarCambios(WidgetTester tester) => tester
+        .widget<ElevatedButton>(
+          find.widgetWithText(ElevatedButton, 'Guardar cambios'),
+        )
+        .onPressed;
+
+    testWidgets('precarga la cita con el cliente fijo', (tester) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: [citaRockyLunaHoy]);
+      await tester.pumpWidget(editar(repo, 'cita-2'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Editar cita'), findsOneWidget);
+      expect(find.text('María Pérez'), findsOneWidget);
+      expect(find.byTooltip('Quitar cliente'), findsNothing);
+      expect(find.text('Cambiar'), findsNothing);
+      // Rocky y Luna, ambas marcadas.
+      final marcas = tester
+          .widgetList<Checkbox>(find.byType(Checkbox))
+          .map((c) => c.value)
+          .toList();
+      expect(marcas, [true, true]);
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+      expect(find.text('Calle 10 # 20-30'), findsOneWidget);
+      expect(_chipSel(tester, '1 h'), isTrue);
+      expect(find.text('3:00 p. m.'), findsWidgets);
+      expect(find.text('Hora elegida'), findsOneWidget);
+      expect(guardarCambios(tester), isNotNull);
+    });
+
+    testWidgets('guarda cambios con actualizar y vuelve a la agenda', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: [citaRockyLunaHoy]);
+      await tester.pumpWidget(editar(repo, 'cita-2'));
+      await tester.pumpAndSettle();
+
+      await _sumar(tester, 1);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      expect(repo.actualizadas, hasLength(1));
+      final a = repo.actualizadas.single;
+      expect(a.citaId, 'cita-2');
+      expect(a.fechaHora, deBogota(2026, 9, 30, 15, 15));
+      expect(a.mascotaIds.toSet(), {'m-rocky', 'm-luna'});
+      expect(repo.creadas, isEmpty);
+      expect(find.text('Cita actualizada'), findsOneWidget);
+      expect(find.text('Hoy, mié 30/09'), findsOneWidget);
+    });
+
+    testWidgets('la cita misma no dispara el cruce', (tester) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: [citaRockyLunaHoy]);
+      await tester.pumpWidget(editar(repo, 'cita-2'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Se cruza con otra cita'), findsNothing);
+      expect(repo.actualizadas, hasLength(1));
+    });
+
+    testWidgets('un cruce con otra cita ofrece Guardar igual', (tester) async {
+      _grande(tester);
+      final otra = citaCanceladaHoy.copyWith(
+        fechaHora: deBogota(2026, 9, 30, 15, 30),
+        estado: EstadoCita.pendiente,
+      );
+      final repo = FakeCitaRepository(citas: [citaRockyLunaHoy, otra]);
+      await tester.pumpWidget(editar(repo, 'cita-2'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+      expect(find.text('Se cruza con otra cita'), findsOneWidget);
+      expect(find.text('Guardar igual'), findsOneWidget);
+      expect(repo.actualizadas, isEmpty);
+
+      await tester.tap(find.text('Guardar igual'));
+      await tester.pumpAndSettle();
+      expect(repo.actualizadas, hasLength(1));
+    });
+
+    testWidgets('un motivo fuera de la lista carga como Otro', (tester) async {
+      _grande(tester);
+      final cita = citaLunaHoy.copyWith(motivo: 'Revisión post-operatoria');
+      await tester.pumpWidget(
+        _app(
+          repo: FakeCitaRepository(citas: [cita]),
+          mascotas: mascotasDeMaria,
+          initial: '/agenda/cita-1/editar',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_chipSel(tester, 'Otro'), isTrue);
+      expect(find.text('Revisión post-operatoria'), findsOneWidget);
+    });
+
+    testWidgets('una cita terminal no se puede editar', (tester) async {
+      _grande(tester);
+      await tester.pumpWidget(
+        editar(FakeCitaRepository(citas: [citaCanceladaHoy]), 'cita-3'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Solo se pueden editar citas pendientes o confirmadas.'),
+        findsOneWidget,
+      );
+      expect(find.text('Guardar cambios'), findsNothing);
+    });
+  });
 }

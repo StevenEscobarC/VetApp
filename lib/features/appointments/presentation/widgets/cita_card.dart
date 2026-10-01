@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato_hora.dart';
 import '../../../../core/utils/zona_bogota.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/status/app_status_chip.dart';
 import '../../domain/entities/cita.dart';
 import '../estado_cita_ui.dart';
+import 'cita_acciones.dart';
 
 /// Tarjeta de una [Cita] en la lista del día: horario + estado, mascotas,
 /// cliente · motivo, lugar y (si existe) el recordatorio enviado. Las
 /// acciones se agregan en planes posteriores.
-class CitaCard extends StatelessWidget {
+class CitaCard extends ConsumerWidget {
   const CitaCard({super.key, required this.cita, this.onTap, this.cruceCon});
 
   final Cita cita;
@@ -22,7 +26,7 @@ class CitaCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
     final apagada = cita.estado == EstadoCita.cancelada ||
         cita.estado == EstadoCita.noAsistio;
@@ -34,7 +38,7 @@ class CitaCard extends StatelessWidget {
         : 'En consultorio';
 
     return AppCard(
-      onTap: onTap,
+      onTap: onTap ?? () => context.push('/agenda/${cita.id}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -116,6 +120,41 @@ class CitaCard extends StatelessWidget {
                       color: AppColors.textMuted,
                     ),
                   ),
+                ),
+              ],
+            ),
+          ],
+          if (!cita.estado.esTerminal) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: AppSpacing.xs),
+            // Espacio para WhatsApp / Cómo llegar (04-08) y Completar (04-09).
+            Wrap(
+              spacing: AppSpacing.sm,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (cita.estado == EstadoCita.pendiente)
+                  AppButton(
+                    label: 'Confirmar',
+                    variant: AppButtonVariant.text,
+                    icon: Icons.check_circle_outline,
+                    expand: false,
+                    onPressed: () => cambiarEstadoConDeshacer(
+                      context,
+                      ref,
+                      cita: cita,
+                      nuevo: EstadoCita.confirmada,
+                      mensaje: 'Cita confirmada',
+                    ),
+                  ),
+                IconButton(
+                  tooltip: 'Más acciones',
+                  icon: const Icon(Icons.more_vert),
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  onPressed: () => mostrarMasAcciones(context, ref, cita),
                 ),
               ],
             ),

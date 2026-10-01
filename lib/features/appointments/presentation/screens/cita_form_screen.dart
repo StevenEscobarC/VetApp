@@ -37,6 +37,7 @@ class CitaFormScreen extends ConsumerStatefulWidget {
     this.clienteIdInicial,
     this.mascotaIdInicial,
     this.fechaInicial,
+    this.citaId,
   });
 
   final String? clienteIdInicial;
@@ -44,6 +45,9 @@ class CitaFormScreen extends ConsumerStatefulWidget {
 
   /// Día de Bogotá (`DateTime.utc(y, m, d)`) preseleccionado.
   final DateTime? fechaInicial;
+
+  /// Si no es null, el formulario edita esa cita (cliente fijo).
+  final String? citaId;
 
   @override
   ConsumerState<CitaFormScreen> createState() => _CitaFormScreenState();
@@ -68,6 +72,35 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
 
   bool _loading = false;
   String? _error;
+
+  // Modo edición: los campos se precargan una sola vez desde la cita.
+  bool _prefilled = false;
+  bool get _editando => widget.citaId != null;
+
+  void _precargar(Cita c) {
+    if (_prefilled) return;
+    final cuando = aBogota(c.fechaHora);
+    setState(() {
+      _prefilled = true;
+      _clienteId = c.clienteId;
+      _mascotasSel = c.mascotas.map((m) => m.id).toSet();
+      final conocido = motivosCita.any((m) => m.label == c.motivo);
+      if (conocido) {
+        _motivo = c.motivo;
+      } else {
+        _motivo = 'Otro';
+        _otroCtrl.text = c.motivo;
+      }
+      _duracion = c.duracionMin;
+      _dia = diaBogota(c.fechaHora);
+      _minutosManual = cuando.hour * 60 + cuando.minute;
+      _domicilio = c.modalidad == ModalidadCita.domicilio;
+      _dirCtrl.text = c.direccion ?? '';
+      final notas = (c.notas ?? '').trim();
+      _notasCtrl.text = notas;
+      _notasExpandidas = notas.isNotEmpty;
+    });
+  }
 
   @override
   void initState() {
@@ -232,7 +265,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Agendar igual'),
+            child: Text(_editando ? 'Guardar igual' : 'Agendar igual'),
           ),
         ],
       ),
@@ -251,6 +284,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
         inicio: fechaHora,
         duracionMin: _duracion,
         citas: delDia,
+        excluirId: widget.citaId,
       );
       if (cruces.isNotEmpty) {
         final seguir = await _confirmarCruce(cruces);
@@ -263,24 +297,39 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
       _error = null;
     });
     try {
-      await ref
-          .read(citaActionsProvider)
-          .crear(
-            clienteId: _clienteId!,
-            mascotaIds: mascotas.toList(),
-            fechaHora: fechaHora,
-            duracionMin: _duracion,
-            modalidad: _domicilio
-                ? ModalidadCita.domicilio
-                : ModalidadCita.consultorio,
-            direccion: _dirCtrl.text.trim(),
-            motivo: _motivoGuardado,
-            notas: _notasCtrl.text.trim(),
-          );
+      final modalidad = _domicilio
+          ? ModalidadCita.domicilio
+          : ModalidadCita.consultorio;
+      final acciones = ref.read(citaActionsProvider);
+      if (_editando) {
+        await acciones.actualizar(
+          citaId: widget.citaId!,
+          mascotaIds: mascotas.toList(),
+          fechaHora: fechaHora,
+          duracionMin: _duracion,
+          modalidad: modalidad,
+          direccion: _dirCtrl.text.trim(),
+          motivo: _motivoGuardado,
+          notas: _notasCtrl.text.trim(),
+        );
+      } else {
+        await acciones.crear(
+          clienteId: _clienteId!,
+          mascotaIds: mascotas.toList(),
+          fechaHora: fechaHora,
+          duracionMin: _duracion,
+          modalidad: modalidad,
+          direccion: _dirCtrl.text.trim(),
+          motivo: _motivoGuardado,
+          notas: _notasCtrl.text.trim(),
+        );
+      }
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Cita agendada')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_editando ? 'Cita actualizada' : 'Cita agendada'),
+        ),
+      );
       context.go(
         Uri(
           path: '/agenda',
@@ -304,6 +353,53 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    if (_editando && !_prefilled) {
+      final citaAsync = ref.watch(citaProvider(widget.citaId!));
+      final cita = citaAsync.asData?.value;
+      Widget centro(List<Widget> hijos) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(mainAxisSize: MainAxisSize.min, children: hijos),
+        ),
+      );
+      final Widget cuerpo;
+      if (cita != null && cita.estado.esTerminal) {
+        cuerpo = centro([
+          Text(
+            'Solo se pueden editar citas pendientes o confirmadas.',
+            textAlign: TextAlign.center,
+            style: textTheme.bodyLarge,
+          ),
+        ]);
+      } else if (cita != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _precargar(cita);
+        });
+        cuerpo = const Center(child: CircularProgressIndicator());
+      } else if (citaAsync.hasError) {
+        cuerpo = centro([
+          Text(
+            'No pudimos cargar la cita. Intenta de nuevo.',
+            textAlign: TextAlign.center,
+            style: textTheme.bodyLarge,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            label: 'Reintentar',
+            variant: AppButtonVariant.outline,
+            expand: false,
+            onPressed: () => ref.invalidate(citaProvider(widget.citaId!)),
+          ),
+        ]);
+      } else {
+        cuerpo = const Center(child: CircularProgressIndicator());
+      }
+      return Scaffold(
+        appBar: const AppTopBar(title: 'Editar cita'),
+        body: cuerpo,
+      );
+    }
+
     final semana = ref.watch(agendaSemanaProvider(lunesDeSemana(_dia)));
     final clienteId = _clienteId;
     final clienteAsync = clienteId == null
@@ -332,7 +428,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
     );
 
     return Scaffold(
-      appBar: const AppTopBar(title: 'Nueva cita'),
+      appBar: AppTopBar(title: _editando ? 'Editar cita' : 'Nueva cita'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
@@ -349,6 +445,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
                 cliente: cliente,
                 error: clienteAsync?.hasError ?? false,
                 cargando: clienteAsync?.isLoading ?? false,
+                soloLectura: _editando,
                 cambiar: clienteId == widget.clienteIdInicial,
                 onQuitar: _quitarCliente,
               ),
@@ -520,7 +617,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
               const SizedBox(height: AppSpacing.sm),
             ],
             AppButton(
-              label: 'Guardar cita',
+              label: _editando ? 'Guardar cambios' : 'Guardar cita',
               isLoading: _loading,
               onPressed: puedeGuardar ? () => _submit(seleccion, minutos) : null,
             ),
@@ -538,7 +635,11 @@ class _ClienteElegido extends StatelessWidget {
     required this.cargando,
     required this.cambiar,
     required this.onQuitar,
+    this.soloLectura = false,
   });
+
+  /// Edición de cita: el cliente queda fijo (conserva el historial ligado).
+  final bool soloLectura;
 
   final Cliente? cliente;
   final bool error;
@@ -581,7 +682,9 @@ class _ClienteElegido extends StatelessWidget {
                     style: textTheme.bodyMedium,
                   ),
           ),
-          if (cambiar)
+          if (soloLectura)
+            const SizedBox.shrink()
+          else if (cambiar)
             TextButton(onPressed: onQuitar, child: const Text('Cambiar'))
           else
             IconButton(

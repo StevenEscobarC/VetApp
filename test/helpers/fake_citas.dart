@@ -63,6 +63,105 @@ class FakeCitaRepository implements SupabaseCitaRepository {
     return idResultado;
   }
 
+  /// Cada [cambiarEstado], en orden.
+  final List<({String citaId, EstadoCita estado})> estadosCambiados = [];
+
+  /// Cada [actualizar], en orden.
+  final List<
+    ({
+      String citaId,
+      List<String> mascotaIds,
+      DateTime fechaHora,
+      int duracionMin,
+      ModalidadCita modalidad,
+      String direccion,
+      String motivo,
+      String notas,
+    })
+  >
+  actualizadas = [];
+
+  /// Cada [marcarRecordatorioEnviado], en orden.
+  final List<({String citaId, DateTime? enviadoAt})> recordatorios = [];
+
+  int _indice(String id) {
+    final i = citas.indexWhere((c) => c.id == id);
+    if (i < 0) throw const CitaFailure('Esta cita ya no existe.');
+    return i;
+  }
+
+  @override
+  Future<void> cambiarEstado(String citaId, EstadoCita estado) async {
+    if (error != null) throw error!;
+    final i = _indice(citaId);
+    estadosCambiados.add((citaId: citaId, estado: estado));
+    citas[i] = citas[i].copyWith(estado: estado);
+  }
+
+  @override
+  Future<void> actualizar({
+    required String citaId,
+    required List<String> mascotaIds,
+    required DateTime fechaHora,
+    required int duracionMin,
+    required ModalidadCita modalidad,
+    required String direccion,
+    required String motivo,
+    required String notas,
+  }) async {
+    if (error != null) throw error!;
+    final i = _indice(citaId);
+    actualizadas.add((
+      citaId: citaId,
+      mascotaIds: mascotaIds,
+      fechaHora: fechaHora,
+      duracionMin: duracionMin,
+      modalidad: modalidad,
+      direccion: direccion,
+      motivo: motivo,
+      notas: notas,
+    ));
+    citas[i] = citas[i].copyWith(
+      fechaHora: fechaHora,
+      duracionMin: duracionMin,
+      modalidad: modalidad,
+      direccion: direccion,
+      motivo: motivo,
+      notas: notas,
+    );
+  }
+
+  @override
+  Future<void> marcarRecordatorioEnviado(
+    String citaId,
+    DateTime? enviadoAt,
+  ) async {
+    if (error != null) throw error!;
+    final i = _indice(citaId);
+    recordatorios.add((citaId: citaId, enviadoAt: enviadoAt));
+    final c = citas[i];
+    // copyWith no puede volver a null: se reconstruye para deshacer.
+    citas[i] = Cita(
+      id: c.id,
+      clinicaId: c.clinicaId,
+      clienteId: c.clienteId,
+      veterinarioId: c.veterinarioId,
+      fechaHora: c.fechaHora,
+      duracionMin: c.duracionMin,
+      modalidad: c.modalidad,
+      direccion: c.direccion,
+      motivo: c.motivo,
+      notas: c.notas,
+      estado: c.estado,
+      recordatorioEnviadoAt: enviadoAt,
+      clienteNombre: c.clienteNombre,
+      clienteTelefono: c.clienteTelefono,
+      clienteDireccion: c.clienteDireccion,
+      mascotas: c.mascotas,
+      mascotasConConsulta: c.mascotasConConsulta,
+    );
+  }
+
   final List<({DateTime inicio, DateTime fin})> consultasEntre = [];
 
   @override

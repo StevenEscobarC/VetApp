@@ -90,6 +90,75 @@ class SupabaseCitaRepository {
     }
   }
 
+  /// Edita una cita pendiente/confirmada vía el RPC `actualizar_cita` (el
+  /// servidor valida estado, dueño y mascotas con consulta ligada).
+  Future<void> actualizar({
+    required String citaId,
+    required List<String> mascotaIds,
+    required DateTime fechaHora,
+    required int duracionMin,
+    required ModalidadCita modalidad,
+    required String direccion,
+    required String motivo,
+    required String notas,
+  }) async {
+    try {
+      await _client.rpc(
+        'actualizar_cita',
+        params: {
+          'p_cita_id': citaId,
+          'p_mascota_ids': mascotaIds,
+          'p_fecha_hora': fechaHora.toUtc().toIso8601String(),
+          'p_duracion_min': duracionMin,
+          'p_modalidad': modalidad.valor,
+          'p_direccion':
+              modalidad == ModalidadCita.domicilio ? direccion.trim() : '',
+          'p_motivo': motivo.trim(),
+          'p_notas': notas.trim(),
+        },
+      );
+    } on PostgrestException catch (e) {
+      throw CitaFailure(_messageFor(e));
+    } catch (_) {
+      throw const CitaFailure('No pudimos guardar la cita. Intenta de nuevo.');
+    }
+  }
+
+  /// Cambia el estado. `.select('id')` evita el falso éxito: RLS oculta en
+  /// silencio las filas ajenas y un update de 0 filas no lanza error.
+  Future<void> cambiarEstado(String citaId, EstadoCita estado) =>
+      _actualizarFila(citaId, {'estado': estado.valor});
+
+  /// Marca (o con `null` deshace) el recordatorio enviado por WhatsApp.
+  Future<void> marcarRecordatorioEnviado(String citaId, DateTime? enviadoAt) =>
+      _actualizarFila(citaId, {
+        'recordatorio_enviado_at': enviadoAt?.toUtc().toIso8601String(),
+      });
+
+  Future<void> _actualizarFila(
+    String citaId,
+    Map<String, dynamic> valores,
+  ) async {
+    try {
+      final filas = await _client
+          .from('citas')
+          .update(valores)
+          .eq('id', citaId)
+          .select('id');
+      if ((filas as List).isEmpty) {
+        throw const CitaFailure('Esta cita ya no existe.');
+      }
+    } on CitaFailure {
+      rethrow;
+    } on PostgrestException catch (e) {
+      throw CitaFailure(_messageFor(e, estado: true));
+    } catch (_) {
+      throw const CitaFailure(
+        'No pudimos cambiar el estado. Intenta de nuevo.',
+      );
+    }
+  }
+
   Cita _fromRow(Map<String, dynamic> row) {
     final cliente = row['clientes'] as Map<String, dynamic>?;
     final mascotas = ((row['cita_mascotas'] as List?) ?? const [])
@@ -134,7 +203,7 @@ class SupabaseCitaRepository {
 
   /// Traducciones centralizadas de `PostgrestException.code` a mensajes en
   /// español — agregar nuevos códigos aquí, nunca inline en un call site.
-  String _messageFor(PostgrestException e) {
+  String _messageFor(PostgrestException e, {bool estado = false}) {
     switch (e.code) {
       case 'PGRST116':
         return 'Esta cita ya no existe.';
@@ -155,7 +224,9 @@ class SupabaseCitaRepository {
       case '23505':
         return 'Ya registraste una consulta para esta mascota en esta cita.';
       default:
-        return 'No pudimos guardar la cita. Intenta de nuevo.';
+        return estado
+            ? 'No pudimos cambiar el estado. Intenta de nuevo.'
+            : 'No pudimos guardar la cita. Intenta de nuevo.';
     }
   }
 }
