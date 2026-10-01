@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -121,6 +123,23 @@ void main() {
 
     expect(t.svc.cancelarTodoLlamadas, 1);
     expect(t.svc.reprogramaciones.length, antes);
+  });
+
+  test('cerrar sesion con sync en vuelo no reprograma', () async {
+    final t = _setup();
+    final retener = Completer<void>();
+    t.svc.retenerPermiso = retener.future;
+    t.c.read(recordatoriosSyncProvider);
+    await _settle();
+    expect(t.svc.reprogramaciones, isEmpty);
+
+    await t.c.read(authProfileProvider.notifier).signOut();
+    await _settle();
+    retener.complete();
+    await _settle();
+
+    expect(t.svc.reprogramaciones, isEmpty);
+    expect(t.svc.cancelarTodoLlamadas, greaterThanOrEqualTo(1));
   });
 
   test('sin permiso no reprograma', () async {

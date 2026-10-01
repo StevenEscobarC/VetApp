@@ -12,6 +12,10 @@ class FakeRecordatoriosService implements RecordatoriosService {
   String? lanzamiento;
   bool resultadoSolicitud = true;
 
+  /// Si no es null, [permisoConcedido] espera este future (simula una
+  /// sincronización en vuelo).
+  Future<void>? retenerPermiso;
+
   void Function(String citaId)? _alTocar;
 
   /// Simula que el usuario toca un recordatorio.
@@ -25,7 +29,11 @@ class FakeRecordatoriosService implements RecordatoriosService {
   }
 
   @override
-  Future<bool> permisoConcedido() async => permiso;
+  Future<bool> permisoConcedido() async {
+    final retener = retenerPermiso;
+    if (retener != null) await retener;
+    return permiso;
+  }
 
   @override
   Future<bool> solicitarPermiso() async {
