@@ -16,8 +16,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Fundación** - Proyecto Supabase real, RLS probado y Riverpod/go_router realmente conectados (completed 2026-09-24)
 - [x] **Phase 2: Clientes y Pacientes** - CRUD real de dueños y mascotas con foto y búsqueda
  (completed 2026-09-26)
+
 - [x] **Phase 3: Historia Clínica** - Registro estructurado, línea de tiempo y exportación a PDF por paciente
  (completed 2026-10-01)
+
 - [ ] **Phase 4: Agenda y Citas** - Calendario de citas con recordatorios locales y por WhatsApp
 - [ ] **Phase 5: Vacunación y Desparasitación** - Carné digital con cálculo automático de próxima dosis y enlace compartible
 - [ ] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo
@@ -106,6 +108,7 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [x] 02-10-PLAN.md — README + full gate + validation sign-off + human-verified device UAT against the live backend
+
 **UI hint**: yes
 
 ### Phase 3: Historia Clínica
@@ -141,6 +144,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 03-06-PLAN.md — README + full gate + HIST-04 structural check + validation sign-off + human-verified device UAT against the live backend
+
 **UI hint**: yes
 
 ### Phase 4: Agenda y Citas
@@ -161,17 +165,35 @@ Plans:
 **Plans**: 11 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 04-01-PLAN.md — Backend: citas + cita_mascotas, RLS, crear_cita/actualizar_cita, registrar_consulta(p_cita_id), 95-check smoke test + human apply (vetapp-supabase)
 - [ ] 04-02-PLAN.md — Platform: notification/url_launcher/prefs deps, es_CO localization, Android desugaring + receivers, APK build spike
 - [ ] 04-03-PLAN.md — Ver agenda: Bogotá time utils, Cita entity, read repository, AgendaScreen (day strip, hourly list, Próxima, states)
 - [ ] 04-04-PLAN.md — Phone normalization (+57) with soft warning, 'Agendar cita' on fichas, combined-alta return mode
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 04-05-PLAN.md — Crear cita: form with cliente search, multi-mascota, motivo/duración, first free slot, domicilio, overlap warning
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 04-06-PLAN.md — Estados + detalle + editar: Confirmar/No asistió/Cancelar/Reabrir with Deshacer, CitaDetailScreen, edit mode
 - [ ] 04-07-PLAN.md — Local reminders core: plan builder, flutter_local_notifications service, idempotent resync, sign-out cancel, tap-to-open
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 04-08-PLAN.md — WhatsApp (wa.me D-14) individual + 'Recordar a todos los de mañana', Cómo llegar (Maps)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 04-09-PLAN.md — Completar cita -> consulta(s) vinculadas (prefill, one per mascota, Completar sin consulta)
 - [ ] 04-10-PLAN.md — Permission rationale after first cita, denied banner, Más > Recordatorios (15/30/60/120)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 04-11-PLAN.md — Integrated gate, live embed probe, vetapp-brand-ui audit, device UAT
+
 **UI hint**: yes
 
 ### Phase 5: Vacunación y Desparasitación
@@ -262,12 +284,14 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 **Depends on:** Phase 2 (registro de cliente ya desacoplado de clínica; genera el código de vinculación que aquí se reclama), Phase 4 (Agenda — el botón "Agendar cita" enlaza ahí)
 **Requirements**: DIR-01, DIR-02, DIR-03, DIR-04, DIR-05, DIR-06, REV-01, REV-02, REV-03, REV-04, REV-05
 **Success Criteria** (what must be TRUE):
+
   1. El cliente puede ver el listado de clínicas activas (nombre, ciudad, dirección, foto/logo si existe, calificación promedio) sin tener que pertenecer a ninguna
   2. El cliente puede buscar veterinarias por nombre o ciudad con resultados instantáneos, y filtrar por ciudad
   3. El cliente puede ver el detalle de una veterinaria (contacto, horario si existe, calificación promedio, reseñas recientes) y desde ahí iniciar "Agendar cita"
   4. El cliente puede dejar una reseña (estrellas + comentario opcional) de una clínica; si ya la calificó, volver a calificar edita su reseña en vez de duplicarla
   5. Cualquier persona autenticada puede leer las reseñas públicas de una clínica, pero solo el autor puede editar/borrar la suya, y la calificación promedio mostrada coincide con el promedio real
   6. El cliente puede vincular su cuenta a un registro de cliente existente usando el código/enlace generado por el veterinario (Fase 2), y a partir de ahí ve en "Mis mascotas" las mascotas que el veterinario ya le había registrado
+
 **Plans**: TBD
 **UI hint**: yes
 
