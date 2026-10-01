@@ -33,17 +33,12 @@ List<Cita> solapesCon({
   return r;
 }
 
-/// Primer instante UTC libre del [dia] de Bogotá, en pasos de 15 min.
-/// Hoy parte del siguiente cuarto desde [ahora]; otro día, de las 8:00.
-/// Si nada cabe antes de las 22:00 devuelve el candidato inicial acotado
-/// a las 22:00.
-DateTime primerHuecoLibre({
-  required Iterable<Cita> citas,
-  required DateTime dia,
-  required DateTime ahora,
-  required int duracionMin,
-  String? excluirId,
-}) {
+/// Desde dónde se busca hueco en el [dia] de Bogotá (instante UTC): hoy, el
+/// siguiente cuarto desde [ahora]; otro día, las 8:00. Nunca antes de las
+/// 6:00 (el mínimo del selector de hora) ni después de las 22:00 (el
+/// máximo), así el valor siempre es representable en el selector.
+DateTime inicioBusquedaHueco({required DateTime dia, required DateTime ahora}) {
+  final apertura = deBogota(dia.year, dia.month, dia.day, 6);
   final limite = deBogota(dia.year, dia.month, dia.day, 22);
   DateTime inicial;
   if (mismoDia(diaBogota(ahora), dia)) {
@@ -55,7 +50,26 @@ DateTime primerHuecoLibre({
   } else {
     inicial = deBogota(dia.year, dia.month, dia.day, 8);
   }
-  var candidato = inicial;
+  if (inicial.isBefore(apertura)) return apertura;
+  if (inicial.isAfter(limite)) return limite;
+  return inicial;
+}
+
+/// Primer instante UTC libre del [dia] de Bogotá, en pasos de 15 min, entre
+/// [inicioBusquedaHueco] y las 22:00. Devuelve `null` si nada cabe o si hoy
+/// ya pasaron las 22:00: nunca sugiere como "libre" una hora que se cruza o
+/// que ya pasó.
+DateTime? primerHuecoLibre({
+  required Iterable<Cita> citas,
+  required DateTime dia,
+  required DateTime ahora,
+  required int duracionMin,
+  String? excluirId,
+}) {
+  final limite = deBogota(dia.year, dia.month, dia.day, 22);
+  var candidato = inicioBusquedaHueco(dia: dia, ahora: ahora);
+  // Hoy después de las 22:00 el inicio queda acotado al límite, que ya pasó.
+  if (candidato.isBefore(ahora)) return null;
   while (!candidato.isAfter(limite)) {
     if (solapesCon(
       inicio: candidato,
@@ -67,5 +81,5 @@ DateTime primerHuecoLibre({
     }
     candidato = candidato.add(const Duration(minutes: 15));
   }
-  return inicial.isAfter(limite) ? limite : inicial;
+  return null;
 }

@@ -64,6 +64,23 @@ AppButton _boton(WidgetTester tester, String label) =>
     tester.widget<AppButton>(find.widgetWithText(AppButton, label));
 
 void main() {
+  for (final estado in [EstadoCita.cancelada, EstadoCita.noAsistio]) {
+    testWidgets('una cita ${estado.name} no se puede completar', (
+      tester,
+    ) async {
+      final repo = FakeCitaRepository(
+        citas: [citaRockyLunaHoy.copyWith(estado: estado)],
+      );
+      await _abrir(tester, repo, 'cita-2');
+
+      expect(find.text('Esta cita ya no se puede completar.'), findsOneWidget);
+      expect(find.text('Finalizar cita'), findsNothing);
+      expect(find.text('Completar sin consulta'), findsNothing);
+      expect(find.text('Registrar consulta'), findsNothing);
+      expect(repo.estadosCambiados, isEmpty);
+    });
+  }
+
   testWidgets('lista cada mascota como Pendiente con Registrar y Omitir', (
     tester,
   ) async {

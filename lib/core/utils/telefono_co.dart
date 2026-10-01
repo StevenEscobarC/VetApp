@@ -85,6 +85,20 @@ bool requiereAvisoTelefono(String raw) {
   return clase == ClaseTelefono.fijoCo || clase == ClaseTelefono.desconocido;
 }
 
+/// Error (bloqueante) cuando el campo obligatorio tiene texto pero ningún
+/// dígito: normalizado quedaría vacío.
+const String kErrorTelefonoSinDigitos = 'Escribe un número de teléfono.';
+
+/// `true` si [raw] produce un teléfono guardable (al menos un dígito). El
+/// chequeo de obligatorio debe usar esto y no `raw.trim().isNotEmpty`, porque
+/// "N/A" o "---" pasarían y se guardaría `''`.
+bool telefonoGuardable(String raw) =>
+    normalizarTelefono(raw).clase != ClaseTelefono.vacio;
+
+/// `true` cuando hay texto escrito que no contiene ningún dígito.
+bool telefonoSinDigitos(String raw) =>
+    raw.trim().isNotEmpty && !telefonoGuardable(raw);
+
 /// Número listo para `wa.me` (solo dígitos, sin `+`), o `null` si no es un
 /// celular colombiano ni un número internacional.
 String? numeroWhatsApp(String raw) {

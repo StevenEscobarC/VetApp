@@ -171,22 +171,50 @@ void main() {
         t(8),
       );
     });
-    test('sin hueco devuelve el candidato inicial acotado a 22:00', () {
-      final llenas = [for (var h = 8; h < 23; h++) _cita('c$h', h, 0, 60)];
-      final r = primerHuecoLibre(
-        citas: llenas,
-        dia: dia,
-        ahora: _t(9, 35),
-        duracionMin: 30,
+    test('sin hueco devuelve null (nunca una hora que se cruza)', () {
+      final llenas = [for (var h = 6; h < 23; h++) _cita('c$h', h, 0, 60)];
+      expect(
+        primerHuecoLibre(
+          citas: llenas,
+          dia: dia,
+          ahora: _t(9, 35),
+          duracionMin: 30,
+        ),
+        isNull,
       );
-      expect(r, _t(9, 45));
-      final tarde = primerHuecoLibre(
-        citas: llenas,
-        dia: dia,
-        ahora: _t(23, 0),
-        duracionMin: 30,
+    });
+    test('hoy después de las 22:00 no sugiere una hora pasada', () {
+      expect(
+        primerHuecoLibre(
+          citas: const [],
+          dia: dia,
+          ahora: _t(23, 0),
+          duracionMin: 30,
+        ),
+        isNull,
       );
-      expect(tarde, _t(22, 0));
+      expect(
+        primerHuecoLibre(
+          citas: const [],
+          dia: dia,
+          ahora: _t(22, 5),
+          duracionMin: 30,
+        ),
+        isNull,
+      );
+    });
+    test('hoy antes de las 6:00 empieza a las 6:00 (mínimo del selector)', () {
+      expect(
+        primerHuecoLibre(
+          citas: const [],
+          dia: dia,
+          ahora: _t(0, 10),
+          duracionMin: 30,
+        ),
+        _t(6, 0),
+      );
+      expect(inicioBusquedaHueco(dia: dia, ahora: _t(0, 10)), _t(6, 0));
+      expect(inicioBusquedaHueco(dia: dia, ahora: _t(23, 50)), _t(22, 0));
     });
   });
 

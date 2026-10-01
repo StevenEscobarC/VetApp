@@ -34,7 +34,7 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
   _Boton? _finalizando;
 
   Future<void> _finalizar(Cita cita, _Boton boton) async {
-    if (_finalizando != null) return;
+    if (_finalizando != null || !_completable(cita)) return;
     if (cita.estado == EstadoCita.completada) {
       context.pop();
       return;
@@ -92,8 +92,41 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
     );
   }
 
+  /// Una cita cancelada o marcada "no asistió" no se puede completar (la
+  /// pantalla puede abrirse desde una tarjeta vieja o un enlace directo).
+  static bool _completable(Cita cita) =>
+      cita.estado != EstadoCita.cancelada &&
+      cita.estado != EstadoCita.noAsistio;
+
   Widget _contenido(Cita cita) {
     final textTheme = Theme.of(context).textTheme;
+    if (!_completable(cita)) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Esta cita ya no se puede completar.',
+                textAlign: TextAlign.center,
+                style: textTheme.bodyLarge,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                cita.estado == EstadoCita.cancelada
+                    ? 'Está cancelada.'
+                    : 'Está marcada como "no asistió".',
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final registradas = cita.mascotasConConsulta;
     bool resuelta(MascotaDeCita m) =>
         registradas.contains(m.id) || _omitidas.contains(m.id);

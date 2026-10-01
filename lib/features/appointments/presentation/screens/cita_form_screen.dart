@@ -63,6 +63,8 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   // null = el usuario aún no tocó las casillas (se usa la selección por defecto).
   Set<String>? _mascotasSel;
   bool _quitoUltima = false;
+  // Edición: mascotas con consulta registrada en la cita; no se pueden quitar.
+  Set<String> _conConsulta = const {};
 
   late DateTime _dia;
   String _motivo = motivoPorDefecto;
@@ -85,6 +87,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
       _prefilled = true;
       _clienteId = c.clienteId;
       _mascotasSel = c.mascotas.map((m) => m.id).toSet();
+      _conConsulta = c.mascotasConConsulta;
       final conocido = motivosCita.any((m) => m.label == c.motivo);
       if (conocido) {
         _motivo = c.motivo;
@@ -148,6 +151,10 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
       return (minutos: _minutosManual, ayuda: 'Hora elegida');
     }
     final ahora = ref.read(clockProvider)();
+    // Hora de respaldo cuando no hay hueco: siempre dentro del selector.
+    final respaldo = minutosDelDia(
+      inicioBusquedaHueco(dia: _dia, ahora: ahora),
+    );
     final citas = _citasDelDia(semana);
     if (citas != null) {
       final h = primerHuecoLibre(
@@ -156,17 +163,17 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
         ahora: ahora,
         duracionMin: _duracion,
       );
+      if (h == null) {
+        return (
+          minutos: respaldo,
+          ayuda: 'No hay huecos libres este día; elige la hora u otro día.',
+        );
+      }
       return (minutos: minutosDelDia(h), ayuda: 'Primer hueco libre sugerido');
     }
     if (semana.hasError) {
-      final h = primerHuecoLibre(
-        citas: const [],
-        dia: _dia,
-        ahora: ahora,
-        duracionMin: _duracion,
-      );
       return (
-        minutos: minutosDelDia(h),
+        minutos: respaldo,
         ayuda: 'No pudimos revisar tu agenda; elige la hora.',
       );
     }
@@ -219,10 +226,14 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   }
 
   Future<void> _elegirFecha() async {
+    // No se agenda en días pasados; si la cita ya está en uno (edición o
+    // fecha recibida por ruta), ese día sigue siendo elegible.
+    final hoy = diaBogota(ref.read(clockProvider)());
+    final desde = _dia.isBefore(hoy) ? _dia : hoy;
     final elegido = await showDatePicker(
       context: context,
       initialDate: DateTime(_dia.year, _dia.month, _dia.day),
-      firstDate: DateTime(2020),
+      firstDate: DateTime(desde.year, desde.month, desde.day),
       lastDate: DateTime(2100),
     );
     if (elegido == null || !mounted) return;
@@ -476,7 +487,9 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
                   mascotas: mascotas,
                   seleccionadas: seleccion,
                   mostrarError: _quitoUltima,
+                  bloqueadas: _conConsulta,
                   onCambio: (id, marcada) => setState(() {
+                    if (!marcada && _conConsulta.contains(id)) return;
                     final nueva = {...seleccion};
                     marcada ? nueva.add(id) : nueva.remove(id);
                     _mascotasSel = nueva;

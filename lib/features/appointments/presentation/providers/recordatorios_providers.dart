@@ -104,9 +104,7 @@ class RecordatoriosSync {
     _ref.listen(authProfileProvider, (previo, siguiente) {
       final perfil = siguiente.value;
       if (perfil == null) {
-        if (previo?.value != null) {
-          unawaited(_ref.read(recordatoriosServiceProvider).cancelarTodo());
-        }
+        if (previo?.value != null) unawaited(_cerrarSesion());
       } else if (perfil.esVeterinario) {
         unawaited(sincronizar());
       }
@@ -139,6 +137,28 @@ class RecordatoriosSync {
   bool _repetir = false;
   bool _lanzamientoAtendido = false;
 
+  /// Cambia en cada cierre de sesión: una sincronización iniciada antes no
+  /// puede programar recordatorios (con nombres de clientes) después.
+  int _generacion = 0;
+
+  /// Cancela todo al cerrar sesión. Si había una sincronización en vuelo,
+  /// espera a que termine y vuelve a cancelar, por si alcanzó a programar
+  /// entre la primera cancelación y su chequeo de sesión.
+  Future<void> _cerrarSesion() async {
+    _generacion++;
+    final servicio = _ref.read(recordatoriosServiceProvider);
+    final enCurso = _enCurso;
+    try {
+      await servicio.cancelarTodo();
+      if (enCurso != null) {
+        await enCurso;
+        await servicio.cancelarTodo();
+      }
+    } catch (_) {
+      // Silencioso: no hay a quién mostrarle el error tras cerrar sesión.
+    }
+  }
+
   /// Reconstruye los recordatorios. Si ya hay una ejecución en curso pide
   /// una repetición y devuelve el mismo future (así quien espera ve el
   /// resultado final). Nunca lanza: los fallos se reintentan en el
@@ -166,6 +186,7 @@ class RecordatoriosSync {
   }
 
   Future<void> _una() async {
+    final generacion = _generacion;
     try {
       final perfil = await _ref.read(authProfileProvider.future);
       if (perfil == null || !perfil.esVeterinario) return;
@@ -178,6 +199,14 @@ class RecordatoriosSync {
       final citas = await _ref
           .read(citaRepositoryProvider)
           .entre(ahora, ahora.add(const Duration(days: 30)));
+      // La sesión pudo cerrarse durante los awaits de arriba.
+      final sigue = _ref.read(authProfileProvider).value;
+      if (generacion != _generacion ||
+          sigue == null ||
+          sigue.id != perfil.id ||
+          !sigue.esVeterinario) {
+        return;
+      }
       await servicio.reprogramar(planificar(citas, minutos, ahora));
 
       if (!_lanzamientoAtendido) {

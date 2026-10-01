@@ -74,6 +74,9 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
   bool get _avisoTelefono =>
       _telefonoTocado && requiereAvisoTelefono(_telefonoCtrl.text);
 
+  bool get _errorTelefono =>
+      _telefonoTocado && telefonoSinDigitos(_telefonoCtrl.text);
+
   void _llenarControladores(Cliente cliente) {
     _nombreCtrl.text = cliente.nombre;
     _telefonoCtrl.text = cliente.telefono;
@@ -100,7 +103,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
   bool get _puedeGuardar =>
       _esDirty &&
       _nombreCtrl.text.trim().isNotEmpty &&
-      _telefonoCtrl.text.trim().isNotEmpty &&
+      telefonoGuardable(_telefonoCtrl.text) &&
       _correoValido;
 
   Future<void> _guardar() async {
@@ -202,7 +205,10 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
               label: 'Teléfono *',
               controller: _telefonoCtrl,
               keyboardType: TextInputType.phone,
-              helperText: _avisoTelefono ? null : 'Ej. 300 123 4567',
+              helperText: _avisoTelefono || _errorTelefono
+                  ? null
+                  : 'Ej. 300 123 4567',
+              errorText: _errorTelefono ? kErrorTelefonoSinDigitos : null,
             ),
           ),
           if (_avisoTelefono) ...[

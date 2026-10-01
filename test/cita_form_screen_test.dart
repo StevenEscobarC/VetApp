@@ -380,6 +380,22 @@ void main() {
   });
 
   group('CitaFormScreen - motivo, duración, dónde', () {
+    testWidgets('el calendario no ofrece días pasados para una cita nueva', (
+      tester,
+    ) async {
+      _grande(tester);
+      await tester.pumpWidget(_app(repo: FakeCitaRepository()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.calendar_today_outlined));
+      await tester.pumpAndSettle();
+
+      final picker = tester.widget<CalendarDatePicker>(
+        find.byType(CalendarDatePicker),
+      );
+      expect(picker.firstDate, DateTime(2026, 9, 30));
+    });
+
     testWidgets('el motivo fija la duración y se puede sobrescribir', (
       tester,
     ) async {
@@ -697,6 +713,32 @@ void main() {
 
       expect(_chipSel(tester, 'Otro'), isTrue);
       expect(find.text('Revisión post-operatoria'), findsOneWidget);
+    });
+
+    testWidgets('una mascota con consulta registrada no se puede desmarcar', (
+      tester,
+    ) async {
+      _grande(tester);
+      final cita = citaRockyLunaHoy.copyWith(mascotasConConsulta: {'m-rocky'});
+      final repo = FakeCitaRepository(citas: [cita]);
+      await tester.pumpWidget(editar(repo, 'cita-2'));
+      await tester.pumpAndSettle();
+
+      // Orden de la lista: Luna, Rocky. Rocky queda fija y marcada.
+      final casillas = tester.widgetList<Checkbox>(find.byType(Checkbox));
+      expect(casillas.map((c) => c.value).toList(), [true, true]);
+      expect(casillas.map((c) => c.onChanged == null).toList(), [false, true]);
+      expect(find.text('Perro · Consulta registrada'), findsOneWidget);
+
+      await tester.tap(find.text('Rocky'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      expect(repo.actualizadas.single.mascotaIds.toSet(), {
+        'm-rocky',
+        'm-luna',
+      });
     });
 
     testWidgets('una cita terminal no se puede editar', (tester) async {

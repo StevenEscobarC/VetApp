@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/cita_failure.dart';
@@ -201,32 +202,53 @@ class SupabaseCitaRepository {
     );
   }
 
-  /// Traducciones centralizadas de `PostgrestException.code` a mensajes en
-  /// español — agregar nuevos códigos aquí, nunca inline en un call site.
-  String _messageFor(PostgrestException e, {bool estado = false}) {
-    switch (e.code) {
-      case 'PGRST116':
-        return 'Esta cita ya no existe.';
-      case '42501':
-        return 'No tienes permiso para gestionar citas.';
-      case '23503':
-        return 'El cliente o la mascota no existe en tu clínica.';
-      case '23514':
-        final m = e.message.toLowerCase();
-        if (m.contains('domicilio')) {
-          return 'Escribe la dirección para la visita a domicilio.';
-        }
-        if (m.contains('mascota')) return 'Elige al menos una mascota.';
-        if (m.contains('editar')) {
-          return 'Solo se pueden editar citas pendientes o confirmadas.';
-        }
-        return 'Revisa los datos de la cita.';
-      case '23505':
-        return 'Ya registraste una consulta para esta mascota en esta cita.';
-      default:
-        return estado
-            ? 'No pudimos cambiar el estado. Intenta de nuevo.'
-            : 'No pudimos guardar la cita. Intenta de nuevo.';
-    }
+  String _messageFor(PostgrestException e, {bool estado = false}) =>
+      mensajeErrorCita(e, estado: estado);
+}
+
+/// Traducciones centralizadas de `PostgrestException.code` a mensajes en
+/// español — agregar nuevos códigos aquí, nunca inline en un call site.
+/// Los mensajes de `check_violation` se distinguen por frase completa y del
+/// más específico al más general: "ya tiene consulta" también contiene
+/// "mascota", así que debe evaluarse antes que "al menos una mascota". Los
+/// guardias del trigger de `citas` (transición de estado, columnas fijas) van
+/// primero porque pueden llegar desde cualquier escritura.
+@visibleForTesting
+String mensajeErrorCita(PostgrestException e, {bool estado = false}) {
+  switch (e.code) {
+    case 'PGRST116':
+      return 'Esta cita ya no existe.';
+    case '42501':
+      return 'No tienes permiso para gestionar citas.';
+    case '23503':
+      return 'El cliente o la mascota no existe en tu clínica.';
+    case '23514':
+      final m = e.message.toLowerCase();
+      if (m.contains('estado no permitido')) {
+        return 'Esta cita ya no puede cambiar a ese estado.';
+      }
+      if (m.contains('no se puede cambiar el cliente')) {
+        return 'No se puede cambiar el cliente de una cita.';
+      }
+      if (m.contains('domicilio')) {
+        return 'Escribe la dirección para la visita a domicilio.';
+      }
+      if (m.contains('ya tiene consulta')) {
+        return 'No puedes quitar una mascota que ya tiene consulta '
+            'registrada en esta cita.';
+      }
+      if (m.contains('al menos una mascota')) {
+        return 'Elige al menos una mascota.';
+      }
+      if (m.contains('editar')) {
+        return 'Solo se pueden editar citas pendientes o confirmadas.';
+      }
+      return 'Revisa los datos de la cita.';
+    case '23505':
+      return 'Ya registraste una consulta para esta mascota en esta cita.';
+    default:
+      return estado
+          ? 'No pudimos cambiar el estado. Intenta de nuevo.'
+          : 'No pudimos guardar la cita. Intenta de nuevo.';
   }
 }
