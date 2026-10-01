@@ -210,11 +210,21 @@ Plans:
   3. Al retirar a un veterinario pierde acceso de inmediato; sus consultas, citas y vacunas siguen visibles con "Atendió: Dr(a). X" (ya no hay `ON DELETE CASCADE` que borre historia clínica)
   4. La agenda muestra "Mías" por defecto con filtro "Todas" (solo visible con 2+ veterinarios); cruces y recordatorios locales son por veterinario asignado; el WhatsApp va firmado por el veterinario asignado
   5. Un veterinario que trabaja solo no ve ningún cambio en su flujo (sin selectores ni filtros nuevos)
-**Plans:** 0 plans
+**Plans:** 11 plans
 **UI hint**: yes
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 04.1 to break down)
+- [ ] 04.1-01-PLAN.md — Schema delta Fase 4.1 (membresía, invitaciones, roles, retiro, citas por vet, RESTRICT, autoría) + smoke P1..P30 + aplicar en SQL Editor [BLOCKING]
+- [ ] 04.1-02-PLAN.md — Más > Equipo visible (AuthProfile, providers de equipo, gate D-00, VetAvatar)
+- [ ] 04.1-03-PLAN.md — Registro con código de invitación
+- [ ] 04.1-04-PLAN.md — Invitar: generar/compartir (share_plus)/copiar/revocar código
+- [ ] 04.1-05-PLAN.md — Agenda "Mías | Todas" con marcador por veterinario y cruces por vet
+- [ ] 04.1-06-PLAN.md — "Atendió: Dr(a). X" en historia clínica + Mi perfil con matrícula
+- [ ] 04.1-07-PLAN.md — Roles y retiro (reasignar citas D-15, salir D-14)
+- [ ] 04.1-08-PLAN.md — Asignar/reasignar cita a un colega
+- [ ] 04.1-09-PLAN.md — Recordatorios por veterinario y WhatsApp firmado por el asignado
+- [ ] 04.1-10-PLAN.md — Acceso revocado (crear mi clínica / unirme con código)
+- [ ] 04.1-11-PLAN.md — Gate + probe en vivo + auditoría de marca + UAT vetapp-qa
 
 ### Phase 5: Vacunación y Desparasitación
 
