@@ -73,7 +73,11 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   void _cambiarSemana(int semanas) {
     setState(() {
       final offset = _dia.difference(_lunes).inDays;
-      _lunes = DateTime.utc(_lunes.year, _lunes.month, _lunes.day + 7 * semanas);
+      _lunes = DateTime.utc(
+        _lunes.year,
+        _lunes.month,
+        _lunes.day + 7 * semanas,
+      );
       _dia = DateTime.utc(_lunes.year, _lunes.month, _lunes.day + offset);
     });
   }
@@ -97,9 +101,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final conteos = citas == null ? null : _conteos(citas);
     final delDia = citas == null
         ? const <Cita>[]
-        : citas
-              .where((c) => mismoDia(diaBogota(c.fechaHora), _dia))
-              .toList();
+        : citas.where((c) => mismoDia(diaBogota(c.fechaHora), _dia)).toList();
 
     return Scaffold(
       appBar: const AppTopBar(title: 'Agenda'),
@@ -153,7 +155,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                               .where((c) => c.estado != EstadoCita.cancelada)
                               .length,
                         ),
-                        style: textTheme.labelMedium?.copyWith(
+                        style: textTheme.labelLarge?.copyWith(
                           color: AppColors.textSecondary,
                         ),
                       ),
@@ -212,8 +214,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                 label: 'Reintentar',
                 variant: AppButtonVariant.outline,
                 expand: false,
-                onPressed: () =>
-                    ref.invalidate(agendaSemanaProvider(_lunes)),
+                onPressed: () => ref.invalidate(agendaSemanaProvider(_lunes)),
               ),
             ],
           ),
@@ -227,11 +228,13 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
               .firstOrNull;
           if (proxima != null) {
             widgets
-              ..add(ProximaBanner(
+              ..add(
+                ProximaBanner(
                   cita: proxima,
                   ahora: ahora,
                   onTap: () => context.push('/agenda/${proxima.id}'),
-                ))
+                ),
+              )
               ..add(const SizedBox(height: AppSpacing.md));
           }
         }
@@ -281,7 +284,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                     const SizedBox(width: AppSpacing.xs),
                     Text(
                       'Todos los recordatorios de mañana enviados',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: AppColors.textMuted,
                       ),
                     ),
@@ -350,7 +353,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                     padding: const EdgeInsets.only(top: AppSpacing.xs),
                     child: Text(
                       hora12(aBogota(grupos[h]!.first.fechaHora)),
-                      style: textTheme.labelMedium?.copyWith(
+                      style: textTheme.labelLarge?.copyWith(
                         color: AppColors.textSecondary,
                       ),
                     ),
@@ -413,7 +416,7 @@ class _EncabezadoSemana extends StatelessWidget {
             icon: const Icon(Icons.chevron_left),
             onPressed: onAnterior,
           ),
-          Text(rangoSemanaTexto(lunes), style: textTheme.titleMedium),
+          Text(rangoSemanaTexto(lunes), style: textTheme.headlineSmall),
           IconButton(
             tooltip: 'Semana siguiente',
             constraints: caja,
@@ -421,7 +424,8 @@ class _EncabezadoSemana extends StatelessWidget {
             onPressed: onSiguiente,
           ),
           const Spacer(),
-          if (mostrarHoy) TextButton(onPressed: onHoy, child: const Text('Hoy')),
+          if (mostrarHoy)
+            TextButton(onPressed: onHoy, child: const Text('Hoy')),
         ],
       ),
     );
@@ -440,7 +444,11 @@ class _Vacio extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
       child: Column(
         children: [
-          const Icon(Icons.event_outlined, size: 48, color: AppColors.textMuted),
+          const Icon(
+            Icons.event_outlined,
+            size: 48,
+            color: AppColors.textMuted,
+          ),
           const SizedBox(height: AppSpacing.sm),
           Text('Sin citas este día', style: textTheme.headlineSmall),
           const SizedBox(height: AppSpacing.xs),

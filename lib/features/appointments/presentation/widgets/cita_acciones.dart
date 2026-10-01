@@ -330,7 +330,7 @@ Widget? avisoWhatsApp(BuildContext context, Cita cita) {
         estado.motivo!,
         style: Theme.of(
           context,
-        ).textTheme.labelMedium?.copyWith(color: AppColors.textMuted),
+        ).textTheme.labelLarge?.copyWith(color: AppColors.textMuted),
       ),
       if (sinTelefono)
         AppButton(

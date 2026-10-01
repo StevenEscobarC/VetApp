@@ -38,8 +38,12 @@ class DayStrip extends StatelessWidget {
                 dia: DateTime.utc(lunes.year, lunes.month, lunes.day + i),
                 seleccionado: seleccionado,
                 hoy: hoy,
-                conteo: conteos?[
-                    DateTime.utc(lunes.year, lunes.month, lunes.day + i)],
+                conteo:
+                    conteos?[DateTime.utc(
+                      lunes.year,
+                      lunes.month,
+                      lunes.day + i,
+                    )],
                 onTap: onSeleccionar,
               ),
             ),
@@ -84,7 +88,8 @@ class _DayCell extends StatelessWidget {
       button: true,
       selected: esSel,
       excludeSemantics: true,
-      label: '${nombreDiaLargo(dia)} ${dia.day}, '
+      label:
+          '${nombreDiaLargo(dia)} ${dia.day}, '
           '${n == 1 ? '1 cita' : '$n citas'}${esSel ? ', seleccionado' : ''}',
       onTap: () => onTap(dia),
       child: Padding(
@@ -106,14 +111,11 @@ class _DayCell extends StatelessWidget {
               children: [
                 Text(
                   diaAbrev(dia),
-                  style: textTheme.labelSmall?.copyWith(color: texto),
+                  style: textTheme.labelMedium?.copyWith(color: texto),
                 ),
                 Text(
                   '${dia.day}',
-                  style: textTheme.titleMedium?.copyWith(
-                    color: texto,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: textTheme.headlineSmall?.copyWith(color: texto),
                 ),
                 const SizedBox(height: 2),
                 if (conteo != null && n > 0)
@@ -125,12 +127,14 @@ class _DayCell extends StatelessWidget {
                       color: esSel
                           ? AppColors.primaryStrong
                           : AppColors.surfaceMuted,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                     ),
                     child: Text(
                       '$n',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: esSel ? AppColors.onPrimary : AppColors.foreground,
+                      style: textTheme.labelMedium?.copyWith(
+                        color: esSel
+                            ? AppColors.onPrimary
+                            : AppColors.foreground,
                       ),
                     ),
                   )

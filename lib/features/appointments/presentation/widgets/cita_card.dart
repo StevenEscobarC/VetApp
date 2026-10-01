@@ -99,8 +99,8 @@ class CitaCard extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     'Se cruza con $cruceCon',
-                    style: textTheme.labelMedium?.copyWith(
-                      color: AppColors.warning,
+                    style: textTheme.labelLarge?.copyWith(
+                      color: AppColors.primaryText,
                     ),
                   ),
                 ),
@@ -117,7 +117,7 @@ class CitaCard extends ConsumerWidget {
                   child: Text(
                     'Recordatorio enviado '
                     '${fechaHoraCorta(aBogota(cita.recordatorioEnviadoAt!))}',
-                    style: textTheme.labelMedium?.copyWith(
+                    style: textTheme.labelLarge?.copyWith(
                       color: AppColors.textMuted,
                     ),
                   ),

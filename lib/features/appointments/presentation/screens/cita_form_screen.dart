@@ -250,7 +250,9 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
           '${hora12(aBogota(c.fechaHora))} ¿Agendar igual?';
     } else {
       final items = cruces
-          .map((c) => '${c.nombresMascotasCorto} ${hora12(aBogota(c.fechaHora))}')
+          .map(
+            (c) => '${c.nombresMascotasCorto} ${hora12(aBogota(c.fechaHora))}',
+          )
           .join(', ');
       cuerpo = 'Se cruza con ${cruces.length} citas: $items ¿Agendar igual?';
     }
@@ -260,13 +262,16 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
         title: const Text('Se cruza con otra cita'),
         content: Text(cuerpo),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Cambiar hora',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cambiar hora'),
           ),
-          ElevatedButton(
+          AppButton(
+            label: _editando ? 'Guardar igual' : 'Agendar igual',
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(_editando ? 'Guardar igual' : 'Agendar igual'),
           ),
         ],
       ),
@@ -499,10 +504,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
             ),
             if (_motivo == 'Otro') ...[
               const SizedBox(height: AppSpacing.sm),
-              AppTextField(
-                label: '¿Cuál es el motivo?',
-                controller: _otroCtrl,
-              ),
+              AppTextField(label: '¿Cuál es el motivo?', controller: _otroCtrl),
             ],
             const SizedBox(height: AppSpacing.lg),
             titulo('Duración'),
@@ -527,10 +529,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        fechaLarga(_dia),
-                        style: textTheme.bodyLarge,
-                      ),
+                      child: Text(fechaLarga(_dia), style: textTheme.bodyLarge),
                     ),
                     const Icon(Icons.calendar_today_outlined),
                   ],
@@ -576,8 +575,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
             ],
             const SizedBox(height: AppSpacing.md),
             InkWell(
-              onTap: () =>
-                  setState(() => _notasExpandidas = !_notasExpandidas),
+              onTap: () => setState(() => _notasExpandidas = !_notasExpandidas),
               child: Container(
                 constraints: const BoxConstraints(
                   minHeight: AppSpacing.touchTarget,
@@ -624,7 +622,9 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
             AppButton(
               label: _editando ? 'Guardar cambios' : 'Guardar cita',
               isLoading: _loading,
-              onPressed: puedeGuardar ? () => _submit(seleccion, minutos) : null,
+              onPressed: puedeGuardar
+                  ? () => _submit(seleccion, minutos)
+                  : null,
             ),
           ],
         ),

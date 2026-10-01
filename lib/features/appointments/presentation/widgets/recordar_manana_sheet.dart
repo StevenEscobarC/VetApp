@@ -56,7 +56,8 @@ class _RecordarMananaSheetState extends ConsumerState<RecordarMananaSheet>
     super.dispose();
   }
 
-  bool _habilitada(Cita c) => estadoWhatsApp(c.clienteTelefono ?? '').habilitado;
+  bool _habilitada(Cita c) =>
+      estadoWhatsApp(c.clienteTelefono ?? '').habilitado;
 
   Cita? get _actual {
     for (final c in _citas) {
@@ -175,7 +176,7 @@ class _RecordarMananaSheetState extends ConsumerState<RecordarMananaSheet>
                     ),
                     Text(
                       _estadoFila(c),
-                      style: textTheme.labelMedium?.copyWith(
+                      style: textTheme.labelLarge?.copyWith(
                         color: _enviados.contains(c.id)
                             ? AppColors.success
                             : AppColors.textSecondary,
