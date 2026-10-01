@@ -174,7 +174,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-05-PLAN.md — Crear cita: form with cliente search, multi-mascota, motivo/duración, first free slot, domicilio, overlap warning
+- [x] 04-05-PLAN.md — Crear cita: form with cliente search, multi-mascota, motivo/duración, first free slot, domicilio, overlap warning
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -270,7 +270,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
-| 4. Agenda y Citas | 4/11 | In Progress|  |
+| 4. Agenda y Citas | 5/11 | In Progress|  |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
