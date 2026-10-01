@@ -15,10 +15,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../domain/cita_solapes.dart';
 import '../../domain/entities/cita.dart';
+import '../../domain/whatsapp_recordatorio.dart';
 import '../providers/citas_providers.dart';
 import '../widgets/cita_card.dart';
 import '../widgets/day_strip.dart';
 import '../widgets/proxima_banner.dart';
+import '../widgets/recordar_manana_sheet.dart';
 
 /// Agenda del veterinario (AGND-01): semana LUN-DOM con conteos por día,
 /// lista del día por hora, banner de próxima cita y estados de carga /
@@ -228,6 +230,62 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                   ahora: ahora,
                   onTap: () => context.push('/agenda/${proxima.id}'),
                 ))
+              ..add(const SizedBox(height: AppSpacing.md));
+          }
+        }
+        final manana = DateTime.utc(hoy.year, hoy.month, hoy.day + 1);
+        if (mismoDia(_dia, manana)) {
+          final elegibles = delDia
+              .where(
+                (c) =>
+                    c.estado == EstadoCita.pendiente ||
+                    c.estado == EstadoCita.confirmada,
+              )
+              .toList();
+          // Solo cuentan los que se pueden avisar por WhatsApp: un fijo nunca
+          // se "envía", así que no debe dejar el botón activo para siempre.
+          final porEnviar = elegibles
+              .where(
+                (c) =>
+                    c.recordatorioEnviadoAt == null &&
+                    estadoWhatsApp(c.clienteTelefono ?? '').habilitado,
+              )
+              .length;
+          if (porEnviar > 0) {
+            widgets
+              ..add(
+                AppButton(
+                  label: 'Recordar a todos los de mañana ($porEnviar)',
+                  variant: AppButtonVariant.outline,
+                  icon: Icons.chat_outlined,
+                  onPressed: () => showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (_) => RecordarMananaSheet(citas: elegibles),
+                  ),
+                ),
+              )
+              ..add(const SizedBox(height: AppSpacing.md));
+          } else if (elegibles.isNotEmpty) {
+            widgets
+              ..add(
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.done_all,
+                      size: 16,
+                      color: AppColors.success,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      'Todos los recordatorios de mañana enviados',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              )
               ..add(const SizedBox(height: AppSpacing.md));
           }
         }

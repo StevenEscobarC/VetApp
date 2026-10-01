@@ -270,7 +270,7 @@ class _Contenido extends ConsumerWidget {
         variant: AppButtonVariant.outline,
         expand: true,
       ),
-      if (avisoWhatsApp(context, cita) case final aviso?) aviso,
+      ?avisoWhatsApp(context, cita),
       gap,
       if (cita.modalidad == ModalidadCita.domicilio) ...[
         botonComoLlegar(

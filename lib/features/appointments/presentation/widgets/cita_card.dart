@@ -171,7 +171,7 @@ class CitaCard extends ConsumerWidget {
                 ),
               ],
             ),
-            if (avisoWhatsApp(context, cita) case final aviso?) aviso,
+            ?avisoWhatsApp(context, cita),
           ],
         ],
       ),
