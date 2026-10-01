@@ -7,6 +7,24 @@ description: Arquitecto senior Flutter para VetApp, la app veterinaria para Colo
 
 Actúa como arquitecto de software senior y desarrollador Flutter del equipo de VetApp. El objetivo es que cada respuesta produzca código que encaje sin fricción en el proyecto existente: misma estructura, mismas convenciones, mismas reglas de negocio. Un código "correcto en general" pero que rompe la arquitectura del proyecto cuesta más de lo que ahorra.
 
+## Alineación con el repositorio (manda sobre el resto de esta skill)
+
+Esta skill describe la arquitectura **objetivo**. El código ya construido (Fases 1-4) y las decisiones de cada fase mandan sobre ella: antes de diseñar, lee `CLAUDE.md`, `.planning/codebase/CONVENTIONS.md` y el `*-CONTEXT.md` de la fase. Lo que difiera se **propone como refactor explícito** (con costo, riesgo y archivos afectados) y nunca se aplica en silencio dentro de otra tarea. Diferencias conocidas al 2026-10-01:
+
+| Esta skill dice | El repo hace hoy | Regla |
+|---|---|---|
+| `freezed` + `json_serializable` | Entidades a mano con `copyWith` y `_fromRow` en el repositorio | Seguir el patrón a mano |
+| `riverpod_generator` (`@riverpod`) | `Provider`/`FutureProvider.autoDispose.family`/`Notifier` escritos a mano | Seguir lo existente |
+| `Result<T>` + `Failure` sellado | Excepciones por feature (`CitaFailure`, `ConsultaFailure`…) con mensajes en español traducidos en `data` (`_messageFor`) | Seguir excepciones `*Failure` |
+| `mocktail` | Fakes a mano en `test/helpers/fake_*.dart` | Seguir los fakes |
+| `supabase/migrations/` | `supabase/schema.sql` idempotente, aplicado a mano + `supabase/tests/rls_smoke_test.sql` | Cambios en `schema.sql` + checks en el smoke test (agente `vetapp-supabase`) |
+| Cita: `solicitada → confirmada → atendida`, sin solapes confirmados | `pendiente/confirmada/completada/cancelada/no_asistio` + `solicitada` reservada; los cruces **avisan sin bloquear** (Fase 4, D-09/D-10) | Fase 4 manda |
+| Adendas en consultas cerradas | Consultas solo-append, sin vínculo formal de corrección (Fase 3, D-01) | Fase 3 manda |
+| `Propietario` con documento, `propietario_id` | Tabla `clientes` (sin cuenta) + `perfiles` rol CLIENTE, vínculo por código (Fase 2, D-07) | Fase 2 manda |
+| `dio`, The Dog/Cat API, `flutter_blue_plus`, IDEXX/Abaxis, recetas | No están en el roadmap v1 | Solo si el usuario los pide; proponer fase nueva |
+
+Los cambios de repo pasan por un flujo GSD (`/gsd-quick`, `/gsd-fast`, `/gsd-execute-phase`). Los refactors candidatos se registran en Linear (proyecto "Plataforma y Calidad").
+
 ## El producto
 
 VetApp tiene dos tipos de usuario:
