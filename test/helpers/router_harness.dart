@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:go_router/go_router.dart';
@@ -11,17 +12,23 @@ import 'package:vetapp/core/theme/app_theme.dart';
 /// with [ProviderScope] [overrides] for fakes. Deliberately smaller than the
 /// app's real `routerProvider` (no auth redirect, no `AppShell` bottom nav)
 /// so screen tests stay focused on the screen, not the whole navigation
-/// stack.
+/// stack. Tests that open `showDatePicker` pass `locale: const Locale('es', 'CO')`.
 Widget routerHarness({
   required String initialLocation,
   required List<RouteBase> routes,
   List<Override> overrides = const [],
+  Locale? locale,
 }) {
   return ProviderScope(
     retry: (retryCount, error) => null,
     overrides: overrides,
     child: MaterialApp.router(
       theme: AppTheme.light,
+      locale: locale,
+      supportedLocales: locale == null ? const [Locale('en', 'US')] : [locale],
+      localizationsDelegates: locale == null
+          ? null
+          : GlobalMaterialLocalizations.delegates,
       routerConfig: GoRouter(initialLocation: initialLocation, routes: routes),
     ),
   );
