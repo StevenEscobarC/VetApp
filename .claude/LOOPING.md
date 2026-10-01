@@ -11,6 +11,7 @@ Guía práctica para combinar los agentes de `.claude/agents/` con `/loop` y GSD
 | `vetapp-brand-ui` | auditoría visual + formato Colombia | No | Después de pantallas nuevas; antes de `/gsd-verify-work` |
 | `vetapp-qa` | UAT/pruebas manuales en emulador Android vía adb, reporte con evidencia | Solo el reporte QA + capturas | Después de `vetapp-gate` GREEN (y brand-ui), antes de `/gsd-verify-work` |
 | `vetapp-opportunity-research` | ideas de mejora, innovación, usabilidad | No | Antes de `/gsd-discuss-phase`, o periódicamente para el backlog |
+| `vetapp-negocio` | ventas, precios, monetización, go-to-market; mantiene `.planning/business/` sincronizado con lo nuevo | Solo `.planning/business/` | **Modo sync al cerrar cada fase** (después de `/gsd-verify-work`), y cuando se pregunte por negocio/precios |
 
 Invocación directa en el chat: *"usa el agente vetapp-gate"* o `@vetapp-gate`.
 Los agentes GSD (`gsd-planner`, `gsd-executor`, …) siguen siendo el motor de las fases; estos agentes
