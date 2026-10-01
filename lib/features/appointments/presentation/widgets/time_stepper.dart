@@ -54,10 +54,7 @@ class TimeStepper extends StatelessWidget {
               etiqueta: 'Restar 15 minutos',
               onPaso: activo && m > minimo ? () => onCambio(m - paso) : null,
             ),
-            Text(
-              m == null ? '—' : formato(m),
-              style: textTheme.displaySmall?.copyWith(fontSize: 28),
-            ),
+            Text(m == null ? '—' : formato(m), style: textTheme.displaySmall),
             _PasoBoton(
               icono: Icons.add,
               etiqueta: 'Sumar 15 minutos',
@@ -69,7 +66,7 @@ class TimeStepper extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             ayuda!,
-            style: textTheme.labelMedium?.copyWith(
+            style: textTheme.labelLarge?.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
@@ -77,7 +74,7 @@ class TimeStepper extends StatelessWidget {
         if (fin != null)
           Text(
             fin!,
-            style: textTheme.labelMedium?.copyWith(
+            style: textTheme.labelLarge?.copyWith(
               color: AppColors.textSecondary,
             ),
           ),

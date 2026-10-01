@@ -195,38 +195,49 @@ class _Contenido extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           for (final m in cita.mascotas)
-            InkWell(
-              onTap: () => context.go('/pacientes/${m.id}'),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 48),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: AppColors.surfaceMuted,
-                      child: Icon(
-                        m.especie == 'gato' ? Icons.pets : Icons.pets_outlined,
-                        size: 18,
-                        color: AppColors.primaryText,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: Text(m.nombre, style: textTheme.bodyLarge)),
-                    if (cita.estado == EstadoCita.completada) ...[
-                      Text(
-                        cita.mascotasConConsulta.contains(m.id)
-                            ? 'Consulta registrada'
-                            : 'Sin consulta',
-                        style: textTheme.labelMedium?.copyWith(
-                          color: cita.mascotasConConsulta.contains(m.id)
-                              ? AppColors.success
-                              : AppColors.textMuted,
+            Semantics(
+              button: true,
+              label: 'Ver a ${m.nombre}',
+              child: InkWell(
+                onTap: () => context.go('/pacientes/${m.id}'),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: AppColors.surfaceMuted,
+                        child: Icon(
+                          m.especie == 'gato'
+                              ? Icons.pets
+                              : Icons.pets_outlined,
+                          size: 18,
+                          color: AppColors.primaryText,
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.xs),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(m.nombre, style: textTheme.bodyLarge),
+                      ),
+                      if (cita.estado == EstadoCita.completada) ...[
+                        Text(
+                          cita.mascotasConConsulta.contains(m.id)
+                              ? 'Consulta registrada'
+                              : 'Sin consulta',
+                          style: textTheme.labelLarge?.copyWith(
+                            color: cita.mascotasConConsulta.contains(m.id)
+                                ? AppColors.success
+                                : AppColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                      ],
+                      const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.textMuted,
+                      ),
                     ],
-                    const Icon(Icons.chevron_right, color: AppColors.textMuted),
-                  ],
+                  ),
                 ),
               ),
             ),

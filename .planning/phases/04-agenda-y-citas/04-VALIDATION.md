@@ -2,8 +2,8 @@
 phase: 4
 slug: agenda-y-citas
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-09-30
 ---
 
@@ -41,20 +41,20 @@ Plan/task IDs are assigned by the planner; requirement → test mapping:
 
 | Requirement | Behavior | Test Type | Automated Command | File Exists | Status |
 |-------------|----------|-----------|-------------------|-------------|--------|
-| AGND-01 | Bogota week bounds; 23:30/00:15 boundary; non-cancelled/no_asistio counts per day | unit | `flutter test test/zona_bogota_test.dart` | ❌ W0 | ⬜ pending |
-| AGND-01 | DayStrip counts/selection, opens on Hoy, week nav, loading/empty/error, "Próxima" banner | widget | `flutter test test/agenda_screen_test.dart` | ❌ W0 | ⬜ pending |
-| AGND-01 | RLS: vet A ≠ vet B citas/cita_mascotas; CLIENTE sees 0 | SQL smoke | `rls_smoke_test.sql` | extend | ⬜ pending |
-| AGND-02 | `crear_cita` atomic w/ N mascotas; rejects other owner/clinic mascota; domicilio requires dirección | SQL smoke | `rls_smoke_test.sql` | extend | ⬜ pending |
-| AGND-02 | Form: required fields, motivo→duration, domicilio prefill, overlap dialog, first free slot, combined-alta return | widget+unit | `flutter test test/cita_form_screen_test.dart test/cita_solapes_test.dart` | ❌ W0 | ⬜ pending |
-| AGND-02 | Overlap/free-slot pure functions (back-to-back, edit excludes self, cancelada/no_asistio ignored, 15-min rounding) | unit | `flutter test test/cita_solapes_test.dart` | ❌ W0 | ⬜ pending |
-| AGND-03 | Estado buttons, Deshacer, cancel confirm, reopen | widget/provider | `flutter test test/cita_actions_test.dart` | ❌ W0 | ⬜ pending |
-| AGND-03 | `estado` check rejects invalid; `solicitada` accepted, not exposed | SQL smoke | `rls_smoke_test.sql` | extend | ⬜ pending |
-| AGND-04 | Reminder plan builder: pendiente/confirmada only, future, lead time, horizon, deterministic ids | unit | `flutter test test/recordatorios_plan_test.dart` | ❌ W0 | ⬜ pending |
-| AGND-04 | Reschedule on create/edit/estado/setting; cancel all on sign-out; permission banner/rationale | provider/widget | `flutter test test/recordatorios_providers_test.dart` | ❌ W0 | ⬜ pending |
-| AGND-05 | Phone normalizer (celular, 57, +/00 foreign, fijo 60X, empty; idempotent) | unit | `flutter test test/telefono_co_test.dart` | ❌ W0 | ⬜ pending |
-| AGND-05 | D-14 template text; wa.me encoding; disabled states; batch sheet state machine | unit/widget | `flutter test test/whatsapp_recordatorio_test.dart test/recordar_manana_sheet_test.dart` | ❌ W0 | ⬜ pending |
-| AGND-06 | `registrar_consulta(p_cita_id)` link, wrong mascota rejected, unique (cita,mascota), append-only holds | SQL smoke | `rls_smoke_test.sql` | extend | ⬜ pending |
-| AGND-06 | Completar flow (registrar/omitir/finalizar/sin consulta, Deshacer); ConsultaForm with citaId prefill; existing consulta tests pass | widget | `flutter test test/completar_cita_screen_test.dart test/consulta_form_screen_test.dart test/consultas_providers_test.dart` | partial | ⬜ pending |
+| AGND-01 | Bogota week bounds; 23:30/00:15 boundary; non-cancelled/no_asistio counts per day | unit | `flutter test test/zona_bogota_test.dart` | ✅ | ✅ green |
+| AGND-01 | DayStrip counts/selection, opens on Hoy, week nav, loading/empty/error, "Próxima" banner | widget | `flutter test test/agenda_screen_test.dart` | ✅ | ✅ green |
+| AGND-01 | RLS: vet A ≠ vet B citas/cita_mascotas; CLIENTE sees 0 | SQL smoke | `rls_smoke_test.sql` | ✅ | ✅ green |
+| AGND-02 | `crear_cita` atomic w/ N mascotas; rejects other owner/clinic mascota; domicilio requires dirección | SQL smoke | `rls_smoke_test.sql` | ✅ | ✅ green |
+| AGND-02 | Form: required fields, motivo→duration, domicilio prefill, overlap dialog, first free slot, combined-alta return | widget+unit | `flutter test test/cita_form_screen_test.dart test/cita_solapes_test.dart` | ✅ | ✅ green |
+| AGND-02 | Overlap/free-slot pure functions (back-to-back, edit excludes self, cancelada/no_asistio ignored, 15-min rounding) | unit | `flutter test test/cita_solapes_test.dart` | ✅ | ✅ green |
+| AGND-03 | Estado buttons, Deshacer, cancel confirm, reopen | widget/provider | `flutter test test/cita_actions_test.dart` | ✅ | ✅ green |
+| AGND-03 | `estado` check rejects invalid; `solicitada` accepted, not exposed | SQL smoke | `rls_smoke_test.sql` | ✅ | ✅ green |
+| AGND-04 | Reminder plan builder: pendiente/confirmada only, future, lead time, horizon, deterministic ids | unit | `flutter test test/recordatorios_plan_test.dart` | ✅ | ✅ green |
+| AGND-04 | Reschedule on create/edit/estado/setting; cancel all on sign-out; permission banner/rationale | provider/widget | `flutter test test/recordatorios_providers_test.dart` | ✅ | ✅ green |
+| AGND-05 | Phone normalizer (celular, 57, +/00 foreign, fijo 60X, empty; idempotent) | unit | `flutter test test/telefono_co_test.dart` | ✅ | ✅ green |
+| AGND-05 | D-14 template text; wa.me encoding; disabled states; batch sheet state machine | unit/widget | `flutter test test/whatsapp_recordatorio_test.dart test/recordar_manana_sheet_test.dart` | ✅ | ✅ green |
+| AGND-06 | `registrar_consulta(p_cita_id)` link, wrong mascota rejected, unique (cita,mascota), append-only holds | SQL smoke | `rls_smoke_test.sql` | ✅ | ✅ green |
+| AGND-06 | Completar flow (registrar/omitir/finalizar/sin consulta, Deshacer); ConsultaForm with citaId prefill; existing consulta tests pass | widget | `flutter test test/completar_cita_screen_test.dart test/consulta_form_screen_test.dart test/consultas_providers_test.dart` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -87,11 +87,11 @@ Plan/task IDs are assigned by the planner; requirement → test mapping:
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
