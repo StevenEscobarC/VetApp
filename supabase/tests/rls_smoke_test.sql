@@ -25,6 +25,7 @@
 -- por clínica, incluyendo la atomicidad consulta+peso (D-02) y HIST-04
 -- (update/delete siempre 0 filas, incluso para el propio veterinario autor).
 -- Fase 4: citas, cita_mascotas, crear_cita/actualizar_cita, registrar_consulta(p_cita_id), cascada al borrar cliente (D-20).
+-- Fixes 04-REVIEW: HI-02 (borrar vet con citas -> restrict, bloque O).
 
 do $$
 declare
@@ -1048,6 +1049,26 @@ begin
     if n <> 0 then failures := failures || format('M3 la cita sobrevivió al borrado del cliente (%s filas)', n); end if;
   exception when others then
     failures := failures || ('M3 cascada de cliente a citas falló, error: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- Fix 04-review HI-02 / bloque O (como postgres): borrar la cuenta de un
+  -- veterinario con citas NO borra la agenda -- citas_veterinario_id_fkey es restrict.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+
+  -- O1: delete de auth.users del vet A (tiene citas) -> foreign_key_violation en citas.
+  checks := checks + 1;
+  begin
+    delete from auth.users where id = vet_a_id;
+    failures := failures || 'O1 borrar el vet A debía fallar (restrict) pero borró sus citas en cascada';
+  exception
+    when foreign_key_violation then
+      get stacked diagnostics v_texto = constraint_name;
+      if v_texto is distinct from 'citas_veterinario_id_fkey' then
+        failures := failures || format('O1 foreign_key_violation por %s, esperaba citas_veterinario_id_fkey', v_texto);
+      end if;
+    when others then failures := failures || ('O1 error inesperado: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------

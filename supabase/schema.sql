@@ -549,7 +549,11 @@ create table if not exists public.citas (
   id uuid primary key default gen_random_uuid(),
   clinica_id uuid not null references public.clinicas(id) on delete cascade,
   cliente_id uuid not null,
-  veterinario_id uuid not null references auth.users(id) on delete cascade,
+  -- HI-02: on delete restrict (no cascade). Borrar la cuenta de un veterinario no
+  -- puede borrar en silencio la agenda de la clínica (cancelar nunca es borrar; D-20
+  -- solo permite la cascada desde el cliente). La FK se (re)crea en el bloque
+  -- idempotente de abajo para las bases ya desplegadas con on delete cascade.
+  veterinario_id uuid not null,
   fecha_hora timestamptz not null,
   duracion_min integer not null default 30
     constraint citas_duracion_check check (duracion_min between 5 and 480),
@@ -577,6 +581,36 @@ create table if not exists public.citas (
 
 create index if not exists citas_clinica_fecha_idx
   on public.citas(clinica_id, fecha_hora);
+
+-- HI-02 (delta idempotente): citas.veterinario_id -> auth.users con on delete restrict.
+-- Elimina cualquier FK citas -> auth.users que no sea restrict (la original era
+-- cascade) y crea citas_veterinario_id_fkey si falta. Re-ejecutable sobre datos vivos.
+do $$
+declare
+  v_con record;
+begin
+  for v_con in
+    select c.conname
+    from pg_constraint c
+    where c.conrelid = 'public.citas'::regclass
+      and c.contype = 'f'
+      and c.confrelid = 'auth.users'::regclass
+      and c.confdeltype <> 'r'
+  loop
+    execute format('alter table public.citas drop constraint %I', v_con.conname);
+  end loop;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'citas_veterinario_id_fkey'
+      and conrelid = 'public.citas'::regclass
+  ) then
+    alter table public.citas
+      add constraint citas_veterinario_id_fkey foreign key (veterinario_id)
+      references auth.users(id) on delete restrict;
+  end if;
+end;
+$$;
 
 drop trigger if exists citas_tocar_updated_at on public.citas;
 create trigger citas_tocar_updated_at before update on public.citas
