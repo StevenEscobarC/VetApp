@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/data/supabase_client_provider.dart';
 import '../../../../core/utils/zona_bogota.dart';
 import '../../data/repositories/supabase_cita_repository.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../clients/domain/entities/cliente.dart';
+import '../../../clients/presentation/providers/clientes_providers.dart';
 import '../../domain/entities/cita.dart';
 
 final citaRepositoryProvider = Provider<SupabaseCitaRepository>((ref) {
@@ -28,3 +31,70 @@ final citaProvider = FutureProvider.autoDispose.family<Cita, String>((
 ) {
   return ref.watch(citaRepositoryProvider).obtener(id);
 });
+
+/// Contador de "las citas cambiaron": se incrementa tras cada escritura
+/// exitosa. Los proveedores de recordatorios locales lo escuchan para
+/// resincronizarse (04-07).
+class CitasRevision extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void incrementar() => state++;
+}
+
+final citasRevisionProvider = NotifierProvider<CitasRevision, int>(
+  CitasRevision.new,
+);
+
+/// Escrituras de citas. Guarda el [Ref] (no `WidgetRef`) y por eso
+/// [citaActionsProvider] NO es `autoDispose` — mismo patrón que
+/// `RegistrarConsulta`.
+class CitaActions {
+  CitaActions(this._ref);
+
+  final Ref _ref;
+
+  Future<String> crear({
+    required String clienteId,
+    required List<String> mascotaIds,
+    required DateTime fechaHora,
+    required int duracionMin,
+    required ModalidadCita modalidad,
+    required String direccion,
+    required String motivo,
+    required String notas,
+  }) async {
+    final id = await _ref
+        .read(citaRepositoryProvider)
+        .crear(
+          clienteId: clienteId,
+          mascotaIds: mascotaIds,
+          fechaHora: fechaHora,
+          duracionMin: duracionMin,
+          modalidad: modalidad,
+          direccion: direccion,
+          motivo: motivo,
+          notas: notas,
+        );
+    _ref.invalidate(agendaSemanaProvider);
+    _ref.read(citasRevisionProvider.notifier).incrementar();
+    return id;
+  }
+}
+
+final citaActionsProvider = Provider<CitaActions>((ref) => CitaActions(ref));
+
+/// Búsqueda de clientes local al formulario de cita: así el query global de
+/// `ClientesNotifier` (pestaña Clientes) no se muta. Usa el mismo
+/// repositorio y la misma búsqueda sanitizada. La UI aplica el debounce.
+final busquedaClientesCitaProvider = FutureProvider.autoDispose
+    .family<List<Cliente>, String>((ref, query) async {
+      if (query.trim().isEmpty) return [];
+      final clinicaId = (await ref.watch(
+        authProfileProvider.future,
+      ))?.clinicaId;
+      if (clinicaId == null) return [];
+      return ref
+          .watch(clienteRepositoryProvider)
+          .buscar(query, clinicaId: clinicaId);
+    });

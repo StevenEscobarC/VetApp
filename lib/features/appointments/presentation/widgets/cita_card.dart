@@ -13,9 +13,12 @@ import '../estado_cita_ui.dart';
 /// cliente · motivo, lugar y (si existe) el recordatorio enviado. Las
 /// acciones se agregan en planes posteriores.
 class CitaCard extends StatelessWidget {
-  const CitaCard({super.key, required this.cita, this.onTap});
+  const CitaCard({super.key, required this.cita, this.onTap, this.cruceCon});
 
   final Cita cita;
+
+  /// Nombre(s) de la cita anterior con la que esta se cruza (D-09).
+  final String? cruceCon;
   final VoidCallback? onTap;
 
   @override
@@ -78,6 +81,27 @@ class CitaCard extends StatelessWidget {
               ),
             ],
           ),
+          if (cruceCon != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                const Icon(
+                  Icons.warning_amber_outlined,
+                  size: 16,
+                  color: AppColors.warning,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    'Se cruza con $cruceCon',
+                    style: textTheme.labelMedium?.copyWith(
+                      color: AppColors.warning,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (cita.recordatorioEnviadoAt != null) ...[
             const SizedBox(height: AppSpacing.xs),
             Row(

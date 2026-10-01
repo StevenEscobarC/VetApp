@@ -11,6 +11,9 @@ import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../domain/cita_solapes.dart';
 import '../../domain/entities/cita.dart';
 import '../providers/citas_providers.dart';
 import '../widgets/cita_card.dart';
@@ -21,7 +24,11 @@ import '../widgets/proxima_banner.dart';
 /// lista del día por hora, banner de próxima cita y estados de carga /
 /// vacío / error. Siempre abre en "hoy" de Bogotá (D-08).
 class AgendaScreen extends ConsumerStatefulWidget {
-  const AgendaScreen({super.key});
+  const AgendaScreen({super.key, this.diaInicial});
+
+  /// Día de Bogotá (`DateTime.utc(y, m, d)`) a seleccionar al abrir; `null`
+  /// abre en hoy. Lo usa el formulario de cita al volver a la agenda.
+  final DateTime? diaInicial;
 
   @override
   ConsumerState<AgendaScreen> createState() => _AgendaScreenState();
@@ -36,12 +43,22 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   void initState() {
     super.initState();
     final hoy = diaBogota(ref.read(clockProvider)());
-    _dia = hoy;
-    _lunes = lunesDeSemana(hoy);
+    _dia = widget.diaInicial ?? hoy;
+    _lunes = lunesDeSemana(_dia);
     // Refresca "en N min" y el banner mientras la pantalla está abierta.
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+  }
+
+  @override
+  void didUpdateWidget(AgendaScreen old) {
+    super.didUpdateWidget(old);
+    final nuevo = widget.diaInicial;
+    if (nuevo != null && nuevo != old.diaInicial) {
+      _dia = nuevo;
+      _lunes = lunesDeSemana(nuevo);
+    }
   }
 
   @override
@@ -143,6 +160,22 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
               ],
             ),
           ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: AppButton(
+                label: 'Nueva cita',
+                icon: Icons.add,
+                onPressed: () => context.push(
+                  Uri(
+                    path: '/agenda/nueva',
+                    queryParameters: {'fecha': _yyyyMmDd(_dia)},
+                  ).toString(),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -214,6 +247,24 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     return mapa;
   }
 
+  static String _yyyyMmDd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  /// Nombre(s) de la cita activa anterior con la que [c] se cruza (D-09).
+  String? _cruceCon(Cita c, List<Cita> delDia) {
+    if (!ocupaHorario(c.estado)) return null;
+    for (final o in delDia) {
+      if (o.id == c.id || !ocupaHorario(o.estado)) continue;
+      if (o.fechaHora.isBefore(c.fechaHora) &&
+          solapa(c.fechaHora, c.duracionMin, o.fechaHora, o.duracionMin)) {
+        return o.nombresMascotasCorto;
+      }
+    }
+    return null;
+  }
+
   List<Widget> _porHora(List<Cita> delDia) {
     final grupos = <int, List<Cita>>{};
     for (final c in delDia) {
@@ -251,7 +302,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                   child: Column(
                     children: [
                       for (final c in grupos[h]!) ...[
-                        CitaCard(cita: c),
+                        CitaCard(cita: c, cruceCon: _cruceCon(c, delDia)),
                         if (c != grupos[h]!.last)
                           const SizedBox(height: AppSpacing.sm),
                       ],
