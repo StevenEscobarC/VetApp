@@ -121,4 +121,4 @@ _Iteration: 1_
 
 ## Database findings (fixed in parallel by vetapp-supabase)
 
-HI-01, HI-02, ME-04 (server side) and LO-06 were fixed directly on master in four `fix(04-review):` commits touching `supabase/schema.sql`, `supabase/tests/rls_smoke_test.sql` (95 → 115 checks) and `README.md`. Pending: human re-applies schema.sql and the smoke test must report `RLS SMOKE: PASS (115 checks)`.
+HI-01, HI-02, ME-04 (server side) and LO-06 were fixed directly on master in four `fix(04-review):` commits touching `supabase/schema.sql`, `supabase/tests/rls_smoke_test.sql` (95 → 115 checks) and `README.md`. Applied live 2026-10-01: `RLS SMOKE: PASS (115 checks)` and `verify_live_schema.sh` → `LIVE_SCHEMA_OK`.
