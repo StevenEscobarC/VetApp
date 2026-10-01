@@ -28,7 +28,8 @@ class CitaCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
-    final apagada = cita.estado == EstadoCita.cancelada ||
+    final apagada =
+        cita.estado == EstadoCita.cancelada ||
         cita.estado == EstadoCita.noAsistio;
     final domicilio = cita.modalidad == ModalidadCita.domicilio;
     final lugar = domicilio
@@ -128,7 +129,6 @@ class CitaCard extends ConsumerWidget {
             const SizedBox(height: AppSpacing.sm),
             const Divider(height: 1, color: AppColors.border),
             const SizedBox(height: AppSpacing.xs),
-            // Espacio para Completar (04-09).
             Wrap(
               spacing: AppSpacing.sm,
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -146,6 +146,13 @@ class CitaCard extends ConsumerWidget {
                     cita,
                     variant: AppButtonVariant.text,
                   ),
+                AppButton(
+                  label: 'Completar',
+                  variant: AppButtonVariant.outline,
+                  icon: Icons.task_alt_outlined,
+                  expand: false,
+                  onPressed: () => context.push('/agenda/${cita.id}/completar'),
+                ),
                 if (cita.estado == EstadoCita.pendiente)
                   AppButton(
                     label: 'Confirmar',

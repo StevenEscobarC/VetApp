@@ -57,6 +57,7 @@ class SupabaseConsultaRepository {
     int? frecuenciaCardiaca,
     int? frecuenciaRespiratoria,
     String? mucosas,
+    String? citaId,
   }) async {
     try {
       final id = await _client.rpc('registrar_consulta', params: {
@@ -70,6 +71,7 @@ class SupabaseConsultaRepository {
         'p_frecuencia_cardiaca': frecuenciaCardiaca,
         'p_frecuencia_respiratoria': frecuenciaRespiratoria,
         'p_mucosas': blancoANull(mucosas),
+        'p_cita_id': citaId,
       });
       return id as String;
     } on PostgrestException catch (e) {
@@ -106,7 +108,11 @@ class SupabaseConsultaRepository {
       case '42501':
         return 'No tienes permiso para realizar esta acción.';
       case '23503':
-        return 'La mascota no existe en tu clínica.';
+        return e.message.toLowerCase().contains('pertenece')
+            ? 'La mascota no pertenece a esta cita.'
+            : 'La mascota no existe en tu clínica.';
+      case '23505':
+        return 'Ya registraste una consulta para esta mascota en esta cita.';
       case '23514':
       case '23502':
       case '22003':

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
+import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clinical_history/domain/consulta_failure.dart';
 import 'package:vetapp/features/clinical_history/presentation/providers/consultas_providers.dart';
@@ -10,6 +11,7 @@ import 'package:vetapp/features/clinical_history/presentation/screens/consulta_f
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_citas.dart';
 import 'helpers/fake_consultas.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/router_harness.dart';
@@ -28,6 +30,8 @@ Widget _appUnderTest({
   required FakeConsultaRepository repo,
   FakeMascotaRepository? mascotaRepo,
   String initialLocation = '/pacientes/m-1/consultas/nueva',
+  FakeCitaRepository? citaRepo,
+  String? citaId,
 }) {
   return routerHarness(
     initialLocation: initialLocation,
@@ -39,7 +43,10 @@ Widget _appUnderTest({
           GoRoute(
             path: 'consultas/nueva',
             builder: (_, state) =>
-                ConsultaFormScreen(mascotaId: state.pathParameters['id']!),
+                ConsultaFormScreen(
+                  mascotaId: state.pathParameters['id']!,
+                  citaId: citaId,
+                ),
           ),
         ],
       ),
@@ -49,6 +56,7 @@ Widget _appUnderTest({
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
       consultaRepositoryProvider.overrideWithValue(repo),
+      if (citaRepo != null) citaRepositoryProvider.overrideWithValue(citaRepo),
       mascotaRepositoryProvider.overrideWithValue(
         mascotaRepo ?? FakeMascotaRepository(mascotas: [mascotaRocky]),
       ),
@@ -284,4 +292,72 @@ void main() {
       expect(find.text('Nueva consulta'), findsOneWidget);
     },
   );
+  testWidgets(
+    'con citaId: pill de la cita, anamnesis precargada editable y citaId '
+    'enviado al guardar',
+    (tester) async {
+      final repo = FakeConsultaRepository();
+      await tester.pumpWidget(
+        _appUnderTest(
+          repo: repo,
+          citaRepo: FakeCitaRepository(citas: [citaLunaHoy]),
+          citaId: citaLunaHoy.id,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cita del mié 30/09 · 10:30 a. m.'), findsOneWidget);
+      // Detalles expandidos: Anamnesis es el campo 2.
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(2))
+            .controller!
+            .text,
+        'Consulta general.',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(2),
+        'Consulta general. Editada',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoDiagnostico),
+        'Dx',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoTratamiento),
+        'Tx',
+      );
+      await tester.pump();
+      await tester.ensureVisible(find.text('Guardar consulta'));
+      await tester.tap(find.text('Guardar consulta'));
+      await tester.pump();
+      await tester.pump();
+
+      final registro = repo.registros.single;
+      expect(registro.citaId, 'cita-1');
+      expect(registro.anamnesis, 'Consulta general. Editada');
+    },
+  );
+
+  testWidgets('con citaId y notas: anamnesis "{motivo}. {notas}"', (
+    tester,
+  ) async {
+    final cita = citaRockyLunaHoy.copyWith(notas: 'Traer carné');
+    await tester.pumpWidget(
+      _appUnderTest(
+        repo: FakeConsultaRepository(),
+        citaRepo: FakeCitaRepository(citas: [cita]),
+        citaId: cita.id,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<TextFormField>(find.byType(TextFormField).at(2))
+          .controller!
+          .text,
+      'Vacunación. Traer carné',
+    );
+  });
 }

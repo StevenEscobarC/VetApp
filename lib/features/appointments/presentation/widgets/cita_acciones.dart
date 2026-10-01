@@ -22,13 +22,14 @@ const _errorEstado = 'No pudimos cambiar el estado. Intenta de nuevo.';
 /// (6 s) que restaura el estado anterior. Captura las acciones y el messenger
 /// ANTES de esperar: el cierre de "Deshacer" nunca toca un widget que pudo
 /// desmontarse. Cada snackbar nuevo reemplaza al anterior, así solo el último
-/// cambio es deshacible.
-Future<void> cambiarEstadoConDeshacer(
+/// cambio es deshacible. Devuelve `true` si el cambio se guardó.
+Future<bool> cambiarEstadoConDeshacer(
   BuildContext context,
   WidgetRef ref, {
   required Cita cita,
   required EstadoCita nuevo,
   required String mensaje,
+  String mensajeError = _errorEstado,
 }) async {
   final actions = ref.read(citaActionsProvider);
   final messenger = ScaffoldMessenger.of(context);
@@ -38,8 +39,8 @@ Future<void> cambiarEstadoConDeshacer(
   } on CitaFailure {
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text(_errorEstado)));
-    return;
+      ..showSnackBar(SnackBar(content: Text(mensajeError)));
+    return false;
   }
   messenger
     ..hideCurrentSnackBar()
@@ -61,6 +62,7 @@ Future<void> cambiarEstadoConDeshacer(
         ),
       ),
     );
+  return true;
 }
 
 /// "¿Cancelar esta cita?" — la cita nunca se borra, solo pasa a cancelada.

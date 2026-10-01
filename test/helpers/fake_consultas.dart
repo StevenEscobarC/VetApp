@@ -43,6 +43,7 @@ class FakeConsultaRepository implements SupabaseConsultaRepository {
       int? frecuenciaCardiaca,
       int? frecuenciaRespiratoria,
       String? mucosas,
+      String? citaId,
     })
   >
   registros = [];
@@ -69,6 +70,7 @@ class FakeConsultaRepository implements SupabaseConsultaRepository {
     int? frecuenciaCardiaca,
     int? frecuenciaRespiratoria,
     String? mucosas,
+    String? citaId,
   }) async {
     registros.add((
       mascotaId: mascotaId,
@@ -81,6 +83,7 @@ class FakeConsultaRepository implements SupabaseConsultaRepository {
       frecuenciaCardiaca: frecuenciaCardiaca,
       frecuenciaRespiratoria: frecuenciaRespiratoria,
       mucosas: mucosas,
+      citaId: citaId,
     ));
     if (error != null) throw error!;
 

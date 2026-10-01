@@ -212,10 +212,20 @@ class _Contenido extends ConsumerWidget {
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(child: Text(m.nombre, style: textTheme.bodyLarge)),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: AppColors.textMuted,
-                    ),
+                    if (cita.estado == EstadoCita.completada) ...[
+                      Text(
+                        cita.mascotasConConsulta.contains(m.id)
+                            ? 'Consulta registrada'
+                            : 'Sin consulta',
+                        style: textTheme.labelMedium?.copyWith(
+                          color: cita.mascotasConConsulta.contains(m.id)
+                              ? AppColors.success
+                              : AppColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                    ],
+                    const Icon(Icons.chevron_right, color: AppColors.textMuted),
                   ],
                 ),
               ),
@@ -284,9 +294,17 @@ class _Contenido extends ConsumerWidget {
       ],
     ];
 
+    Widget completar() => AppButton(
+      label: 'Completar cita',
+      icon: Icons.task_alt_outlined,
+      onPressed: () => context.push('/agenda/${cita.id}/completar'),
+    );
+
     switch (cita.estado) {
       case EstadoCita.pendiente:
         return [
+          completar(),
+          gap,
           AppButton(
             label: 'Confirmar',
             variant: AppButtonVariant.outline,
@@ -306,9 +324,19 @@ class _Contenido extends ConsumerWidget {
           cancelar(),
         ];
       case EstadoCita.confirmada:
-        return [...contacto(), noAsistio(), gap, cancelar()];
+        return [completar(), gap, ...contacto(), noAsistio(), gap, cancelar()];
       case EstadoCita.completada:
         return [
+          if (cita.mascotas.any(
+            (m) => !cita.mascotasConConsulta.contains(m.id),
+          )) ...[
+            AppButton(
+              label: 'Registrar consulta pendiente',
+              variant: AppButtonVariant.outline,
+              onPressed: () => context.push('/agenda/${cita.id}/completar'),
+            ),
+            gap,
+          ],
           AppButton(
             label: 'Ver historia clínica',
             variant: AppButtonVariant.outline,
