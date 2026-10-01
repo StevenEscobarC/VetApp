@@ -80,6 +80,54 @@ class CitaActions {
     _ref.read(citasRevisionProvider.notifier).incrementar();
     return id;
   }
+
+  Future<void> actualizar({
+    required String citaId,
+    required List<String> mascotaIds,
+    required DateTime fechaHora,
+    required int duracionMin,
+    required ModalidadCita modalidad,
+    required String direccion,
+    required String motivo,
+    required String notas,
+  }) async {
+    await _ref
+        .read(citaRepositoryProvider)
+        .actualizar(
+          citaId: citaId,
+          mascotaIds: mascotaIds,
+          fechaHora: fechaHora,
+          duracionMin: duracionMin,
+          modalidad: modalidad,
+          direccion: direccion,
+          motivo: motivo,
+          notas: notas,
+        );
+    _refrescar(citaId);
+    _ref.read(citasRevisionProvider.notifier).incrementar();
+  }
+
+  Future<void> cambiarEstado(String citaId, EstadoCita nuevo) async {
+    await _ref.read(citaRepositoryProvider).cambiarEstado(citaId, nuevo);
+    _refrescar(citaId);
+    _ref.read(citasRevisionProvider.notifier).incrementar();
+  }
+
+  /// No incrementa la revisión: los recordatorios locales no dependen de esto.
+  Future<void> marcarRecordatorioEnviado(
+    String citaId,
+    DateTime? enviadoAt,
+  ) async {
+    await _ref
+        .read(citaRepositoryProvider)
+        .marcarRecordatorioEnviado(citaId, enviadoAt);
+    _refrescar(citaId);
+  }
+
+  void _refrescar(String citaId) {
+    _ref.invalidate(agendaSemanaProvider);
+    _ref.invalidate(citaProvider(citaId));
+  }
 }
 
 final citaActionsProvider = Provider<CitaActions>((ref) => CitaActions(ref));
