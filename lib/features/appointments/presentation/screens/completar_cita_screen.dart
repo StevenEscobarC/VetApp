@@ -81,8 +81,7 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
                   label: 'Reintentar',
                   variant: AppButtonVariant.outline,
                   expand: false,
-                  onPressed: () =>
-                      ref.invalidate(citaProvider(widget.citaId)),
+                  onPressed: () => ref.invalidate(citaProvider(widget.citaId)),
                 ),
               ],
             ),
@@ -189,9 +188,7 @@ class _MascotaCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.xs),
               Text(
                 'Consulta registrada',
-                style: textTheme.labelLarge?.copyWith(
-                  color: AppColors.success,
-                ),
+                style: textTheme.labelLarge?.copyWith(color: AppColors.success),
               ),
             ],
           )

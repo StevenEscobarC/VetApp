@@ -48,7 +48,11 @@ Widget _app(FakeCitaRepository repo, String id) => routerHarness(
   overrides: [citaRepositoryProvider.overrideWithValue(repo)],
 );
 
-Future<void> _abrir(WidgetTester tester, FakeCitaRepository repo, String id) async {
+Future<void> _abrir(
+  WidgetTester tester,
+  FakeCitaRepository repo,
+  String id,
+) async {
   tester.view.physicalSize = const Size(800, 2000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -63,7 +67,11 @@ void main() {
   testWidgets('lista cada mascota como Pendiente con Registrar y Omitir', (
     tester,
   ) async {
-    await _abrir(tester, FakeCitaRepository(citas: [citaRockyLunaHoy]), 'cita-2');
+    await _abrir(
+      tester,
+      FakeCitaRepository(citas: [citaRockyLunaHoy]),
+      'cita-2',
+    );
 
     expect(find.text('Completar cita'), findsOneWidget);
     expect(find.text('¿Registrar la consulta?'), findsOneWidget);
@@ -87,7 +95,9 @@ void main() {
       final repo = FakeCitaRepository(citas: [citaRockyLunaHoy]);
       await _abrir(tester, repo, 'cita-2');
 
-      await tester.tap(find.widgetWithText(AppButton, 'Registrar consulta').first);
+      await tester.tap(
+        find.widgetWithText(AppButton, 'Registrar consulta').first,
+      );
       await tester.pumpAndSettle();
       expect(find.text('consulta m-rocky'), findsOneWidget);
 
@@ -120,8 +130,9 @@ void main() {
       repo.citas[0] = citaRockyLunaHoy.copyWith(
         mascotasConConsulta: {'m-rocky'},
       );
-      ProviderScope.containerOf(tester.element(find.text('Rocky')))
-          .invalidate(citaProvider('cita-2'));
+      ProviderScope.containerOf(
+        tester.element(find.text('Rocky')),
+      ).invalidate(citaProvider('cita-2'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Omitir'));
@@ -180,13 +191,14 @@ void main() {
     expect(find.text('¿Registrar la consulta?'), findsOneWidget);
   });
 
-  testWidgets('cita de una sola mascota usa la misma pantalla con una tarjeta', (
-    tester,
-  ) async {
-    await _abrir(tester, FakeCitaRepository(citas: [citaLunaHoy]), 'cita-1');
+  testWidgets(
+    'cita de una sola mascota usa la misma pantalla con una tarjeta',
+    (tester) async {
+      await _abrir(tester, FakeCitaRepository(citas: [citaLunaHoy]), 'cita-1');
 
-    expect(find.text('Luna'), findsOneWidget);
-    expect(find.text('Registrar consulta'), findsOneWidget);
-    expect(find.text('Omitir'), findsOneWidget);
-  });
+      expect(find.text('Luna'), findsOneWidget);
+      expect(find.text('Registrar consulta'), findsOneWidget);
+      expect(find.text('Omitir'), findsOneWidget);
+    },
+  );
 }

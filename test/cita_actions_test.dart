@@ -29,6 +29,12 @@ Widget _agenda(FakeCitaRepository repo) => routerHarness(
               builder: (_, state) =>
                   Scaffold(body: Text('editar ${state.pathParameters['id']}')),
             ),
+            GoRoute(
+              path: 'completar',
+              builder: (_, state) => Scaffold(
+                body: Text('completar ${state.pathParameters['id']}'),
+              ),
+            ),
           ],
         ),
       ],
@@ -115,6 +121,19 @@ void main() {
       await _snack(tester);
       expect(repo.estadosCambiados.last.estado, EstadoCita.pendiente);
       expect(repo.estadosCambiados.last.citaId, 'cita-1');
+    });
+
+    testWidgets('Completar: solo en no terminales y navega a /completar', (
+      tester,
+    ) async {
+      await _abrir(
+        tester,
+        FakeCitaRepository(citas: [citaLunaHoy, citaCanceladaHoy]),
+      );
+      expect(find.text('Completar'), findsOneWidget);
+      await tester.tap(find.text('Completar'));
+      await tester.pumpAndSettle();
+      expect(find.text('completar cita-1'), findsOneWidget);
     });
 
     testWidgets('confirmada no muestra Confirmar; terminales sin acciones', (

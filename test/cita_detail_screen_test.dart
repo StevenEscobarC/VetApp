@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vetapp/core/utils/zona_bogota.dart';
+import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/appointments/domain/cita_failure.dart';
 import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 import 'package:vetapp/features/appointments/presentation/agenda_routes.dart';
@@ -28,8 +29,13 @@ Widget _detalle(FakeCitaRepository repo, String id) => routerHarness(
           routes: [
             GoRoute(
               path: 'editar',
+              builder: (_, state) =>
+                  Scaffold(body: Text('editar ${state.pathParameters['id']}')),
+            ),
+            GoRoute(
+              path: 'completar',
               builder: (_, state) => Scaffold(
-                body: Text('editar ${state.pathParameters['id']}'),
+                body: Text('completar ${state.pathParameters['id']}'),
               ),
             ),
           ],
@@ -138,10 +144,7 @@ void main() {
 
       expect(find.text('Reabrir cita'), findsOneWidget);
       expect(find.text('Confirmar'), findsNothing);
-      expect(
-        find.widgetWithText(OutlinedButton, 'No asistió'),
-        findsNothing,
-      );
+      expect(find.widgetWithText(OutlinedButton, 'No asistió'), findsNothing);
       expect(find.byTooltip('Editar cita'), findsNothing);
 
       await tester.tap(find.text('Reabrir cita'));
@@ -169,6 +172,61 @@ void main() {
     expect(find.text('paciente m-luna'), findsOneWidget);
   });
 
+  testWidgets('pendiente: Completar cita es el único botón primario y navega', (
+    tester,
+  ) async {
+    await _abrir(tester, FakeCitaRepository(citas: [citaLunaHoy]), 'cita-1');
+
+    final primarios = tester
+        .widgetList<AppButton>(find.byType(AppButton))
+        .where((b) => b.variant == AppButtonVariant.primary);
+    expect(primarios, hasLength(1));
+    expect(primarios.single.label, 'Completar cita');
+
+    await tester.tap(find.text('Completar cita'));
+    await tester.pumpAndSettle();
+    expect(find.text('completar cita-1'), findsOneWidget);
+  });
+
+  testWidgets('confirmada: también ofrece Completar cita', (tester) async {
+    await _abrir(
+      tester,
+      FakeCitaRepository(citas: [citaRockyLunaHoy]),
+      'cita-2',
+    );
+    expect(find.text('Completar cita'), findsOneWidget);
+  });
+
+  testWidgets('completada: Consulta registrada / Sin consulta por mascota y '
+      'Registrar consulta pendiente', (tester) async {
+    final cita = citaRockyLunaHoy.copyWith(
+      estado: EstadoCita.completada,
+      mascotasConConsulta: {'m-rocky'},
+    );
+    await _abrir(tester, FakeCitaRepository(citas: [cita]), 'cita-2');
+
+    expect(find.text('Consulta registrada'), findsOneWidget);
+    expect(find.text('Sin consulta'), findsOneWidget);
+    expect(find.text('Completar cita'), findsNothing);
+    expect(find.text('Ver historia clínica'), findsOneWidget);
+
+    await tester.tap(find.text('Registrar consulta pendiente'));
+    await tester.pumpAndSettle();
+    expect(find.text('completar cita-2'), findsOneWidget);
+  });
+
+  testWidgets('completada con todas registradas: sin Registrar pendiente', (
+    tester,
+  ) async {
+    final cita = citaLunaHoy.copyWith(
+      estado: EstadoCita.completada,
+      mascotasConConsulta: {'m-luna'},
+    );
+    await _abrir(tester, FakeCitaRepository(citas: [cita]), 'cita-1');
+    expect(find.text('Registrar consulta pendiente'), findsNothing);
+    expect(find.text('Consulta registrada'), findsOneWidget);
+  });
+
   testWidgets('muestra el recordatorio enviado', (tester) async {
     final cita = Cita(
       id: 'cita-9',
@@ -192,9 +250,7 @@ void main() {
     final nunca = Completer<Cita>();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          citaProvider('cita-1').overrideWith((ref) => nunca.future),
-        ],
+        overrides: [citaProvider('cita-1').overrideWith((ref) => nunca.future)],
         child: const MaterialApp(home: CitaDetailScreen(citaId: 'cita-1')),
       ),
     );
@@ -206,7 +262,9 @@ void main() {
     await _abrir(
       tester,
       FakeCitaRepository(
-        error: const CitaFailure('No pudimos cargar la cita. Intenta de nuevo.'),
+        error: const CitaFailure(
+          'No pudimos cargar la cita. Intenta de nuevo.',
+        ),
       ),
       'cita-1',
     );
@@ -227,7 +285,9 @@ void main() {
 
   test('en agendaRoute nueva va antes que :id', () {
     final paths = agendaRoute.routes.whereType<GoRoute>().map((r) => r.path);
-    expect(paths.toList().indexOf('nueva'),
-        lessThan(paths.toList().indexOf(':id')));
+    expect(
+      paths.toList().indexOf('nueva'),
+      lessThan(paths.toList().indexOf(':id')),
+    );
   });
 }
