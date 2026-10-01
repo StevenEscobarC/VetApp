@@ -20,12 +20,12 @@ El veterinario puede llevar toda su consulta — pacientes, historia clínica, a
 - ✓ Código muerto de la migración Firebase→Supabase eliminado (dominio de auth duplicado, `firebase.json`, `google-services.json`, `LoginScreen` duplicado, dashboard mock de 1400 líneas) — Fase 1
 - ✓ Gestión de clientes (dueños) con datos reales: crear (sin necesitar cuenta), ver/editar, buscar/filtrar por nombre o teléfono, ver sus mascotas, generar código de vinculación de cuenta — Fase 2
 - ✓ Gestión de pacientes (mascotas) con datos reales: alta combinada con su dueño en un solo gesto (D-02), ver/editar ficha (especie, raza, edad, peso, foto vía Storage privado + URL firmada, dueño), historial de peso en el tiempo, buscar/filtrar por nombre/dueño/especie — Fase 2
+- ✓ Historia clínica digital real: registro de consultas con campos estructurados (anamnesis, examen físico, diagnóstico, tratamiento, evolución; solo diagnóstico+tratamiento obligatorios), línea de tiempo por paciente (más reciente primero, expandible), exportación de la historia completa a PDF por el share sheet nativo, append-only de principio a fin (sin edición/borrado en ningún capa) — Fase 3
 
 ### Active
 
 <!-- Alcance actual: reconstruir la app mockeada con backend y lógica reales, módulo por módulo. -->
 
-- [ ] Historia clínica digital real: registro de consultas (anamnesis, examen físico, diagnóstico, tratamiento, evolución), línea de tiempo por paciente, exportable a PDF
 - [ ] Agenda y citas reales con recordatorios
 - [ ] Carné de vacunación y desparasitación digital con alertas automáticas de próxima dosis
 - [ ] Inventario básico de medicamentos/insumos con alertas de stock mínimo
@@ -47,6 +47,7 @@ El veterinario puede llevar toda su consulta — pacientes, historia clínica, a
 
 - **Fase 1 (Fundación) completa y verificada (2026-09-24).** El proyecto ya no es brownfield-sin-backend: Supabase real está en producción (`apjonrmhkpyzbofupokb.supabase.co`), RLS multi-tenant probado (27/27 checks, incluyendo el ataque de auto-escalación de privilegios), y la app tiene un walking skeleton real (Riverpod + go_router + Inicio con datos reales) verificado en un dispositivo Android real. El resto de módulos (pacientes, clientes, agenda, vacunación, inventario, facturación, dashboard completo) siguen siendo pantallas placeholder ("Próximamente") o carpetas de dominio vacías — eso es el trabajo de las Fases 2-8.
 - **Fase 2 (Clientes y Pacientes) completa y verificada (2026-09-26).** CRUD real de principio a fin para ambas entidades, RLS extendido a 53/53 checks (incluye el nuevo bucket privado `mascota-fotos` y las columnas de vinculación de cuenta), 111/111 tests automatizados, y un UAT de 12 pasos en un dispositivo Android real contra producción, aprobado por el usuario. Pendiente documentado (no bloqueante): un parpadeo visual de caché de Riverpod al cambiar de cuenta de veterinario en el mismo dispositivo (RLS sigue protegiendo los datos igual) — ver STATE.md Blockers/Concerns. Pacientes/Clientes ya no son pantallas placeholder.
+- **Fase 3 (Historia Clínica) completa y verificada (2026-09-30).** Tabla `consultas` append-only + RPC atómica `registrar_consulta` en producción, RLS extendido a 70/70 checks, 154/154 tests automatizados, revisión de código con 3 advertencias corregidas (doble-tap, botón de PDF activo sin datos, validación de temperatura desalineada con la columna), auditoría de seguridad retroactiva con 18/18 amenazas cerradas, y un UAT de 10 pasos en un dispositivo Android real contra producción, aprobado por el usuario. Pendiente documentado (no bloqueante, requiere otra migración en vivo): `consultas.veterinario_id` tiene `on delete cascade` contra `auth.users` — debe revisarse antes de que exista cualquier función de borrado de cuenta de veterinario (ver STATE.md Blockers/Concerns, `03-REVIEW.md` WR-04). Historia clínica ya no es pantalla placeholder.
 - Backend decidido y en producción: Supabase (Postgres + RLS), no Firebase — `schema.sql` aplicado al proyecto real, cuenta de Supabase del usuario ya creada.
 - Mercado: los competidores colombianos (Vetlogy, GVET, Panacea) e internacionales (Digitail, IDEXX Neo) están pensados para clínicas con recepción y computador fijo. El hueco identificado es mobile-first para el veterinario que atiende solo o a domicilio.
 - Diseño visual definitivo ya aportado por el usuario: mockup de 9 pantallas (login, dashboard/inicio, pacientes, ficha de paciente con historia clínica, clientes, agenda, carné de vacunación, inventario, facturación). Paleta cálida terracota/crema, tipografía Caprasimo (headings) + Figtree (cuerpo), bottom nav de 5 secciones. Ver `.planning/design/DESIGN-REFERENCE.md` y `.planning/design/vetapp-mobile-designs.html`.
@@ -90,4 +91,4 @@ Este documento evoluciona en las transiciones de fase y en los límites de miles
 4. Actualizar Context con el estado actual
 
 ---
-*Last updated: 2026-09-26 after Phase 2 (Clientes y Pacientes) completion*
+*Last updated: 2026-09-30 after Phase 3 (Historia Clínica) completion*
