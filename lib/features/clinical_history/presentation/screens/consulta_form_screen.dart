@@ -10,6 +10,7 @@ import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../appointments/domain/entities/cita.dart';
 import '../../../appointments/presentation/providers/citas_providers.dart';
 import '../../domain/consulta_failure.dart';
 import '../providers/consultas_providers.dart';
@@ -61,6 +62,30 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
     super.initState();
     _diagnosticoCtrl.addListener(_onCamposCambiaron);
     _tratamientoCtrl.addListener(_onCamposCambiaron);
+    final citaId = widget.citaId;
+    if (citaId != null) {
+      // Fuera de build(): cambiar un controller durante el build notifica a
+      // sus listeners en plena fase de construcción.
+      ref.listenManual<AsyncValue<Cita>>(citaProvider(citaId), (_, siguiente) {
+        final cita = siguiente.asData?.value;
+        if (cita != null) _precargar(cita);
+      }, fireImmediately: true);
+    }
+  }
+
+  /// Precarga la anamnesis con el motivo y las notas de la cita, una sola
+  /// vez y solo si el veterinario no alcanzó a escribir algo antes de que la
+  /// cita cargara (enlace directo o red lenta).
+  void _precargar(Cita cita) {
+    if (_precargada) return;
+    _precargada = true;
+    if (_anamnesisCtrl.text.trim().isEmpty) {
+      final notas = (cita.notas ?? '').trim();
+      _anamnesisCtrl.text = notas.isEmpty
+          ? '${cita.motivo}.'
+          : '${cita.motivo}. $notas';
+    }
+    if (mounted) setState(() => _detallesExpandidos = true);
   }
 
   @override
@@ -162,14 +187,6 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
     final cita = citaId == null
         ? null
         : ref.watch(citaProvider(citaId)).asData?.value;
-    if (cita != null && !_precargada) {
-      _precargada = true;
-      final notas = (cita.notas ?? '').trim();
-      _anamnesisCtrl.text = notas.isEmpty
-          ? '${cita.motivo}.'
-          : '${cita.motivo}. $notas';
-      _detallesExpandidos = true;
-    }
     return Scaffold(
       appBar: const AppTopBar(title: 'Nueva consulta'),
       body: SingleChildScrollView(

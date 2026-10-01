@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
+import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clinical_history/domain/consulta_failure.dart';
@@ -62,6 +65,19 @@ Widget _appUnderTest({
       ),
     ],
   );
+}
+
+/// La cita llega solo cuando el test completa [llegada] (red lenta).
+class _CitaLenta extends FakeCitaRepository {
+  _CitaLenta({super.citas});
+
+  final llegada = Completer<void>();
+
+  @override
+  Future<Cita> obtener(String id) async {
+    await llegada.future;
+    return super.obtener(id);
+  }
 }
 
 Future<void> _expandirDetalles(WidgetTester tester) async {
@@ -358,6 +374,37 @@ void main() {
           .controller!
           .text,
       'Vacunación. Traer carné',
+    );
+  });
+
+  testWidgets('la precarga no pisa la anamnesis escrita antes de que llegue '
+      'la cita', (tester) async {
+    final citaRepo = _CitaLenta(citas: [citaLunaHoy]);
+    await tester.pumpWidget(
+      _appUnderTest(
+        repo: FakeConsultaRepository(),
+        citaRepo: citaRepo,
+        citaId: citaLunaHoy.id,
+      ),
+    );
+    await tester.pump();
+    await _expandirDetalles(tester);
+    await tester.enterText(
+      find.byType(TextFormField).at(2),
+      'Vómito desde ayer',
+    );
+    await tester.pump();
+
+    citaRepo.llegada.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cita del mié 30/09 · 10:30 a. m.'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextFormField>(find.byType(TextFormField).at(2))
+          .controller!
+          .text,
+      'Vómito desde ayer',
     );
   });
 }
