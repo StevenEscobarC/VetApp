@@ -41,12 +41,12 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 
 ### Agenda (AGND)
 
-- [ ] **AGND-01**: El veterinario puede ver su agenda en vista de día/semana
-- [ ] **AGND-02**: El veterinario puede crear una cita asociada a un cliente y una mascota
-- [ ] **AGND-03**: El veterinario puede marcar una cita como confirmada/pendiente/completada
-- [ ] **AGND-04**: La app envía un recordatorio local (notificación) antes de una cita próxima
-- [ ] **AGND-05**: El veterinario puede enviar un recordatorio de cita por WhatsApp con un toque (deep-link `wa.me` con mensaje prellenado)
-- [ ] **AGND-06**: Al completar una cita, se puede crear una entrada de historia clínica vinculada
+- [x] **AGND-01**: El veterinario puede ver su agenda en vista de día/semana
+- [x] **AGND-02**: El veterinario puede crear una cita asociada a un cliente y una mascota
+- [x] **AGND-03**: El veterinario puede marcar una cita como confirmada/pendiente/completada
+- [x] **AGND-04**: La app envía un recordatorio local (notificación) antes de una cita próxima
+- [x] **AGND-05**: El veterinario puede enviar un recordatorio de cita por WhatsApp con un toque (deep-link `wa.me` con mensaje prellenado)
+- [x] **AGND-06**: Al completar una cita, se puede crear una entrada de historia clínica vinculada
 
 ### Vacunación (VAC)
 

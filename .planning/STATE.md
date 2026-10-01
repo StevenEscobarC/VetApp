@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-10-01T04:24:42.817Z"
-last_activity: 2026-10-01 -- Phase 4 execution started
+status: ready_to_plan
+stopped_at: Phase 4 complete (11/11) — ready to discuss Phase 05 (Vacunación y Desparasitación)
+last_updated: 2026-10-01T20:39:17.182Z
+last_activity: 2026-10-01 -- Phase 4 closed (QA PASS tras VET-25); next_phase routing bug (3ra vez) corregido manualmente de 09 a 05
 progress:
   total_phases: 9
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 33
-  completed_plans: 22
-  percent: 33
+  completed_plans: 33
+  percent: 44
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** El veterinario puede llevar toda su consulta — pacientes, historia clínica, agenda — desde el celular, sin depender de un computador ni de una recepcionista.
-**Current focus:** Phase 4 — Agenda y Citas
+**Current focus:** Phase 05 — vacunación y desparasitación
 
 ## Current Position
 
-Phase: 4 (Agenda y Citas) — EXECUTING
-Plan: 1 of 11
-Status: Executing Phase 4
-Last activity: 2026-10-01 -- Phase 4 execution started
+Phase: 05 (vacunacion-y-desparasitacion)
+Plan: Not started — no CONTEXT.md/PLAN.md yet
+Status: Ready to discuss (gsd-discuss-phase)
+Last activity: 2026-10-01
 
-Progress: [░░░░░░░░░░] 0% (Phase 4 not yet discussed/planned)
+Progress: [████░░░░░] 44% (4 de 9 fases completas; Fase 5 sin discutir)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 22
+- Total plans completed: 44
 - Average duration: - min
 - Total execution time: 0 hours
 
@@ -46,6 +46,7 @@ Progress: [░░░░░░░░░░] 0% (Phase 4 not yet discussed/planned
 |-------|-------|-------|----------|
 | 1 | 6 | - | - |
 | 02 | 10 | - | - |
+| 4 | 11 | - | - |
 
 **Recent Trend:**
 
@@ -83,6 +84,7 @@ None yet.
 - [Phase 2]: UAT en dispositivo (02-10) detectó un parpadeo visual (no fuga de datos, RLS sigue protegiendo todo) — al cambiar de cuenta de veterinario en el mismo dispositivo, la lista de Clientes muestra por una fracción de segundo los datos de la cuenta anterior antes de corregirse a la lista vacía correcta. Causa probable: providers de Riverpod no se invalidan al cambiar de sesión. Usuario decidió diferir el fix (candidato para Fase 8 o un ajuste rápido standalone). También se observó que la vista de Pacientes tarda un poco en cargar en emulador — no confirmado como problema real de producción.
 - [Phase 2]: El comando `gsd-sdk query phase.complete "02"` calculó `next_phase: "09"` en vez de `"03"` — parece elegir la siguiente carpeta de fase ya existente en disco (solo `01`, `02` y `09` tenían directorio creado) en vez de seguir el orden numérico/dependencias reales del ROADMAP.md ("Execution Order: 1 → 2 → 3 → ... → 9"; la Fase 9 además depende de la Fase 4, que no existe aún). Corregido manualmente en STATE.md a Fase 3. Verificar este comportamiento antes de confiar en `next_phase` de nuevo al cerrar futuras fases.
 - [Phase 3]: **Se repitió el mismo bug** — `gsd-sdk query phase.complete "3"` otra vez calculó `next_phase: "09"` en vez de `"04"` (misma causa probable: elige la siguiente carpeta de fase existente en disco). Además, esta vez `progress.completed_phases` en STATE.md tampoco se incrementó automáticamente (quedó en 2 en vez de 3) — corregido manualmente junto con el routing a Fase 4. Patrón confirmado en 2 de 2 cierres de fase hasta ahora; no confiar en ninguno de los dos campos que escribe `phase.complete` sin verificar manualmente.
+- [Phase 4]: **Tercera vez** — `phase.complete "4"` volvió a dar `next_phase: "09"` y no incrementó `completed_phases`. Causa probable confirmada: existe la carpeta sin seguimiento `.planning/phases/09-directorio-de-veterinarias/`. Corregido a Fase 05 a mano. Siempre verificar.
 - [Phase 3]: Gate automático `check.decision-coverage-plan` reportó D-01 (corrección sin vínculo formal, HIST-04) como no cubierto al planear la Fase 3 — verificado como el mismo falso positivo de las Fases 1 y 2 (probablemente busca un campo YAML estructurado en vez de prosa): D-01 está citado explícitamente en `03-01-PLAN.md:95,102` ("No corrige_a column (D-01)", "a correction is always a new row (D-01)") y `03-03-PLAN.md:179` ("HIST-04/D-01: a correction is a new consulta"). Se continuó sin replanear (patrón ya establecido, no se re-preguntó al usuario). Re-verificar en `/gsd:verify-work` si el gate se corrige.
 
 ### Roadmap Evolution
@@ -99,7 +101,7 @@ None yet.
 | 261001-huq | Skill `arquitecto-vetapp` reescrita según el repo actual (SKILL.md + modelo-dominio desde schema.sql + colombia alineado a lib/core/utils) | 2026-10-01 | 25be488 | [261001-huq-reescribir-skill-arquitecto-vetapp-segun](./quick/261001-huq-reescribir-skill-arquitecto-vetapp-segun/) |
 | 261001-lg6 | VET-25: WhatsApp solo abre en app (externalNonBrowserApplication); sin WhatsApp muestra aviso y no marca enviado | 2026-10-01 | 3adfebc | [261001-lg6-fix-whatsapp-sin-app-instalada-abre-nave](./quick/261001-lg6-fix-whatsapp-sin-app-instalada-abre-nave/) |
 | fast | Regla de escape de `adb input text` en `vetapp-qa` (sin URL-encoding, verificar antes de guardar) | 2026-10-01 | 94f7c6c | — |
-| fast | Hardening advisor 0028/0029: revoke EXECUTE anon/public en helpers RLS y trigger (pendiente aplicar en vivo tras QA) | 2026-10-01 | 4f44309 | — |
+| fast | Hardening advisor 0028/0029: revoke EXECUTE anon/public en helpers RLS y trigger (aplicado en vivo 2026-10-01, VET-21) | 2026-10-01 | 4f44309 | — |
 | fast | Skill de proyecto `arquitecto-vetapp` copiada a `.claude/skills/` (estaba solo en la app de Claude) | 2026-10-01 | d4e4e29 | — |
 
 ## Deferred Items

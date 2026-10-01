@@ -270,7 +270,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
-| 4. Agenda y Citas | 11/11 | Complete   | 2026-10-01 |
+| 4. Agenda y Citas | 11/11 | Complete    | 2026-10-01 |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
