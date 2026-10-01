@@ -19,6 +19,7 @@ import '../../domain/whatsapp_recordatorio.dart';
 import '../providers/citas_providers.dart';
 import '../widgets/cita_card.dart';
 import '../widgets/day_strip.dart';
+import '../widgets/notificaciones_banner.dart';
 import '../widgets/proxima_banner.dart';
 import '../widgets/recordar_manana_sheet.dart';
 
@@ -104,6 +105,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       appBar: const AppTopBar(title: 'Agenda'),
       body: Column(
         children: [
+          const NotificacionesBanner(),
           _EncabezadoSemana(
             lunes: _lunes,
             mostrarHoy: !mismoDia(_dia, hoy),
