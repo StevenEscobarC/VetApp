@@ -29,7 +29,7 @@ Depende de la **Fase 4.1** (Equipo de la clínica): cada dosis registra qué vet
 - **D-06:** Obligatorios: **biológico + fecha** (fecha precargada en hoy). Opcionales: producto/marca comercial, lote, observaciones. (Sugerencia del research: autocompletar con los últimos productos/lotes usados por la clínica.)
 - **D-07:** Se permiten **dosis históricas o aplicadas en otra clínica** (mascota que llega con carné de papel): fecha pasada + switch **"Aplicada en otra clínica"** (nombre opcional). Cuentan para la serie y el cálculo; el carné las muestra diferenciadas.
 - **D-08:** Corrección: **anular con motivo** (la dosis queda tachada, no cuenta para el cálculo) y registrar la correcta. Sin edición ni borrado — coherente con el estilo solo-append de historia clínica (HIST-04).
-- **D-09:** Cada dosis guarda el **veterinario que la registró/aplicó** (Fase 4.1).
+- **D-09:** Cada dosis guarda el **veterinario que la registró/aplicó** (Fase 4.1). La tabla de dosis debe agregarse al helper de autoría `es_autor_en_mi_clinica` de la Fase 4.1 (04.1 D-13), para que el nombre/matrícula del vet siga visible en el carné aunque ya no sea miembro de la clínica.
 
 ### Alertas (VAC-03)
 - **D-10:** Dónde: **tarjeta en Inicio** ("Vacunas pendientes: 3 vencidas, 5 esta semana"), **pantalla "Vacunas pendientes"** agrupada en Vencidas / Próximas, y **badge** "Vencida"/"Próxima" en lista de pacientes y ficha. **Sin notificación push/local diaria** en esta fase.
