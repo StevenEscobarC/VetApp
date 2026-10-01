@@ -37,6 +37,7 @@ class CitaFormScreen extends ConsumerStatefulWidget {
     this.clienteIdInicial,
     this.mascotaIdInicial,
     this.fechaInicial,
+    this.citaId,
   });
 
   final String? clienteIdInicial;
@@ -44,6 +45,9 @@ class CitaFormScreen extends ConsumerStatefulWidget {
 
   /// Día de Bogotá (`DateTime.utc(y, m, d)`) preseleccionado.
   final DateTime? fechaInicial;
+
+  /// Si no es null, el formulario edita esa cita (cliente fijo).
+  final String? citaId;
 
   @override
   ConsumerState<CitaFormScreen> createState() => _CitaFormScreenState();

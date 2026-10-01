@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../clients/presentation/screens/nuevo_cliente_mascota_screen.dart';
 import '../../patients/presentation/screens/mascota_form_screen.dart';
 import 'screens/agenda_screen.dart';
+import 'screens/cita_detail_screen.dart';
 import 'screens/cita_form_screen.dart';
 
 /// `yyyy-mm-dd` -> `DateTime.utc(y, m, d)`; `null` si falta o es inválido.
@@ -44,6 +45,18 @@ final GoRoute agendaRoute = GoRoute(
           builder: (_, state) => MascotaFormScreen(
             clienteId: state.uri.queryParameters['clienteId'] ?? '',
           ),
+        ),
+      ],
+    ),
+    GoRoute(
+      path: ':id',
+      builder: (_, state) =>
+          CitaDetailScreen(citaId: state.pathParameters['id']!),
+      routes: [
+        GoRoute(
+          path: 'editar',
+          builder: (_, state) =>
+              CitaFormScreen(citaId: state.pathParameters['id']!),
         ),
       ],
     ),
