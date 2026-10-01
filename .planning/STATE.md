@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 3 execution complete (6/6 plans) — device UAT approved, ready for verify-phase/phase.complete
-last_updated: "2026-09-30T00:00:00.000Z"
-last_activity: 2026-09-30 -- Plan 03-06 closed (device UAT approved by user), Phase 3 execution done
+status: ready_to_plan
+stopped_at: Phase 3 complete (6/6) — ready to discuss Phase 4 (Agenda y Citas)
+last_updated: 2026-10-01T02:31:21.774Z
+last_activity: 2026-10-01 -- Phase 3 closed via phase.complete; next_phase routing bug (again) manually corrected from 09 to 04
 progress:
   total_phases: 9
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 22
   completed_plans: 22
-  percent: 22
+  percent: 33
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** El veterinario puede llevar toda su consulta — pacientes, historia clínica, agenda — desde el celular, sin depender de un computador ni de una recepcionista.
-**Current focus:** Phase 03 — historia-cl-nica
+**Current focus:** Phase 04 — agenda-y-citas
 
 ## Current Position
 
-Phase: 03 (historia-cl-nica) — EXECUTION COMPLETE
-Plan: 6 of 6 (all plans merged; device UAT approved by user 2026-09-30; awaiting verify-phase/phase.complete)
-Status: Ready for phase closure (verify-phase, phase.complete, then secure-phase)
-Last activity: 2026-09-30 -- Plan 03-06 closed, Phase 3 execution done
+Phase: 04 (agenda-y-citas)
+Plan: Not started — no CONTEXT.md/PLAN.md yet
+Status: Ready to discuss (gsd-discuss-phase)
+Last activity: 2026-10-01
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0% (Phase 4 not yet discussed/planned)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 22
 - Average duration: - min
 - Total execution time: 0 hours
 
@@ -82,6 +82,7 @@ None yet.
 - [Phase 2]: `02-REVIEW.md` WR-03 — `ClienteDetailScreen`/`MascotaFormScreen` llenan `TextEditingController.text` directamente dentro de `build()`, lo cual dispara `setState()` síncrono mid-build. No falla hoy solo por un detalle interno no documentado de Flutter (el elemento que llama `setState()` es el mismo que está construyéndose) — es frágil ante cualquier refactor futuro (helper widget, `didUpdateWidget`, etc.). Documentado, no arreglado — requiere mover el llenado inicial a `ref.listen(...)` o `addPostFrameCallback`.
 - [Phase 2]: UAT en dispositivo (02-10) detectó un parpadeo visual (no fuga de datos, RLS sigue protegiendo todo) — al cambiar de cuenta de veterinario en el mismo dispositivo, la lista de Clientes muestra por una fracción de segundo los datos de la cuenta anterior antes de corregirse a la lista vacía correcta. Causa probable: providers de Riverpod no se invalidan al cambiar de sesión. Usuario decidió diferir el fix (candidato para Fase 8 o un ajuste rápido standalone). También se observó que la vista de Pacientes tarda un poco en cargar en emulador — no confirmado como problema real de producción.
 - [Phase 2]: El comando `gsd-sdk query phase.complete "02"` calculó `next_phase: "09"` en vez de `"03"` — parece elegir la siguiente carpeta de fase ya existente en disco (solo `01`, `02` y `09` tenían directorio creado) en vez de seguir el orden numérico/dependencias reales del ROADMAP.md ("Execution Order: 1 → 2 → 3 → ... → 9"; la Fase 9 además depende de la Fase 4, que no existe aún). Corregido manualmente en STATE.md a Fase 3. Verificar este comportamiento antes de confiar en `next_phase` de nuevo al cerrar futuras fases.
+- [Phase 3]: **Se repitió el mismo bug** — `gsd-sdk query phase.complete "3"` otra vez calculó `next_phase: "09"` en vez de `"04"` (misma causa probable: elige la siguiente carpeta de fase existente en disco). Además, esta vez `progress.completed_phases` en STATE.md tampoco se incrementó automáticamente (quedó en 2 en vez de 3) — corregido manualmente junto con el routing a Fase 4. Patrón confirmado en 2 de 2 cierres de fase hasta ahora; no confiar en ninguno de los dos campos que escribe `phase.complete` sin verificar manualmente.
 - [Phase 3]: Gate automático `check.decision-coverage-plan` reportó D-01 (corrección sin vínculo formal, HIST-04) como no cubierto al planear la Fase 3 — verificado como el mismo falso positivo de las Fases 1 y 2 (probablemente busca un campo YAML estructurado en vez de prosa): D-01 está citado explícitamente en `03-01-PLAN.md:95,102` ("No corrige_a column (D-01)", "a correction is always a new row (D-01)") y `03-03-PLAN.md:179` ("HIST-04/D-01: a correction is a new consulta"). Se continuó sin replanear (patrón ya establecido, no se re-preguntó al usuario). Re-verificar en `/gsd:verify-work` si el gate se corrige.
 
 ### Roadmap Evolution
