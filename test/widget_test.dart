@@ -72,6 +72,25 @@ void main() {
     expect(find.text('Bienvenido a VetApp'), findsOneWidget);
   });
 
+  testWidgets('Más lista Recordatorios y abre su pantalla', (tester) async {
+    await tester.pumpWidget(appUnderTest(profile: vetProfile));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Más'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Recordatorios'), findsOneWidget);
+    expect(find.text('1 hora antes'), findsOneWidget);
+
+    await tester.tap(find.text('Recordatorios'));
+    await tester.pumpAndSettle();
+    expect(find.text('Avisarme antes de cada cita'), findsOneWidget);
+  });
+
   testWidgets('cliente va a /cliente', (WidgetTester tester) async {
     await tester.pumpWidget(appUnderTest(profile: clienteProfile));
     await tester.pumpAndSettle();
