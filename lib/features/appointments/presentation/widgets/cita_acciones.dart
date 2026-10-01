@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/data/clock_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato_hora.dart';
+import '../../../../core/utils/lanzador_externo.dart';
+import '../../../../core/utils/telefono_co.dart';
 import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/cita_failure.dart';
 import '../../domain/entities/cita.dart';
+import '../../domain/whatsapp_recordatorio.dart';
 import '../providers/citas_providers.dart';
 
 const _errorEstado = 'No pudimos cambiar el estado. Intenta de nuevo.';
@@ -172,4 +177,166 @@ Future<void> mostrarMasAcciones(
     case _Accion.editar:
       context.push('/agenda/${cita.id}/editar');
   }
+}
+
+const _errorWhatsApp = 'No pudimos abrir WhatsApp. ¿Está instalado?';
+
+/// Abre el chat de WhatsApp del cliente con el mensaje formal (D-14) y, si el
+/// lanzamiento funcionó, marca el recordatorio como enviado con "Deshacer".
+/// El número se normaliza al usar (D-16), así que teléfonos antiguos sin
+/// normalizar también funcionan.
+Future<void> enviarRecordatorioWhatsApp(
+  BuildContext context,
+  WidgetRef ref,
+  Cita cita,
+) async {
+  final actions = ref.read(citaActionsProvider);
+  final messenger = ScaffoldMessenger.of(context);
+  final lanzador = ref.read(lanzadorExternoProvider);
+  final ahora = ref.read(clockProvider);
+  final profile = ref.read(authProfileProvider).asData?.value;
+
+  final telefono = cita.clienteTelefono ?? '';
+  final numero = numeroWhatsApp(telefono);
+  if (numero == null) {
+    mostrarMotivoWhatsApp(messenger, telefono);
+    return;
+  }
+  final mensaje = mensajeRecordatorio(
+    cita: cita,
+    veterinario: profile?.nombre ?? '',
+    clinica: profile?.clinicaNombre,
+  );
+  final ok = await lanzador.abrir(whatsappUri(numero, mensaje));
+  if (!ok) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text(_errorWhatsApp)));
+    return;
+  }
+  final anterior = cita.recordatorioEnviadoAt;
+  try {
+    await actions.marcarRecordatorioEnviado(cita.id, ahora());
+  } on CitaFailure catch (e) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(e.message)));
+    return;
+  }
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: const Text('Marcado como recordatorio enviado'),
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Deshacer',
+          onPressed: () async {
+            try {
+              await actions.marcarRecordatorioEnviado(cita.id, anterior);
+            } on CitaFailure {
+              messenger.showSnackBar(
+                const SnackBar(content: Text(_errorEstado)),
+              );
+            }
+          },
+        ),
+      ),
+    );
+}
+
+/// Muestra por qué no se puede enviar WhatsApp a [telefono].
+void mostrarMotivoWhatsApp(ScaffoldMessengerState messenger, String telefono) {
+  final motivo = estadoWhatsApp(telefono).motivo;
+  if (motivo == null) return;
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(motivo)));
+}
+
+/// "Cómo llegar": abre Google Maps hacia la dirección sin pedir ubicación.
+Future<void> abrirComoLlegar(
+  BuildContext context,
+  WidgetRef ref,
+  Cita cita,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final ok = await ref
+      .read(lanzadorExternoProvider)
+      .abrir(mapsUri(cita.direccion ?? ''));
+  if (!ok) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text('No pudimos abrir Google Maps.')),
+      );
+  }
+}
+
+/// Botón "WhatsApp" de una cita. Si el número no sirve se ve apagado (0.38)
+/// pero sigue siendo tocable para explicar el motivo.
+Widget botonWhatsApp(
+  BuildContext context,
+  WidgetRef ref,
+  Cita cita, {
+  required AppButtonVariant variant,
+  bool expand = false,
+}) {
+  final estado = estadoWhatsApp(cita.clienteTelefono ?? '');
+  final boton = AppButton(
+    label: 'WhatsApp',
+    variant: variant,
+    icon: Icons.chat_outlined,
+    expand: expand,
+    onPressed: estado.habilitado
+        ? () => enviarRecordatorioWhatsApp(context, ref, cita)
+        : () => mostrarMotivoWhatsApp(
+            ScaffoldMessenger.of(context),
+            cita.clienteTelefono ?? '',
+          ),
+  );
+  return estado.habilitado ? boton : Opacity(opacity: 0.38, child: boton);
+}
+
+/// Botón "Cómo llegar" (solo citas a domicilio).
+Widget botonComoLlegar(
+  BuildContext context,
+  WidgetRef ref,
+  Cita cita, {
+  required AppButtonVariant variant,
+  bool expand = false,
+}) => AppButton(
+  label: 'Cómo llegar',
+  variant: variant,
+  icon: Icons.directions_outlined,
+  expand: expand,
+  onPressed: () => abrirComoLlegar(context, ref, cita),
+);
+
+/// Motivo visible cuando WhatsApp no está disponible, más "Agregar teléfono"
+/// si el cliente no tiene teléfono. `null` si WhatsApp está habilitado.
+Widget? avisoWhatsApp(BuildContext context, Cita cita) {
+  final estado = estadoWhatsApp(cita.clienteTelefono ?? '');
+  if (estado.habilitado) return null;
+  final sinTelefono =
+      normalizarTelefono(cita.clienteTelefono ?? '').clase ==
+      ClaseTelefono.vacio;
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        estado.motivo!,
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(color: AppColors.textMuted),
+      ),
+      if (sinTelefono)
+        AppButton(
+          label: 'Agregar teléfono',
+          variant: AppButtonVariant.text,
+          expand: false,
+          onPressed: () => context.go('/clientes/${cita.clienteId}'),
+        ),
+    ],
+  );
 }

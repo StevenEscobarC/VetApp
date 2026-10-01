@@ -128,11 +128,24 @@ class CitaCard extends ConsumerWidget {
             const SizedBox(height: AppSpacing.sm),
             const Divider(height: 1, color: AppColors.border),
             const SizedBox(height: AppSpacing.xs),
-            // Espacio para WhatsApp / Cómo llegar (04-08) y Completar (04-09).
+            // Espacio para Completar (04-09).
             Wrap(
               spacing: AppSpacing.sm,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                botonWhatsApp(
+                  context,
+                  ref,
+                  cita,
+                  variant: AppButtonVariant.text,
+                ),
+                if (domicilio)
+                  botonComoLlegar(
+                    context,
+                    ref,
+                    cita,
+                    variant: AppButtonVariant.text,
+                  ),
                 if (cita.estado == EstadoCita.pendiente)
                   AppButton(
                     label: 'Confirmar',
@@ -158,6 +171,7 @@ class CitaCard extends ConsumerWidget {
                 ),
               ],
             ),
+            ?avisoWhatsApp(context, cita),
           ],
         ],
       ),
