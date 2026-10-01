@@ -81,9 +81,12 @@ class _NuevoClienteMascotaScreenState
   bool get _avisoTelefono =>
       _telefonoTocado && requiereAvisoTelefono(_telefonoCtrl.text);
 
+  bool get _errorTelefono =>
+      _telefonoTocado && telefonoSinDigitos(_telefonoCtrl.text);
+
   bool get _puedeGuardar =>
       _clienteNombreCtrl.text.trim().isNotEmpty &&
-      _telefonoCtrl.text.trim().isNotEmpty &&
+      telefonoGuardable(_telefonoCtrl.text) &&
       _mascotaNombreCtrl.text.trim().isNotEmpty &&
       _especie != null;
 
@@ -210,7 +213,12 @@ class _NuevoClienteMascotaScreenState
                       label: 'Teléfono *',
                       controller: _telefonoCtrl,
                       keyboardType: TextInputType.phone,
-                      helperText: _avisoTelefono ? null : 'Ej. 300 123 4567',
+                      helperText: _avisoTelefono || _errorTelefono
+                          ? null
+                          : 'Ej. 300 123 4567',
+                      errorText: _errorTelefono
+                          ? kErrorTelefonoSinDigitos
+                          : null,
                     ),
                   ),
                   if (_avisoTelefono) ...[

@@ -91,6 +91,18 @@ void main() {
     });
   });
 
+  group('telefonoGuardable / telefonoSinDigitos', () {
+    test('texto sin dígitos no es guardable', () {
+      for (final raw in ['N/A', '---', 'abc', '  ']) {
+        expect(telefonoGuardable(raw), isFalse, reason: raw);
+      }
+      expect(telefonoSinDigitos('N/A'), isTrue);
+      expect(telefonoSinDigitos(''), isFalse);
+      expect(telefonoGuardable('300 123 4567'), isTrue);
+      expect(telefonoSinDigitos('2345678'), isFalse);
+    });
+  });
+
   group('numeroWhatsApp', () {
     test('celular, internacional y nulos', () {
       expect(numeroWhatsApp('300 123 4567'), '573001234567');

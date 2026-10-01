@@ -317,6 +317,35 @@ void main() {
     },
   );
 
+  testWidgets('un teléfono sin dígitos no habilita Guardar y muestra error', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _appUnderTest(mascotaRepo: FakeMascotaRepository()),
+    );
+    await tester.pumpAndSettle();
+
+    await _llenarCamposRequeridos(tester);
+    await tester.tap(find.byType(TextFormField).at(_campoTelefono));
+    await tester.enterText(
+      find.byType(TextFormField).at(_campoTelefono),
+      'N/A',
+    );
+    // Salir del campo lo marca como tocado.
+    await tester.tap(find.byType(TextFormField).at(_campoMascotaNombre));
+    await tester.pump();
+
+    final boton = tester.widget<AppButton>(
+      find.widgetWithText(AppButton, 'Guardar cliente y mascota'),
+    );
+    expect(boton.onPressed, isNull);
+    expect(find.text(kErrorTelefonoSinDigitos), findsOneWidget);
+  });
+
   testWidgets('teléfono "300 123 4567" se envía normalizado una sola vez', (
     tester,
   ) async {
