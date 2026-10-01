@@ -507,18 +507,10 @@ using (
   )
 );
 
-drop policy if exists consultas_insert on public.consultas;
-create policy consultas_insert on public.consultas for insert to authenticated
-with check (
-  public.es_veterinario()
-  and veterinario_id = auth.uid()
-  and exists (
-    select 1 from public.mascotas m
-    where m.id = consultas.mascota_id and m.clinica_id = public.mi_clinica_id()
-  )
-);
-
--- consultas_insert se redefine en la sección Fase 4 (HI-01: valida consultas.cita_id).
+-- consultas_insert vive en la sección Fase 4 (HI-01/ME-04): además de la mascota de
+-- la clínica valida consultas.cita_id, que depende de citas/cita_mascotas. No se crea
+-- aquí para que al re-pegar el archivo nunca exista, ni por un instante, una versión
+-- más débil de la política.
 
 -- Sin política update/delete: la historia clínica es de solo-append (HIST-04) --
 -- una corrección se registra como una fila nueva, nunca editando ni borrando.
@@ -762,7 +754,7 @@ using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
 -- Sin política update en cita_mascotas ni ninguna política para CLIENTE
 -- (la Fase 9 / DIR-05 agrega la suya).
 
--- HI-01: consultas_insert (definida en la Fase 3) se redefine aquí porque ahora
+-- HI-01/ME-04: consultas_insert (antes en la Fase 3) vive aquí porque ahora
 -- valida consultas.cita_id. La FK consultas.cita_id -> citas(id) es de una sola
 -- columna y las FK ignoran RLS, así que sin esto un insert directo podía ligar la
 -- consulta a una cita de OTRA clínica o a una cita donde la mascota no está.
@@ -784,6 +776,8 @@ with check (
       where cm.cita_id = consultas.cita_id
         and cm.mascota_id = consultas.mascota_id
         and cm.clinica_id = public.mi_clinica_id()
+        -- ME-04: una cita cancelada / no_asistio / solicitada no recibe consultas.
+        and c.estado in ('pendiente', 'confirmada', 'completada')
     )
   )
 );
@@ -997,6 +991,16 @@ begin
       and c.clinica_id = v_clinica_id
   ) then
     raise exception 'La mascota no pertenece a esta cita.' using errcode = 'foreign_key_violation';
+  end if;
+
+  -- ME-04: solo citas pendientes, confirmadas o completadas admiten consultas.
+  if p_cita_id is not null and exists (
+    select 1 from public.citas c
+    where c.id = p_cita_id
+      and c.estado not in ('pendiente', 'confirmada', 'completada')
+  ) then
+    raise exception 'Esta cita no admite consultas (está cancelada, no asistió o es solo una solicitud).'
+      using errcode = 'check_violation';
   end if;
 
   insert into public.consultas (

@@ -27,7 +27,7 @@
 -- Fase 4: citas, cita_mascotas, crear_cita/actualizar_cita, registrar_consulta(p_cita_id), cascada al borrar cliente (D-20).
 -- Fixes 04-REVIEW: HI-01 (writes directos: dueño en cita_mascotas, columnas inmutables
 -- y máquina de estados de citas incl. Reabrir/Deshacer, consultas.cita_id de la misma
--- clínica y cita, bloque N + J6), HI-02 (borrar vet con citas -> restrict, bloque O).
+-- clínica y cita, bloque N + J6), ME-04 (consultas sobre citas canceladas, N9/N18/N19), HI-02 (borrar vet con citas -> restrict, bloque O).
 
 do $$
 declare
@@ -1250,6 +1250,27 @@ begin
     if n <> 1 then failures := failures || format('N17 consulta directa legítima afectó %s filas, esperaba 1', n); end if;
   exception when others then
     failures := failures || ('N17 consulta directa legítima debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- N18 (ME-04): registrar_consulta ligada a una cita cancelada -> check_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_a_id, 'dx', 'tx', p_cita_id => cita_cancelada_id);
+    failures := failures || 'N18 registrar_consulta sobre cita cancelada debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('N18 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N19 (ME-04): insert directo de consulta ligada a una cita cancelada -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    insert into public.consultas (mascota_id, veterinario_id, diagnostico, tratamiento, cita_id)
+      values (mascota_a_id, vet_a_id, 'dx', 'tx', cita_cancelada_id);
+    failures := failures || 'N19 consulta directa sobre cita cancelada debía fallar';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('N19 error inesperado: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------
