@@ -1,7 +1,7 @@
 ---
 phase: 4
 slug: agenda-y-citas
-status: draft
+status: complete
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-09-30
@@ -94,4 +94,4 @@ Plan/task IDs are assigned by the planner; requirement → test mapping:
 - [x] Feedback latency < 30s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-10-01 (automated suite green; manual device UAT approved by user on emulator)

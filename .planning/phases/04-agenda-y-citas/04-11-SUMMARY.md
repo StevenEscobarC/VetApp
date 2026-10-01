@@ -1,7 +1,7 @@
 ---
 phase: 04-agenda-y-citas
 plan: 11
-status: partial-awaiting-checkpoint
+status: complete
 requirements: [AGND-01, AGND-02, AGND-03, AGND-04, AGND-05, AGND-06]
 key-files:
   modified:
@@ -16,9 +16,9 @@ key-files:
     - lib/features/appointments/presentation/widgets/time_stepper.dart
 ---
 
-# Phase 4 Plan 11: Integrated gate, live probe, brand audit - Summary (PARTIAL)
+# Phase 4 Plan 11: Integrated gate, live probe, brand audit - Summary
 
-Task 1 complete (commit a36f1ed). Task 2 (device UAT) is a blocking human checkpoint, pending.
+Task 1 complete (commit a36f1ed). Task 2 (device UAT) approved by the user on 2026-10-01 (Pixel 9 API 35 emulator, live Supabase).
 
 ## Task 1 results
 
@@ -53,7 +53,7 @@ Zero blocking findings remain. `dart format` was applied to the touched files (s
 
 None from the plan beyond the scoped deferrals above. Regenerated linux/macos/windows plugin files were not committed. `dart_define.json` was copied locally (gitignored), not committed.
 
-## Task 2: Device UAT checklist (pending)
+## Task 2: Device UAT checklist (approved 2026-10-01)
 
 Run: `flutter run -d <dispositivo Android 13+> --dart-define-from-file=dart_define.json`, logueado como veterinario con al menos dos clientes (uno con celular, uno con telefono fijo).
 
@@ -68,3 +68,8 @@ Run: `flutter run -d <dispositivo Android 13+> --dart-define-from-file=dart_defi
 9. Completar cita de 2 mascotas: consulta para una (anamnesis precargada, pastilla 'Cita del …'), omitir la otra, 'Finalizar cita' -> 'Cita completada' + Deshacer; la consulta aparece en la historia clinica.
 
 Resume signal: "approved" o numeros de pasos fallidos con notas.
+
+## UAT result
+
+- 2026-10-01: user ran the 9-step checklist on the Pixel_9_API_35 emulator against the live Supabase project and replied **approved**.
+- Emulator caveat: WhatsApp is not installed on the emulator, so steps 5-6 exercised the "No pudimos abrir WhatsApp" fallback; real wa.me delivery should be spot-checked on a physical phone.
