@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/data/supabase_client_provider.dart';
 import '../../../../core/utils/formato.dart';
+import '../../../appointments/presentation/providers/citas_providers.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../data/repositories/supabase_consulta_repository.dart';
 import '../../domain/entities/consulta.dart';
@@ -53,6 +54,7 @@ class RegistrarConsulta {
     int? frecuenciaCardiaca,
     int? frecuenciaRespiratoria,
     String? mucosas,
+    String? citaId,
   }) async {
     final id = await _ref.read(consultaRepositoryProvider).registrarConsulta(
       mascotaId: mascotaId,
@@ -65,10 +67,15 @@ class RegistrarConsulta {
       frecuenciaCardiaca: frecuenciaCardiaca,
       frecuenciaRespiratoria: frecuenciaRespiratoria,
       mucosas: blancoANull(mucosas),
+      citaId: citaId,
     );
     _ref.invalidate(consultasProvider(mascotaId));
     if (pesoKg != null) {
       _ref.invalidate(pesosProvider(mascotaId));
+    }
+    if (citaId != null) {
+      _ref.invalidate(citaProvider(citaId));
+      _ref.invalidate(agendaSemanaProvider);
     }
     return id;
   }

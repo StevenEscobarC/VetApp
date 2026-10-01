@@ -5,9 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
+import '../../../../core/utils/formato_hora.dart';
+import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../appointments/presentation/providers/citas_providers.dart';
 import '../../domain/consulta_failure.dart';
 import '../providers/consultas_providers.dart';
 
@@ -20,9 +23,13 @@ import '../providers/consultas_providers.dart';
 /// nunca bloquean el guardado. Sin diálogo de confirmación al volver: es un
 /// formulario de solo-creación, igual que todos los demás en esta app.
 class ConsultaFormScreen extends ConsumerStatefulWidget {
-  const ConsultaFormScreen({super.key, required this.mascotaId});
+  const ConsultaFormScreen({super.key, required this.mascotaId, this.citaId});
 
   final String mascotaId;
+
+  /// Cuando llega (flujo Completar cita), la consulta queda ligada a la cita
+  /// y la anamnesis se precarga con el motivo y las notas de la cita.
+  final String? citaId;
 
   @override
   ConsumerState<ConsultaFormScreen> createState() =>
@@ -41,6 +48,7 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
   final _evolucionCtrl = TextEditingController();
 
   bool _detallesExpandidos = false;
+  bool _precargada = false;
   bool _loading = false;
   String? _error;
   String? _pesoError;
@@ -133,6 +141,7 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
         frecuenciaCardiaca: frecuenciaCardiaca.valor?.toInt(),
         frecuenciaRespiratoria: frecuenciaRespiratoria.valor?.toInt(),
         mucosas: _mucosasCtrl.text,
+        citaId: widget.citaId,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -149,6 +158,18 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final citaId = widget.citaId;
+    final cita = citaId == null
+        ? null
+        : ref.watch(citaProvider(citaId)).asData?.value;
+    if (cita != null && !_precargada) {
+      _precargada = true;
+      final notas = (cita.notas ?? '').trim();
+      _anamnesisCtrl.text = notas.isEmpty
+          ? '${cita.motivo}.'
+          : '${cita.motivo}. $notas';
+      _detallesExpandidos = true;
+    }
     return Scaffold(
       appBar: const AppTopBar(title: 'Nueva consulta'),
       body: SingleChildScrollView(
@@ -156,6 +177,24 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (cita != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                ),
+                child: Text(
+                  'Cita del ${diaCorto(aBogota(cita.fechaHora))} · '
+                  '${hora12(aBogota(cita.fechaHora))}',
+                  style: textTheme.labelLarge,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             AppTextField(
               label: 'Diagnóstico *',
               controller: _diagnosticoCtrl,

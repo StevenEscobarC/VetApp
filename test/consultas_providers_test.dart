@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
+import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clinical_history/domain/consulta_failure.dart';
@@ -10,6 +12,7 @@ import 'package:vetapp/features/patients/domain/entities/peso_registro.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_citas.dart';
 import 'helpers/fake_consultas.dart';
 import 'helpers/fake_mascotas.dart';
 
@@ -17,6 +20,7 @@ ProviderContainer _containerWith({
   required FakeConsultaRepository repo,
   FakeMascotaRepository? mascotaRepo,
   AuthProfile? profile = vetProfile,
+  FakeCitaRepository? citaRepo,
 }) {
   return ProviderContainer(
     // Same convention as mascotas_providers_test.dart: disable Riverpod 3's
@@ -28,6 +32,7 @@ ProviderContainer _containerWith({
         () => FakeAuthProfileNotifier(profile: profile),
       ),
       consultaRepositoryProvider.overrideWithValue(repo),
+      if (citaRepo != null) citaRepositoryProvider.overrideWithValue(citaRepo),
       if (mascotaRepo != null)
         mascotaRepositoryProvider.overrideWithValue(mascotaRepo),
     ],
@@ -78,6 +83,46 @@ void main() {
   });
 
   group('registrarConsultaProvider', () {
+    test('sin citaId registra citaId null', () async {
+      final repo = FakeConsultaRepository();
+      final container = _containerWith(repo: repo);
+      addTearDown(container.dispose);
+
+      await container.read(registrarConsultaProvider)(
+        mascotaId: 'm-1',
+        diagnostico: 'Dx',
+        tratamiento: 'Tx',
+      );
+
+      expect(repo.registros.single.citaId, isNull);
+    });
+
+    test('con citaId lo reenvía e invalida citaProvider', () async {
+      final repo = FakeConsultaRepository();
+      final citaRepo = FakeCitaRepository(citas: [citaLunaHoy]);
+      final container = _containerWith(repo: repo, citaRepo: citaRepo);
+      addTearDown(container.dispose);
+
+      final sub = container.listen(citaProvider('cita-1'), (_, _) {});
+      addTearDown(sub.close);
+      expect((await container.read(citaProvider('cita-1').future)).estado,
+          EstadoCita.pendiente);
+      // La cita cambia en el servidor; solo una invalidación la relee.
+      citaRepo.citas[0] = citaLunaHoy.copyWith(
+        mascotasConConsulta: {'m-luna'},
+      );
+
+      await container.read(registrarConsultaProvider)(
+        mascotaId: 'm-luna',
+        diagnostico: 'Dx',
+        tratamiento: 'Tx',
+        citaId: 'cita-1',
+      );
+
+      expect(repo.registros.single.citaId, 'cita-1');
+      final cita = await container.read(citaProvider('cita-1').future);
+      expect(cita.mascotasConConsulta, {'m-luna'});
+    });
     test(
       'registrar solo con diagnóstico y tratamiento recortados no envía '
       'ningún campo opcional (D-03)',
