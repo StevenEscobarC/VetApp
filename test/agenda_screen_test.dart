@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vetapp/core/data/clock_provider.dart';
 import 'package:vetapp/core/utils/zona_bogota.dart';
 import 'package:vetapp/features/appointments/domain/cita_failure.dart';
+import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 import 'package:vetapp/features/appointments/presentation/agenda_routes.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 
@@ -145,6 +146,82 @@ void main() {
       await tester.tap(find.text('Reintentar'));
       await tester.pumpAndSettle();
       expect(repo.consultasEntre.length, greaterThan(antes));
+    });
+  });
+
+  group('AgendaScreen - nueva cita y cruces', () {
+    testWidgets('Nueva cita abre el formulario con el día seleccionado', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _agenda(FakeCitaRepository(citas: citasSemanaFixture)),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Nueva cita'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Guardar cita'), findsOneWidget);
+      expect(find.text('mié 30/09/2026'), findsOneWidget);
+    });
+
+    testWidgets('/agenda?dia= abre con ese día seleccionado', (tester) async {
+      await tester.pumpWidget(
+        routerHarness(
+          initialLocation: '/agenda?dia=2026-10-02',
+          routes: [agendaRoute],
+          overrides: [
+            citaRepositoryProvider.overrideWithValue(
+              FakeCitaRepository(citas: citasSemanaFixture),
+            ),
+            clockProvider.overrideWithValue(
+              () => deBogota(2026, 9, 30, 9, 35),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('vie 02/10'), findsOneWidget);
+    });
+
+    testWidgets('marca "Se cruza con" en la cita pendiente que se solapa', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final maxCruce = citaCanceladaHoy.copyWith(
+        fechaHora: deBogota(2026, 9, 30, 10, 45),
+        estado: EstadoCita.pendiente,
+      );
+      await tester.pumpWidget(
+        _agenda(FakeCitaRepository(citas: [citaLunaHoy, maxCruce])),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Se cruza con Luna'), findsOneWidget);
+      expect(find.byIcon(Icons.warning_amber_outlined), findsOneWidget);
+    });
+
+    testWidgets('una cita cancelada que se solapa no muestra el cruce', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final maxCancelada = citaCanceladaHoy.copyWith(
+        fechaHora: deBogota(2026, 9, 30, 10, 45),
+      );
+      await tester.pumpWidget(
+        _agenda(FakeCitaRepository(citas: [citaLunaHoy, maxCancelada])),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Se cruza con'), findsNothing);
     });
   });
 }
