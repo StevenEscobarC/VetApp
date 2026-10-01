@@ -14,8 +14,10 @@ VetApp pasa de ser una app Flutter con UI mockeada a una herramienta real de ges
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Fundación** - Proyecto Supabase real, RLS probado y Riverpod/go_router realmente conectados (completed 2026-09-24)
-- [x] **Phase 2: Clientes y Pacientes** - CRUD real de dueños y mascotas con foto y búsqueda (completed 2026-09-26)
-- [x] **Phase 3: Historia Clínica** - Registro estructurado, línea de tiempo y exportación a PDF por paciente (completed 2026-10-01)
+- [x] **Phase 2: Clientes y Pacientes** - CRUD real de dueños y mascotas con foto y búsqueda
+ (completed 2026-09-26)
+- [x] **Phase 3: Historia Clínica** - Registro estructurado, línea de tiempo y exportación a PDF por paciente
+ (completed 2026-10-01)
 - [ ] **Phase 4: Agenda y Citas** - Calendario de citas con recordatorios locales y por WhatsApp
 - [ ] **Phase 5: Vacunación y Desparasitación** - Carné digital con cálculo automático de próxima dosis y enlace compartible
 - [ ] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo
@@ -156,7 +158,20 @@ Plans:
   5. El veterinario puede enviar un recordatorio de cita por WhatsApp con un toque (deep-link `wa.me` con mensaje prellenado)
   6. Al completar una cita, el veterinario puede crear una entrada de historia clínica vinculada
 
-**Plans**: TBD
+**Plans**: 11 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Backend: citas + cita_mascotas, RLS, crear_cita/actualizar_cita, registrar_consulta(p_cita_id), 95-check smoke test + human apply (vetapp-supabase)
+- [ ] 04-02-PLAN.md — Platform: notification/url_launcher/prefs deps, es_CO localization, Android desugaring + receivers, APK build spike
+- [ ] 04-03-PLAN.md — Ver agenda: Bogotá time utils, Cita entity, read repository, AgendaScreen (day strip, hourly list, Próxima, states)
+- [ ] 04-04-PLAN.md — Phone normalization (+57) with soft warning, 'Agendar cita' on fichas, combined-alta return mode
+- [ ] 04-05-PLAN.md — Crear cita: form with cliente search, multi-mascota, motivo/duración, first free slot, domicilio, overlap warning
+- [ ] 04-06-PLAN.md — Estados + detalle + editar: Confirmar/No asistió/Cancelar/Reabrir with Deshacer, CitaDetailScreen, edit mode
+- [ ] 04-07-PLAN.md — Local reminders core: plan builder, flutter_local_notifications service, idempotent resync, sign-out cancel, tap-to-open
+- [ ] 04-08-PLAN.md — WhatsApp (wa.me D-14) individual + 'Recordar a todos los de mañana', Cómo llegar (Maps)
+- [ ] 04-09-PLAN.md — Completar cita -> consulta(s) vinculadas (prefill, one per mascota, Completar sin consulta)
+- [ ] 04-10-PLAN.md — Permission rationale after first cita, denied banner, Más > Recordatorios (15/30/60/120)
+- [ ] 04-11-PLAN.md — Integrated gate, live embed probe, vetapp-brand-ui audit, device UAT
 **UI hint**: yes
 
 ### Phase 5: Vacunación y Desparasitación
@@ -233,7 +248,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
-| 4. Agenda y Citas | 0/TBD | Not started | - |
+| 4. Agenda y Citas | 0/11 | Planned | - |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
