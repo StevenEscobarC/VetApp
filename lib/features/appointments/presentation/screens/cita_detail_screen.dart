@@ -262,6 +262,28 @@ class _Contenido extends ConsumerWidget {
       ),
     );
 
+    List<Widget> contacto() => [
+      botonWhatsApp(
+        context,
+        ref,
+        cita,
+        variant: AppButtonVariant.outline,
+        expand: true,
+      ),
+      if (avisoWhatsApp(context, cita) case final aviso?) aviso,
+      gap,
+      if (cita.modalidad == ModalidadCita.domicilio) ...[
+        botonComoLlegar(
+          context,
+          ref,
+          cita,
+          variant: AppButtonVariant.outline,
+          expand: true,
+        ),
+        gap,
+      ],
+    ];
+
     switch (cita.estado) {
       case EstadoCita.pendiente:
         return [
@@ -278,12 +300,13 @@ class _Contenido extends ConsumerWidget {
             ),
           ),
           gap,
+          ...contacto(),
           noAsistio(),
           gap,
           cancelar(),
         ];
       case EstadoCita.confirmada:
-        return [noAsistio(), gap, cancelar()];
+        return [...contacto(), noAsistio(), gap, cancelar()];
       case EstadoCita.completada:
         return [
           AppButton(
