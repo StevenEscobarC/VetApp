@@ -64,6 +64,16 @@ $ADB exec-out screencap -p > {phase_dir}/qa/{NN}-C{n}-{slug}.png
 - Después de cada acción espera 1-2 s (Flutter re-renderiza) y haz un nuevo dump antes de afirmar un resultado.
 - Verifica cada captura leyéndola con Read. Si no hay fase, guarda en el scratchpad.
 
+### Escribir texto con `input text` (regla obligatoria)
+
+`adb shell input text` escribe **literalmente** lo que recibe. Solo `%s` se convierte en espacio; **no decodifica URL-encoding**. Si tecleas `%20` o `%23`, la app guarda "Carrera%2010%20%2312-34" (pasó en el QA de la Fase 4 y parecía un bug de la app, pero no lo era).
+
+- **Nunca teclees texto URL-encoded** (`%20`, `%23`, `%2C`…). Espacio = `%s`, nada más.
+- El texto pasa por el shell del dispositivo: envuélvelo en comillas simples y escapa con `\` los caracteres especiales `# & ( ) ; < > ' " | * ~ $ \`. Ejemplo: `$ADB shell input text 'Carrera%s10%s\#12-34%sBogota'`.
+- Si un carácter no se deja escapar de forma fiable (tildes, ñ, emojis, `'`), cambia el dato de prueba por uno equivalente sin ese carácter (p. ej. "No" en lugar de "#", "Pena" en lugar de "Peña") y anótalo en el reporte. Las tildes/ñ de la app se verifican leyendo textos que ya muestra, no tecleándolos.
+- **Antes de guardar un formulario**, haz `uiautomator dump` y confirma que el campo contiene exactamente el texto esperado. Si no coincide, bórralo (`KEYCODE_MOVE_END` + `KEYCODE_DEL` repetido) y vuelve a escribirlo.
+- Si después de guardar ves texto con `%xx` en la app, revisa primero cómo lo tecleaste antes de reportar FAIL.
+
 ## Capacidades extra
 
 ```bash
