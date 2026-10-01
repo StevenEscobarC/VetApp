@@ -526,13 +526,19 @@ with check (
 -- ===== Fase 4: Agenda y Citas (delta idempotente; se puede re-ejecutar el archivo completo) =====
 
 -- Pitfall 7: la FK compuesta cita_mascotas -> mascotas(id, clinica_id) necesita una
--- unique sobre (id, clinica_id) en mascotas.
+-- unique sobre (id, clinica_id) en mascotas. Se consulta pg_constraint (por nombre Y
+-- tabla) en vez de tragarse duplicate_object/duplicate_table, para no ocultar el caso
+-- en que otra relación ya use ese nombre (LO-06).
 do $$
 begin
-  alter table public.mascotas
-    add constraint mascotas_id_clinica_id_key unique (id, clinica_id);
-exception
-  when duplicate_object or duplicate_table then null;
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'mascotas_id_clinica_id_key'
+      and conrelid = 'public.mascotas'::regclass
+  ) then
+    alter table public.mascotas
+      add constraint mascotas_id_clinica_id_key unique (id, clinica_id);
+  end if;
 end;
 $$;
 
