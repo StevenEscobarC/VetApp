@@ -187,8 +187,8 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 04-09-PLAN.md — Completar cita -> consulta(s) vinculadas (prefill, one per mascota, Completar sin consulta)
-- [ ] 04-10-PLAN.md — Permission rationale after first cita, denied banner, Más > Recordatorios (15/30/60/120)
+- [x] 04-09-PLAN.md — Completar cita -> consulta(s) vinculadas (prefill, one per mascota, Completar sin consulta)
+- [x] 04-10-PLAN.md — Permission rationale after first cita, denied banner, Más > Recordatorios (15/30/60/120)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -270,7 +270,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Fundación | 6/6 | Complete    | 2026-09-24 |
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
-| 4. Agenda y Citas | 8/11 | In Progress|  |
+| 4. Agenda y Citas | 10/11 | In Progress|  |
 | 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
