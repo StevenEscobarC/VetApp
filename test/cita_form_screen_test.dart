@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:vetapp/core/data/clock_provider.dart';
 import 'package:vetapp/core/utils/zona_bogota.dart';
@@ -10,6 +11,7 @@ import 'package:vetapp/features/appointments/domain/cita_failure.dart';
 import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 import 'package:vetapp/features/appointments/presentation/agenda_routes.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
+import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/appointments/presentation/screens/cita_form_screen.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clients/domain/entities/cliente.dart';
@@ -21,6 +23,7 @@ import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_recordatorios.dart';
 import 'helpers/router_harness.dart';
 
 const _maria = Cliente(
@@ -75,7 +78,10 @@ List<Override> _overrides(
     () => FakeAuthProfileNotifier(profile: vetProfile),
   ),
   clockProvider.overrideWithValue(() => deBogota(2026, 9, 30, 9, 35)),
+  recordatoriosServiceProvider.overrideWithValue(_recordatorios),
 ];
+
+var _recordatorios = FakeRecordatoriosService();
 
 Widget _app({
   required FakeCitaRepository repo,
@@ -122,6 +128,128 @@ final _maxCruce = citaCanceladaHoy.copyWith(
 );
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    // Permiso ya concedido: el resto de casos no ve el diálogo.
+    _recordatorios = FakeRecordatoriosService();
+  });
+
+  group('CitaFormScreen - permiso de notificaciones (D-13)', () {
+    const titulo = '¿Te avisamos antes de tus citas?';
+    setUp(() => _recordatorios.permiso = false);
+
+    testWidgets('primera cita: explica y Activar solicita una vez', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: citasSemanaFixture);
+      await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cita'));
+      // El spinner de "guardando" sigue animado con el diálogo abierto.
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text(titulo), findsOneWidget);
+      expect(
+        find.text(
+          'Te enviaremos un recordatorio en tu celular antes de cada cita '
+          'para que no se te pase ninguna.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Ahora no'), findsOneWidget);
+
+      await tester.tap(find.text('Activar recordatorios'));
+      await tester.pumpAndSettle();
+
+      expect(_recordatorios.solicitudes, 1);
+      expect(_recordatorios.ajustesAbiertos, 0);
+      expect(find.text('Hoy, mié 30/09'), findsOneWidget);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('permiso_notificaciones_explicado'), isTrue);
+    });
+
+    testWidgets('Ahora no no solicita y continúa; la segunda vez no vuelve', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: citasSemanaFixture);
+      await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cita'));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.text('Ahora no'));
+      await tester.pumpAndSettle();
+
+      expect(_recordatorios.solicitudes, 0);
+      expect(find.text('Hoy, mié 30/09'), findsOneWidget);
+
+      await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cita'));
+      await tester.pumpAndSettle();
+      expect(find.text(titulo), findsNothing);
+      expect(repo.creadas, hasLength(2));
+    });
+
+    testWidgets('con permiso ya concedido no muestra el diálogo', (
+      tester,
+    ) async {
+      _grande(tester);
+      _recordatorios.permiso = true;
+      final repo = FakeCitaRepository(citas: citasSemanaFixture);
+      await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cita'));
+      await tester.pumpAndSettle();
+      expect(find.text(titulo), findsNothing);
+      expect(find.text('Hoy, mié 30/09'), findsOneWidget);
+    });
+
+    testWidgets('editar nunca muestra el diálogo', (tester) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: [citaRockyLunaHoy]);
+      await tester.pumpWidget(
+        _app(
+          repo: repo,
+          mascotas: FakeMascotaRepository(mascotas: [_luna, _rocky]),
+          initial: '/agenda/cita-2/editar',
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+      expect(find.text(titulo), findsNothing);
+      expect(find.text('Hoy, mié 30/09'), findsOneWidget);
+    });
+
+    testWidgets('un fallo de preferencias no bloquea el guardado', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: citasSemanaFixture);
+      await tester.pumpWidget(
+        routerHarness(
+          locale: const Locale('es', 'CO'),
+          initialLocation: _conFicha,
+          routes: [agendaRoute],
+          overrides: [
+            ..._overrides(repo, FakeMascotaRepository(mascotas: [_luna])),
+            sharedPreferencesProvider.overrideWith(
+              (ref) async => throw StateError('sin prefs'),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cita'));
+      await tester.pumpAndSettle();
+      expect(repo.creadas, hasLength(1));
+      expect(find.text('Hoy, mié 30/09'), findsOneWidget);
+    });
+  });
+
   group('CitaFormScreen - flujo básico', () {
     testWidgets('Guardar cita deshabilitado hasta elegir cliente y mascota', (
       tester,

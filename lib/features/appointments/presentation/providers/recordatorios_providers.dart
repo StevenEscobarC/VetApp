@@ -59,6 +59,29 @@ final permisoNotificacionesProvider = FutureProvider<bool>(
   (ref) => ref.watch(recordatoriosServiceProvider).permisoConcedido(),
 );
 
+const _clavePermisoExplicado = 'permiso_notificaciones_explicado';
+
+/// Si ya se le explicó al veterinario para qué sirven los recordatorios
+/// (D-13): el diálogo se muestra una sola vez.
+final permisoExplicadoProvider = FutureProvider<bool>((ref) async {
+  final prefs = await ref.watch(sharedPreferencesProvider.future);
+  return prefs.getBool(_clavePermisoExplicado) ?? false;
+});
+
+Future<void> marcarPermisoExplicado(WidgetRef ref) async {
+  final prefs = await ref.read(sharedPreferencesProvider.future);
+  await prefs.setBool(_clavePermisoExplicado, true);
+  ref.invalidate(permisoExplicadoProvider);
+}
+
+/// El banner de la Agenda solo aparece cuando ya se explicó el permiso y
+/// sigue sin concederse. Mientras carga o si falla, no se muestra.
+final mostrarBannerNotificacionesProvider = FutureProvider<bool>((ref) async {
+  final permiso = await ref.watch(permisoNotificacionesProvider.future);
+  final explicado = await ref.watch(permisoExplicadoProvider.future);
+  return !permiso && explicado;
+});
+
 /// Qué hacer al tocar un recordatorio. Es un provider para que los tests lo
 /// sustituyan sin necesidad de un router real.
 final abrirCitaDesdeNotificacionProvider =

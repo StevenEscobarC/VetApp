@@ -24,6 +24,7 @@ import '../../domain/motivos_cita.dart';
 import '../providers/citas_providers.dart';
 import '../widgets/cliente_search_field.dart';
 import '../widgets/mascota_multi_select.dart';
+import '../widgets/permiso_notificaciones.dart';
 import '../widgets/time_stepper.dart';
 
 /// "Nueva cita" (AGND-02). Solo cliente, al menos una mascota, fecha y hora
@@ -330,6 +331,10 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
           content: Text(_editando ? 'Cita actualizada' : 'Cita agendada'),
         ),
       );
+      if (!_editando) {
+        await pedirPermisoEnContexto(context, ref);
+        if (!mounted) return;
+      }
       context.go(
         Uri(
           path: '/agenda',
