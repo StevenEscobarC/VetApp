@@ -69,7 +69,7 @@ Plan/task IDs assigned by the planner (2026-09-26). Additional per-plan coverage
 | Behavior | Requirement | Why Manual | Test Instructions | Status |
 |----------|-------------|------------|-------------------|--------|
 | RLS blocks cross-clinic access on `consultas`, as the `authenticated` role; no update/delete succeeds even for the owning vet | HIST-01..04 | Locked by Phase 1's D-03 convention — manual smoke test only, no automated pgTAP/CI suite this milestone | Extend `supabase/tests/rls_smoke_test.sql` with positive/negative cases for `consultas`, using the same two throwaway clinics already in the script; record pass/fail per check before closing the phase | ✅ `RLS SMOKE: PASS (70 checks)` confirmed live (03-01-SUMMARY.md) |
-| PDF export produces a readable, complete document and the native share sheet opens correctly on a real device | HIST-03 | Requires a real device/emulator to confirm `Printing.sharePdf` OS-level behavior and permission prompts, not mockable without losing the thing being tested | Generate a PDF for a patient with 2+ consultas, confirm the share sheet opens, confirm the PDF content includes every consulta in chronological order | ⬜ pending — Task 2 device UAT |
+| PDF export produces a readable, complete document and the native share sheet opens correctly on a real device | HIST-03 | Requires a real device/emulator to confirm `Printing.sharePdf` OS-level behavior and permission prompts, not mockable without losing the thing being tested | Generate a PDF for a patient with 2+ consultas, confirm the share sheet opens, confirm the PDF content includes every consulta in chronological order | ✅ confirmed — 10-step device UAT approved 2026-09-30 (`emulator-5554`, live project) |
 
 ---
 
@@ -82,4 +82,4 @@ Plan/task IDs assigned by the planner (2026-09-26). Additional per-plan coverage
 - [x] Feedback latency < 30s
 - [x] `nyquist_compliant: true` set in frontmatter (planner confirmed coverage 2026-09-26)
 
-**Approval:** automated gates approved 2026-09-29 (`GATE3_OK`, `LIVE_SCHEMA_OK`, 154/154 tests, `flutter analyze` clean); device UAT (Task 2) still pending user sign-off
+**Approval:** approved 2026-09-30 — automated gates (`GATE3_OK`, `LIVE_SCHEMA_OK`, 154/154 tests, `flutter analyze` clean, 2026-09-29) + 10-step device UAT against the live backend (user replied "aprobado", 2026-09-30)
