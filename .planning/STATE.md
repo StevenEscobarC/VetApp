@@ -98,6 +98,7 @@ None yet.
 | 261001-g9e | Agente `vetapp-qa` (UAT en emulador Android vía adb + uiautomator) y receta QA loop en `.claude/LOOPING.md` | 2026-10-01 | 1f88e7f | [261001-g9e-crear-agente-vetapp-qa-para-pruebas-en-e](./quick/261001-g9e-crear-agente-vetapp-qa-para-pruebas-en-e/) |
 | fast | Regla de escape de `adb input text` en `vetapp-qa` (sin URL-encoding, verificar antes de guardar) | 2026-10-01 | 94f7c6c | — |
 | fast | Hardening advisor 0028/0029: revoke EXECUTE anon/public en helpers RLS y trigger (pendiente aplicar en vivo tras QA) | 2026-10-01 | 4f44309 | — |
+| fast | Skill de proyecto `arquitecto-vetapp` copiada a `.claude/skills/` (estaba solo en la app de Claude) | 2026-10-01 | d4e4e29 | — |
 
 ## Deferred Items
 
