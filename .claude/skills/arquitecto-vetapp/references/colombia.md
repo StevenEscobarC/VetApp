@@ -1,49 +1,45 @@
 # Reglas de Colombia para VetApp
 
-Esta guía orienta decisiones de producto y de código. No es asesoría legal: cuando una regla condicione el diseño (consentimientos, conservación de historias, recetas), señálalo y recomienda validarlo con un abogado o con el gremio veterinario antes de salir a producción.
+Orienta decisiones de producto y código. No es asesoría legal: cuando una regla condicione el diseño (consentimientos, conservación de historias), señálalo y recomienda validarlo con un abogado o el gremio veterinario antes de producción. El comportamiento descrito sale de `lib/core/utils/` y sus pruebas en `test/`; si difieren, gana el código.
 
 ## Formato y localización
 
-- Locale `es_CO` (`Intl.defaultLocale = 'es_CO'` e `initializeDateFormatting('es_CO')`).
-- **Dinero (COP)**: sin decimales, punto como separador de miles: `$ 85.000`. Con `intl`: `NumberFormat.currency(locale: 'es_CO', symbol: '\$', decimalDigits: 0)`. Guarda montos como enteros de pesos, nunca `double`.
-- **Fechas**: `dd/MM/yyyy` (`01/10/2026`); fecha larga `EEEE d 'de' MMMM 'de' y` (`jueves 1 de octubre de 2026`).
-- **Horas**: formato de 12 horas con `a. m.` / `p. m.` en la UI (`3:30 p. m.`).
-- **Zona horaria**: `America/Bogota` (UTC−5, sin horario de verano). Guarda en UTC (`timestamptz` en Postgres) y muestra en hora de Bogotá; las citas se crean siempre interpretando la hora en la zona de la clínica.
-- **Teléfono**: celular de 10 dígitos que empieza por 3; almacénalo en E.164 (`+573001234567`) y muéstralo como `300 123 4567`.
-- **Direcciones**: formato colombiano libre (`Cra 23 # 65-12`, `Calle 50 # 20-30 Apto 301`); no fuerces campos de calle/número separados al estilo de otros países.
+- **Locale**: `MaterialApp` usa `Locale('es', 'CO')` (`lib/main.dart`). La app **nunca llama `initializeDateFormatting`**, por eso los formatos de fecha/hora están escritos a mano o usan patrones numéricos: no uses `DateFormat` con nombres de mes/día localizados (lanzaría `LocaleDataException`).
+- **Fechas** (`lib/core/utils/formato.dart`): `formatearFecha` produce `dd/mm/aaaa` (`01/10/2026`); `parsearFecha` valida el formato exacto, días de calendario reales y que no sea futura (mensaje: "Usa el formato dd/mm/aaaa"). En agenda, `formato_hora.dart` agrega `fechaLarga` (`mié 30/09/2026`), `diaCorto` (`mié 30/09`), `fechaHoraCorta` (`29/09 6:15 p. m.`) y `encabezadoDia` (`Hoy, mié 30/09`).
+- **Horas** (`lib/core/utils/formato_hora.dart`): 12 horas con `a. m.` / `p. m.`, nunca 24 h. `hora12` da `10:30 a. m.`, `12:00 p. m.`, `12:15 a. m.`, `6:05 p. m.`; `rangoHoras` da `10:30 – 11:00 a. m.` o `11:30 a. m. – 12:30 p. m.`; `duracionTexto` da `15 min`, `1 h`, `1 h 30 min`. Los espacios son ASCII normales.
+- **Zona horaria** (`lib/core/utils/zona_bogota.dart`): `America/Bogota` es UTC-5 fijo (sin horario de verano). La agenda **no usa `toLocal()`**: `aBogota`, `deBogota`, `diaBogota`, `rangoDiaUtc`, `rangoSemanaUtc` y `lunesDeSemana` fijan el desfase para que la zona del dispositivo nunca mueva los límites de un día. Guarda siempre `timestamptz` (UTC) y convierte para mostrar. Los recordatorios locales usan `timezone`.
+- **Dinero (COP)**: aún **no existe** un helper en `lib/core/utils/` (no hay `NumberFormat` en `lib/`). Convención al introducirlo (previsto en Facturación, Fase 7): pesos sin decimales y punto como separador de miles (`$ 85.000`); guardar montos como enteros de pesos, nunca `double`. Créalo junto a `formato.dart` con su prueba, sin depender de `initializeDateFormatting`.
+- **Pesos y números**: `parsearPeso` y `parsearNumeroPositivo` aceptan coma o punto decimal; `formatearPeso` muestra coma (`12,5 kg`).
+- **Direcciones**: texto libre al estilo colombiano (`Cra 23 # 65-12`); no separes calle y número en campos distintos. Una cita a domicilio exige dirección (check en `citas`).
+
+## Teléfono (`lib/core/utils/telefono_co.dart`)
+
+- `normalizarTelefono(raw)` guarda **`57XXXXXXXXXX`** (sin `+`) para números colombianos de 10 dígitos que empiezan por 3 (celular) o 60 (fijo), p. ej. `300 123 4567` -> `573001234567`, mostrado como `+57 300 123 4567`. Los extranjeros se guardan como `+<dígitos>`; lo dudoso se conserva tal cual como `desconocido`. Es idempotente y nunca bloquea el guardado.
+- `requiereAvisoTelefono` muestra un aviso suave (`kAvisoTelefono`) solo para fijos y números no reconocidos. `telefonoGuardable` / `telefonoSinDigitos` validan que haya al menos un dígito.
+- `numeroWhatsApp(raw)` devuelve el número solo con dígitos para `https://wa.me/...` (celular colombiano o internacional), o `null` para fijos y no reconocidos. Úsalo siempre para armar enlaces de WhatsApp; abre enlaces con `lanzador_externo.dart`.
+- No uses el formato E.164 con `+` para números colombianos al guardar.
 
 ## Documentos de identidad
 
-Tipos a soportar en el registro del propietario:
-
-| Código | Documento |
-|---|---|
-| CC | Cédula de ciudadanía |
-| CE | Cédula de extranjería |
-| PPT | Permiso por Protección Temporal |
-| PA | Pasaporte |
-| NIT | Número de Identificación Tributaria (clínicas y personas jurídicas) |
-
-- El NIT se muestra con dígito de verificación (`900123456-7`); valida el dígito con el algoritmo de la DIAN.
-- No exijas documento para el primer registro del propietario si no es necesario (el registro debe ser fácil); pídelo cuando se necesite, por ejemplo al emitir una receta o un certificado.
+- El schema actual **no** guarda documento de identidad del dueño ni NIT de la clínica (`clientes` y `clinicas` no tienen esas columnas). Registrar un cliente solo exige nombre y teléfono.
+- Si en el futuro se pide (receta, factura, certificado), debe ser opcional y pedirse solo cuando haga falta; los tipos habituales son CC, CE, PPT, PA y NIT (con dígito de verificación). No lo agregues como obligatorio en el alta.
 
 ## Protección de datos personales
 
-Ley 1581 de 2012 (Habeas Data) y su reglamentación:
+Ley 1581 de 2012 (habeas data) y su reglamentación:
 
-- **Autorización previa, expresa e informada** antes de recolectar datos personales: casilla no marcada por defecto, enlace a la política de tratamiento, y registro de fecha y versión de la política aceptada (`autorizacionDatos` en el modelo).
-- Informa la finalidad: gestionar citas, historias clínicas y comunicaciones de la clínica.
-- El titular debe poder consultar, actualizar y pedir supresión de sus datos: prevé estas acciones en el perfil. La supresión no borra historias clínicas que deban conservarse; anonimiza los datos del propietario cuando aplique.
-- Mínimo privilegio en la base de datos: RLS por clínica y propietario. Nunca registres en logs documentos, teléfonos ni contenido clínico.
-- Compartir la historia de una mascota con otra clínica requiere acción explícita del propietario.
+- Autorización previa, expresa e informada antes de recolectar datos personales, con finalidad clara (gestionar citas, historias y comunicaciones). Hoy la app no tiene aún un flujo de consentimiento ni de política de tratamiento: si una tarea recolecta datos nuevos o abre la app a clientes (Fase 9), señálalo.
+- Datos mínimos: no pidas más de lo necesario.
+- El titular puede consultar, actualizar y pedir supresión; la supresión no borra historias clínicas que deban conservarse. Confirma con asesoría legal los tiempos de conservación antes de construir borrados.
+- Mínimo privilegio: RLS por clínica (`es_veterinario()` + `mi_clinica_id()`), y nunca registres en logs teléfonos ni contenido clínico.
+- Compartir datos con otra clínica o públicamente (p. ej. el link del carné de vacunación, Fase 5) requiere acción explícita y debe exponer solo lo necesario.
 
-## Historia clínica y ejercicio profesional
+## Ejercicio profesional
 
-- La medicina veterinaria en Colombia está regulada (Ley 576 de 2000, código de ética profesional), y el profesional se identifica con su **tarjeta profesional**. Por eso, cada consulta, receta y certificado registra el veterinario responsable y su número de tarjeta.
-- Trata la historia clínica como un documento con valor legal: inmutable una vez cerrada (correcciones por adenda), con autor y fecha en cada entrada, y conservada aunque el propietario deje de usar la app. Confirma con asesoría legal el tiempo mínimo de conservación antes de implementar borrados.
-- Los medicamentos de uso veterinario están bajo control del ICA. Si la receta incluye medicamentos de control especial, señálalo como un caso que requiere validación regulatoria adicional en vez de asumir un formato.
-- Bienestar animal: Ley 1774 de 2016. Relevante si la app maneja reportes de maltrato o eutanasias; no lo asumas para otras tareas.
+- La medicina veterinaria está regulada por la Ley 576 de 2000 (código de ética); el profesional se identifica con su tarjeta profesional. Hoy el schema no guarda ese número: es "futuro, cuando aplique" (por ejemplo, en el perfil público del directorio de la Fase 9 o en documentos clínicos).
+- La historia clínica es solo-append, con autor (`veterinario_id`) y fecha en cada entrada; una corrección es una entrada nueva.
+- Medicamentos de control especial (ICA) y bienestar animal (Ley 1774 de 2016): no asumas formatos; si una tarea los toca, señálalo para validación regulatoria.
 
-## Pagos (solo si la tarea lo pide)
+## Fuera de v1 (proponer fase)
 
-Medios habituales en Colombia: PSE, tarjetas, Nequi y Daviplata. Integra siempre a través de una pasarela (p. ej. Wompi, ePayco, Mercado Pago) y nunca manejes datos de tarjeta en la app ni en tu backend.
+Pagos (PSE, tarjetas, Nequi, Daviplata) y facturación electrónica ante la DIAN no están en el roadmap actual; la Fase 7 cubre cotizaciones/facturas simples en PDF. Si se piden, propón una fase nueva; si hay pagos, usa siempre una pasarela y nunca manejes datos de tarjeta en la app.
