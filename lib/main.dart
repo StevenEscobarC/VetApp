@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -33,6 +34,9 @@ class VetApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       routerConfig: router,
+      locale: const Locale('es', 'CO'),
+      supportedLocales: const [Locale('es', 'CO'), Locale('es')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
     );
   }
 }
@@ -46,6 +50,9 @@ class _MissingConfigApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     theme: AppTheme.light,
+    locale: const Locale('es', 'CO'),
+    supportedLocales: const [Locale('es', 'CO'), Locale('es')],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
     debugShowCheckedModeBanner: false,
     builder: (context, child) => Scaffold(
       body: Center(
