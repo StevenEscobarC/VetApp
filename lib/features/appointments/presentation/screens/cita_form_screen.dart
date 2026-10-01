@@ -226,10 +226,14 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   }
 
   Future<void> _elegirFecha() async {
+    // No se agenda en días pasados; si la cita ya está en uno (edición o
+    // fecha recibida por ruta), ese día sigue siendo elegible.
+    final hoy = diaBogota(ref.read(clockProvider)());
+    final desde = _dia.isBefore(hoy) ? _dia : hoy;
     final elegido = await showDatePicker(
       context: context,
       initialDate: DateTime(_dia.year, _dia.month, _dia.day),
-      firstDate: DateTime(2020),
+      firstDate: DateTime(desde.year, desde.month, desde.day),
       lastDate: DateTime(2100),
     );
     if (elegido == null || !mounted) return;

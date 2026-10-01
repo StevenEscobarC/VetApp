@@ -380,6 +380,22 @@ void main() {
   });
 
   group('CitaFormScreen - motivo, duración, dónde', () {
+    testWidgets('el calendario no ofrece días pasados para una cita nueva', (
+      tester,
+    ) async {
+      _grande(tester);
+      await tester.pumpWidget(_app(repo: FakeCitaRepository()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.calendar_today_outlined));
+      await tester.pumpAndSettle();
+
+      final picker = tester.widget<CalendarDatePicker>(
+        find.byType(CalendarDatePicker),
+      );
+      expect(picker.firstDate, DateTime(2026, 9, 30));
+    });
+
     testWidgets('el motivo fija la duración y se puede sobrescribir', (
       tester,
     ) async {
