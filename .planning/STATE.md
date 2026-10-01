@@ -89,6 +89,12 @@ None yet.
 - Phase 9 added (2026-09-24): Directorio de Veterinarias — el cliente explora, busca y califica las clínicas de la plataforma, con reseñas públicas. Origen: propuesta del usuario durante la discusión de la Fase 2, colocada al final por su dependencia de Agenda (Fase 4). Requisitos DIR-01..05, REV-01..05 agregados a REQUIREMENTS.md.
 - Vinculación de cuenta cliente↔mascotas agregada (2026-09-24): `clientes` (vet-managed) y `perfiles` (cuenta CLIENTE autenticada) no tenían vínculo — decisión del usuario: el veterinario invita/vincula desde la ficha del cliente. Lado veterinario = CLI-05 (Fase 2, esta fase); lado cliente (reclamar el código, ver "Mis mascotas") = DIR-06 (Fase 9). Requiere columna nueva `clientes.perfiles_id` (nullable).
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260930-tu9 | Agentes especializados VetApp (opportunity-research, supabase, brand-ui, gate) + guía de looping `.claude/LOOPING.md` | 2026-09-30 | (this commit) | [260930-tu9-crear-agentes-especializados-vetapp-y-gu](./quick/260930-tu9-crear-agentes-especializados-vetapp-y-gu/) |
+
 ## Deferred Items
 
 Items acknowledged and carried forward from previous milestone close:
