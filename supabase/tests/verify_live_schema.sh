@@ -36,7 +36,7 @@ fi
 
 any_fail=0
 
-for t in clinicas perfiles clientes mascotas mascota_pesos consultas; do
+for t in clinicas perfiles clientes mascotas mascota_pesos consultas citas cita_mascotas; do
   code=$(curl -s -o /dev/null -w '%{http_code}' \
     -H "apikey: $SUPABASE_ANON_KEY" \
     -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
@@ -65,7 +65,7 @@ else
   any_fail=1
 fi
 
-for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta; do
+for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita; do
   case "$rpc" in
     registrar_cliente_con_mascota)
       payload='{"cliente_nombre":"probe","cliente_telefono":"3000000000","mascota_nombre":"probe","mascota_especie":"perro","mascota_raza":"","mascota_fecha_nacimiento":null,"mascota_peso_kg":null}'
@@ -78,6 +78,12 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
       ;;
     registrar_consulta)
       payload='{"p_mascota_id":"00000000-0000-0000-0000-000000000000","p_diagnostico":"x","p_tratamiento":"y"}'
+      ;;
+    crear_cita)
+      payload='{"p_cliente_id":"00000000-0000-0000-0000-000000000000","p_mascota_ids":["00000000-0000-0000-0000-000000000000"],"p_fecha_hora":"2026-01-01T15:00:00Z"}'
+      ;;
+    actualizar_cita)
+      payload='{"p_cita_id":"00000000-0000-0000-0000-000000000000","p_mascota_ids":["00000000-0000-0000-0000-000000000000"],"p_fecha_hora":"2026-01-01T15:00:00Z"}'
       ;;
   esac
 
@@ -99,6 +105,27 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
     any_fail=1
   fi
 done
+
+# Sonda de embeds de la agenda (Fase 4): valida los hints de relación que usa el
+# repositorio de citas. Con anon, RLS oculta todo: se espera 200 con cuerpo [].
+embed_select='*, clientes!citas_cliente_misma_clinica_fkey(nombre, telefono, direccion), cita_mascotas(mascotas!cita_mascotas_mascota_fkey(id, nombre, especie, foto_path)), consultas(mascota_id)'
+embed_body=$(mktemp)
+embed_code=$(curl -s -G -o "$embed_body" -w '%{http_code}' \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  --data-urlencode "select=$embed_select" \
+  --data-urlencode "limit=1" \
+  "$SUPABASE_URL/rest/v1/citas")
+if [ "$embed_code" = "200" ] && [ "$(tr -d '[:space:]' < "$embed_body")" = "[]" ]; then
+  echo "OK citas embed"
+else
+  echo "FAIL citas embed $embed_code"
+  cat "$embed_body"
+  echo
+  rm -f "$embed_body"
+  exit 1
+fi
+rm -f "$embed_body"
 
 if [ "$any_fail" -ne 0 ]; then
   exit 1

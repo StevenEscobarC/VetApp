@@ -24,6 +24,7 @@
 -- Fase 3: consultas (historia clínica append-only) + registrar_consulta, scoped
 -- por clínica, incluyendo la atomicidad consulta+peso (D-02) y HIST-04
 -- (update/delete siempre 0 filas, incluso para el propio veterinario autor).
+-- Fase 4: citas, cita_mascotas, crear_cita/actualizar_cita, registrar_consulta(p_cita_id), cascada al borrar cliente (D-20).
 
 do $$
 declare
@@ -49,6 +50,11 @@ declare
   v_masc uuid;
   v_consulta uuid;
   v_texto text;
+  cita_a_id uuid;
+  cita_a2_id uuid;
+  cliente_a2_id uuid;
+  mascota_a2_id uuid;
+  mascota_a3_id uuid;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -782,6 +788,266 @@ begin
   exception
     when insufficient_privilege then null;
     when others then failures := failures || ('I2 error inesperado: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- Fase 4 / bloque J: impersonar vet A -- citas, cita_mascotas, RPCs.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- Setup de Fase 4 (no cuenta en checks): segundo cliente+mascota y segunda mascota del cliente A.
+  begin
+    select cliente_id, mascota_id into cliente_a2_id, mascota_a2_id
+      from public.registrar_cliente_con_mascota('Smoke Cliente A2', '3000000003', 'Smoke Pet A2', 'perro', '', null, null);
+    mascota_a3_id := public.registrar_mascota(cliente_a_id, 'Smoke Pet A3', 'gato');
+  exception when others then
+    failures := failures || ('SETUP5 setup de Fase 4 falló: ' || sqlerrm);
+  end;
+
+  -- J1: crear_cita con 2 mascotas del mismo cliente -> id y 2 filas en cita_mascotas.
+  checks := checks + 1;
+  begin
+    cita_a_id := public.crear_cita(cliente_a_id, array[mascota_a_id, mascota_a3_id], now() + interval '1 day');
+    if cita_a_id is null then
+      failures := failures || 'J1 crear_cita devolvió null';
+    else
+      select count(*) into n from public.cita_mascotas where cita_id = cita_a_id;
+      if n <> 2 then failures := failures || format('J1 esperaba 2 filas en cita_mascotas, vio %s', n); end if;
+    end if;
+  exception when others then
+    failures := failures || ('J1 crear_cita multi-mascota debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- J2: lista de mascotas vacía -> check_violation.
+  checks := checks + 1;
+  begin
+    perform public.crear_cita(cliente_a_id, array[]::uuid[], now() + interval '1 day');
+    failures := failures || 'J2 crear_cita con lista vacía debía fallar pero tuvo éxito';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('J2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- J3: mascota de otro dueño (misma clínica) -> foreign_key_violation.
+  checks := checks + 1;
+  begin
+    perform public.crear_cita(cliente_a_id, array[mascota_a2_id], now() + interval '1 day');
+    failures := failures || 'J3 crear_cita con mascota de otro dueño debía fallar pero tuvo éxito';
+  exception
+    when foreign_key_violation then null;
+    when others then failures := failures || ('J3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- J4: domicilio sin dirección -> check_violation.
+  checks := checks + 1;
+  begin
+    perform public.crear_cita(cliente_a_id, array[mascota_a_id], now() + interval '1 day', 30, 'domicilio', '   ');
+    failures := failures || 'J4 crear_cita a domicilio sin dirección debía fallar pero tuvo éxito';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('J4 error inesperado: ' || sqlerrm);
+  end;
+
+  -- J5: estado inválido -> check_violation.
+  checks := checks + 1;
+  begin
+    update public.citas set estado = 'invalido' where id = cita_a_id;
+    failures := failures || 'J5 estado inválido debía fallar pero tuvo éxito';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('J5 error inesperado: ' || sqlerrm);
+  end;
+
+  -- J6: estado reservado 'solicitada' aceptado (1 fila); se devuelve a pendiente.
+  checks := checks + 1;
+  update public.citas set estado = 'solicitada' where id = cita_a_id;
+  get diagnostics n = row_count;
+  if n <> 1 then failures := failures || format('J6 update a solicitada afectó %s filas, esperaba 1', n); end if;
+  update public.citas set estado = 'pendiente' where id = cita_a_id;
+
+  -- J7: estado confirmada (1 fila).
+  checks := checks + 1;
+  update public.citas set estado = 'confirmada' where id = cita_a_id;
+  get diagnostics n = row_count;
+  if n <> 1 then failures := failures || format('J7 update a confirmada afectó %s filas, esperaba 1', n); end if;
+
+  -- J8: delete de cita -> 0 filas (sin política delete).
+  checks := checks + 1;
+  delete from public.citas where id = cita_a_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('J8 delete de cita afectó %s filas, esperaba 0', n); end if;
+
+  -- J9: update de cita_mascotas -> 0 filas (sin política update).
+  checks := checks + 1;
+  update public.cita_mascotas set mascota_id = mascota_a_id where cita_id = cita_a_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('J9 update de cita_mascotas afectó %s filas, esperaba 0', n); end if;
+
+  -- J10: actualizar_cita deja solo 1 mascota.
+  checks := checks + 1;
+  begin
+    perform public.actualizar_cita(cita_a_id, array[mascota_a_id], now() + interval '2 days');
+    select count(*) into n from public.cita_mascotas where cita_id = cita_a_id;
+    if n <> 1 then failures := failures || format('J10 esperaba 1 fila en cita_mascotas tras actualizar, vio %s', n); end if;
+  exception when others then
+    failures := failures || ('J10 actualizar_cita debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- J11: actualizar_cita sobre cita cancelada -> check_violation; se devuelve a pendiente.
+  checks := checks + 1;
+  update public.citas set estado = 'cancelada' where id = cita_a_id;
+  begin
+    perform public.actualizar_cita(cita_a_id, array[mascota_a_id], now() + interval '2 days');
+    failures := failures || 'J11 actualizar_cita sobre cita cancelada debía fallar pero tuvo éxito';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('J11 error inesperado: ' || sqlerrm);
+  end;
+  update public.citas set estado = 'pendiente' where id = cita_a_id;
+
+  -------------------------------------------------------------------------
+  -- Fase 4 / bloque K: impersonar vet B -- aislamiento entre clínicas.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- K1: select citas de A -> 0.
+  checks := checks + 1;
+  select count(*) into n from public.citas where id = cita_a_id;
+  if n <> 0 then failures := failures || format('K1 vet B ve %s citas de A, esperaba 0', n); end if;
+
+  -- K2: select cita_mascotas de A -> 0.
+  checks := checks + 1;
+  select count(*) into n from public.cita_mascotas where cita_id = cita_a_id;
+  if n <> 0 then failures := failures || format('K2 vet B ve %s filas de cita_mascotas de A, esperaba 0', n); end if;
+
+  -- K3: crear_cita con cliente/mascota de A -> foreign_key_violation.
+  checks := checks + 1;
+  begin
+    perform public.crear_cita(cliente_a_id, array[mascota_a_id], now());
+    failures := failures || 'K3 vet B pudo crear cita para cliente de otra clinica';
+  exception
+    when foreign_key_violation then null;
+    when others then failures := failures || ('K3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- K4: insert directo en citas de la clínica A -> insufficient_privilege (RLS).
+  checks := checks + 1;
+  begin
+    insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora)
+      values (clinica_a_id, cliente_a_id, vet_b_id, now());
+    failures := failures || 'K4 insert directo de vet B en citas de clinica A debía fallar pero tuvo éxito';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('K4 error inesperado: ' || sqlerrm);
+  end;
+
+  -- K5: update de cita de A -> 0 filas.
+  checks := checks + 1;
+  update public.citas set notas = 'x' where id = cita_a_id;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('K5 vet B actualizó %s citas de A, esperaba 0', n); end if;
+
+  -- K6: registrar_consulta ligada a cita de A -> foreign_key_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_a_id, 'x', 'y', p_cita_id => cita_a_id);
+    failures := failures || 'K6 vet B pudo registrar consulta ligada a cita de otra clinica';
+  exception
+    when foreign_key_violation then null;
+    when others then failures := failures || ('K6 error inesperado: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- Fase 4 / bloque L: vet A de nuevo -- vínculo consulta/cita y append-only.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- L1: consulta ligada a la cita.
+  checks := checks + 1;
+  begin
+    v_consulta := public.registrar_consulta(mascota_a_id, 'dx', 'tx', p_cita_id => cita_a_id);
+    if not exists (select 1 from public.consultas where id = v_consulta and cita_id = cita_a_id) then
+      failures := failures || 'L1 la consulta no quedó ligada a la cita';
+    end if;
+  exception when others then
+    failures := failures || ('L1 registrar_consulta con cita debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- L2: segunda consulta para el mismo (cita, mascota) -> unique_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_a_id, 'dx', 'tx', p_cita_id => cita_a_id);
+    failures := failures || 'L2 segunda consulta para la misma cita y mascota debía fallar pero tuvo éxito';
+  exception
+    when unique_violation then null;
+    when others then failures := failures || ('L2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- L3: mascota que ya no pertenece a la cita -> foreign_key_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_a3_id, 'dx', 'tx', p_cita_id => cita_a_id);
+    failures := failures || 'L3 consulta de mascota fuera de la cita debía fallar pero tuvo éxito';
+  exception
+    when foreign_key_violation then null;
+    when others then failures := failures || ('L3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- L4: llamada de 3 argumentos sigue funcionando (sin ambigüedad de sobrecarga).
+  checks := checks + 1;
+  begin
+    perform public.registrar_consulta(mascota_a_id, 'x', 'y');
+  exception when others then
+    failures := failures || ('L4 registrar_consulta de 3 argumentos debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- L5: update de consultas.cita_id -> 0 filas (append-only).
+  checks := checks + 1;
+  update public.consultas set cita_id = null where id = v_consulta;
+  get diagnostics n = row_count;
+  if n <> 0 then failures := failures || format('L5 update de consultas afectó %s filas, esperaba 0 (append-only)', n); end if;
+
+  -------------------------------------------------------------------------
+  -- Fase 4 / bloque M: cliente sin clínica, y cascada D-20.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', cliente_c_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- M1: cliente ve 0 citas.
+  checks := checks + 1;
+  select count(*) into n from public.citas;
+  if n <> 0 then failures := failures || format('M1 cliente ve %s citas, esperaba 0', n); end if;
+
+  -- M2: cliente no puede crear citas.
+  checks := checks + 1;
+  begin
+    perform public.crear_cita(cliente_a_id, array[mascota_a_id], now());
+    failures := failures || 'M2 cliente pudo ejecutar crear_cita';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('M2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- M3: borrar un cliente borra sus citas en cascada (D-20).
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  checks := checks + 1;
+  begin
+    cita_a2_id := public.crear_cita(cliente_a2_id, array[mascota_a2_id], now());
+    perform set_config('role', 'postgres', true);
+    delete from public.clientes where id = cliente_a2_id;
+    select count(*) into n from public.citas where id = cita_a2_id;
+    if n <> 0 then failures := failures || format('M3 la cita sobrevivió al borrado del cliente (%s filas)', n); end if;
+  exception when others then
+    failures := failures || ('M3 cascada de cliente a citas falló, error: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------

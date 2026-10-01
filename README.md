@@ -73,6 +73,14 @@ Es decir, `pubspec.yaml` fija `pdf: 3.12.0` y `printing: 5.14.3` exactos. Las ve
 
 La primera exportación descarga la tipografía Noto Sans desde Google Fonts (requiere internet una sola vez; luego queda cacheada localmente). El PDF se comparte solo mediante la hoja nativa del dispositivo — no genera ningún link público ni sube nada a un servidor (D-05, uso exclusivo del veterinario).
 
+## Fase 4 — Agenda y Citas
+
+Agrega `citas` (una o varias mascotas del mismo cliente vía `cita_mascotas`), las RPC `crear_cita` / `actualizar_cita`, el vínculo `consultas.cita_id` y la nueva firma de 11 argumentos de `registrar_consulta` (`p_cita_id`).
+
+1. En **SQL Editor**, pega y ejecuta el archivo completo [`supabase/schema.sql`](supabase/schema.sql) (idempotente; espera "Success. No rows returned").
+2. En una consulta nueva, pega y ejecuta [`supabase/tests/rls_smoke_test.sql`](supabase/tests/rls_smoke_test.sql). Espera el mensaje `RLS SMOKE: PASS (95 checks)` (70 de las Fases 1-3 + 25 de la Fase 4); termina en error a propósito para revertir los datos de prueba.
+3. Corre `bash supabase/tests/verify_live_schema.sh` — debe imprimir `OK citas embed` y terminar con `LIVE_SCHEMA_OK`.
+
 ## Ejecutar Flutter
 
 No se guardan claves en el código fuente. Crea un archivo `dart_define.json` en la raíz del repo (ya está en `.gitignore`, nunca se sube) con este contenido:
