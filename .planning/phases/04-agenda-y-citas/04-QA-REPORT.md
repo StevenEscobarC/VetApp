@@ -113,3 +113,36 @@
 - REQUIERE-DISPOSITIVO C9: WhatsApp real en telefono fisico.
 
 QA: FAIL — C5 falla: sin WhatsApp el enlace wa.me abre el navegador y la cita se marca como enviada (lanzador_externo.dart:17); ademas C4 y C12 quedan BLOCKED
+
+
+## Re-test VET-25 (2026-10-01)
+
+Build: `flutter run` relanzado tras `am force-stop`; log: "Built build\app\outputs\flutter-apk\app-debug.apk" + instalacion OK (codigo actual de master, commits f890e40 y 3adfebc). AVD Pixel_9_API_35, sin WhatsApp.
+
+| Caso | Resultado |
+|------|-----------|
+| C5 WhatsApp individual | PASS |
+| C6 Recordar a todos los de manana | PASS |
+| Regresion "Como llegar" | PASS |
+
+### C5 - PASS
+- Pasos: creada cita nueva "Papon / Steven" (Control, vie 02/10 9:30 a. m., consultorio; celular +57 314 512 3455). Tap en "WhatsApp" de la tarjeta.
+- Esperado: sin Chrome, snackbar de error, sin "Recordatorio enviado".
+- Observado: snackbar "No pudimos abrir WhatsApp. ¿Está instalado?"; `mCurrentFocus` siguio en `com.vetapp.vetapp/MainActivity` (no se abrio navegador); la tarjeta 9:30 sigue sin linea "Recordatorio enviado" (dump: `...Papon&#10;Steven · Control&#10;En consultorio`).
+- Evidencia: `qa/04-retest-C5-snackbar.png`.
+
+### C6 - PASS
+- Pasos: Agenda > vie 02/10 > "Recordar a todos los de mañana (1)" > "Enviar a Steven".
+- Observado: snackbar "No pudimos abrir WhatsApp. ¿Está instalado?"; la hoja mantiene la cita 9:30 como "Pendiente de enviar" (no paso a "Enviado"); foco sigue en la app.
+- Evidencia: `qa/04-retest-C6-todos.png`, `qa/04-retest-C6-enviar.png`.
+
+### Regresion Como llegar - PASS
+- Pasos: cita nueva a domicilio (dir. "Carrera 10 12-34 Bogota", sin caracteres especiales) > "Cómo llegar".
+- Observado: `mCurrentFocus=com.google.android.apps.maps/...MapsActivity` (abre Maps).
+- Evidencia: `qa/04-retest-como-llegar.png`.
+
+### Cambios al dispositivo / datos
+- Sin pm clear, zona horaria ni permisos. App detenida y relanzada.
+- Datos nuevos en Supabase: citas de Papon (Steven) vie 02/10 9:30 (Control, consultorio) y 10:00 (domicilio, Carrera 10 12-34 Bogota); ambas sin recordatorio enviado.
+
+QA: PASS — VET-25 verificado: sin WhatsApp se muestra el aviso y no se marca "Recordatorio enviado" (C5, C6); "Cómo llegar" sigue abriendo Maps
