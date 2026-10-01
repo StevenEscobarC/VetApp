@@ -96,6 +96,7 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260930-tu9 | Agentes especializados VetApp (opportunity-research, supabase, brand-ui, gate) + guía de looping `.claude/LOOPING.md` | 2026-09-30 | (this commit) | [260930-tu9-crear-agentes-especializados-vetapp-y-gu](./quick/260930-tu9-crear-agentes-especializados-vetapp-y-gu/) |
 | 261001-g9e | Agente `vetapp-qa` (UAT en emulador Android vía adb + uiautomator) y receta QA loop en `.claude/LOOPING.md` | 2026-10-01 | 1f88e7f | [261001-g9e-crear-agente-vetapp-qa-para-pruebas-en-e](./quick/261001-g9e-crear-agente-vetapp-qa-para-pruebas-en-e/) |
+| 261001-huq | Skill `arquitecto-vetapp` reescrita según el repo actual (SKILL.md + modelo-dominio desde schema.sql + colombia alineado a lib/core/utils) | 2026-10-01 | 25be488 | [261001-huq-reescribir-skill-arquitecto-vetapp-segun](./quick/261001-huq-reescribir-skill-arquitecto-vetapp-segun/) |
 | fast | Regla de escape de `adb input text` en `vetapp-qa` (sin URL-encoding, verificar antes de guardar) | 2026-10-01 | 94f7c6c | — |
 | fast | Hardening advisor 0028/0029: revoke EXECUTE anon/public en helpers RLS y trigger (pendiente aplicar en vivo tras QA) | 2026-10-01 | 4f44309 | — |
 | fast | Skill de proyecto `arquitecto-vetapp` copiada a `.claude/skills/` (estaba solo en la app de Claude) | 2026-10-01 | d4e4e29 | — |
