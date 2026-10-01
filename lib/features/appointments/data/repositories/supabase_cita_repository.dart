@@ -53,6 +53,43 @@ class SupabaseCitaRepository {
     }
   }
 
+  /// Crea una cita para [clienteId] con una o varias mascotas vía el RPC
+  /// `crear_cita` (valida dueño/clínica en el servidor). Devuelve el id.
+  /// `notas` y `direccion` se envían como '' (no null): las columnas son
+  /// `not null default ''`.
+  Future<String> crear({
+    required String clienteId,
+    required List<String> mascotaIds,
+    required DateTime fechaHora,
+    required int duracionMin,
+    required ModalidadCita modalidad,
+    required String direccion,
+    required String motivo,
+    required String notas,
+  }) async {
+    try {
+      final id = await _client.rpc(
+        'crear_cita',
+        params: {
+          'p_cliente_id': clienteId,
+          'p_mascota_ids': mascotaIds,
+          'p_fecha_hora': fechaHora.toUtc().toIso8601String(),
+          'p_duracion_min': duracionMin,
+          'p_modalidad': modalidad.valor,
+          'p_direccion':
+              modalidad == ModalidadCita.domicilio ? direccion.trim() : '',
+          'p_motivo': motivo.trim(),
+          'p_notas': notas.trim(),
+        },
+      );
+      return id as String;
+    } on PostgrestException catch (e) {
+      throw CitaFailure(_messageFor(e));
+    } catch (_) {
+      throw const CitaFailure('No pudimos guardar la cita. Intenta de nuevo.');
+    }
+  }
+
   Cita _fromRow(Map<String, dynamic> row) {
     final cliente = row['clientes'] as Map<String, dynamic>?;
     final mascotas = ((row['cita_mascotas'] as List?) ?? const [])

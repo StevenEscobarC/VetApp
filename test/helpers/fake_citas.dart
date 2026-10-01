@@ -8,11 +8,60 @@ import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 /// so tests prove the provider does the ordering. [consultasEntre] logs
 /// every [entre] call.
 class FakeCitaRepository implements SupabaseCitaRepository {
-  FakeCitaRepository({List<Cita> citas = const [], this.error})
-      : citas = List.of(citas);
+  FakeCitaRepository({
+    List<Cita> citas = const [],
+    this.error,
+    this.errorCrear,
+    this.idResultado = 'cita-nueva',
+  }) : citas = List.of(citas);
 
   final List<Cita> citas;
   final Object? error;
+  final String idResultado;
+
+  /// Si se establece, solo [crear] lo lanza (la lectura sigue funcionando).
+  final Object? errorCrear;
+
+  /// Cada llamada a [crear], en orden.
+  final List<
+    ({
+      String clienteId,
+      List<String> mascotaIds,
+      DateTime fechaHora,
+      int duracionMin,
+      ModalidadCita modalidad,
+      String direccion,
+      String motivo,
+      String notas,
+    })
+  >
+  creadas = [];
+
+  @override
+  Future<String> crear({
+    required String clienteId,
+    required List<String> mascotaIds,
+    required DateTime fechaHora,
+    required int duracionMin,
+    required ModalidadCita modalidad,
+    required String direccion,
+    required String motivo,
+    required String notas,
+  }) async {
+    if (errorCrear != null) throw errorCrear!;
+    if (error != null) throw error!;
+    creadas.add((
+      clienteId: clienteId,
+      mascotaIds: mascotaIds,
+      fechaHora: fechaHora,
+      duracionMin: duracionMin,
+      modalidad: modalidad,
+      direccion: direccion,
+      motivo: motivo,
+      notas: notas,
+    ));
+    return idResultado;
+  }
 
   final List<({DateTime inicio, DateTime fin})> consultasEntre = [];
 
