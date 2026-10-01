@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/utils/formato.dart';
@@ -101,24 +102,33 @@ class SupabaseConsultaRepository {
     ),
   );
 
-  /// Traducciones centralizadas de `PostgrestException.code` a mensajes en
-  /// español — agregar nuevos códigos aquí, nunca inline en un call site.
-  String _messageFor(PostgrestException e) {
-    switch (e.code) {
-      case '42501':
-        return 'No tienes permiso para realizar esta acción.';
-      case '23503':
-        return e.message.toLowerCase().contains('pertenece')
-            ? 'La mascota no pertenece a esta cita.'
-            : 'La mascota no existe en tu clínica.';
-      case '23505':
-        return 'Ya registraste una consulta para esta mascota en esta cita.';
-      case '23514':
-      case '23502':
-      case '22003':
-        return 'Revisa los datos ingresados.';
-      default:
-        return 'No pudimos guardar la consulta. Intenta de nuevo.';
-    }
+  String _messageFor(PostgrestException e) => mensajeErrorConsulta(e);
+}
+
+/// Traducciones centralizadas de `PostgrestException.code` a mensajes en
+/// español — agregar nuevos códigos aquí, nunca inline en un call site.
+@visibleForTesting
+String mensajeErrorConsulta(PostgrestException e) {
+  switch (e.code) {
+    case '42501':
+      return 'No tienes permiso para realizar esta acción.';
+    case '23503':
+      return e.message.toLowerCase().contains('pertenece')
+          ? 'La mascota no pertenece a esta cita.'
+          : 'La mascota no existe en tu clínica.';
+    case '23505':
+      return 'Ya registraste una consulta para esta mascota en esta cita.';
+    case '23514':
+      // registrar_consulta rechaza citas canceladas, "no asistió" o
+      // solicitudes.
+      if (e.message.toLowerCase().contains('no admite consultas')) {
+        return 'Esta cita ya no admite consultas.';
+      }
+      return 'Revisa los datos ingresados.';
+    case '23502':
+    case '22003':
+      return 'Revisa los datos ingresados.';
+    default:
+      return 'No pudimos guardar la consulta. Intenta de nuevo.';
   }
 }

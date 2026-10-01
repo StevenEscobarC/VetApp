@@ -43,6 +43,28 @@ void main() {
       );
     });
 
+    test('transición de estado rechazada por el trigger', () {
+      expect(
+        mensajeErrorCita(
+          _check('Cambio de estado no permitido: cancelada -> completada.'),
+          estado: true,
+        ),
+        'Esta cita ya no puede cambiar a ese estado.',
+      );
+    });
+
+    test('columnas fijas de la cita', () {
+      expect(
+        mensajeErrorCita(
+          _check(
+            'No se puede cambiar el cliente, la clínica ni el veterinario '
+            'de una cita.',
+          ),
+        ),
+        'No se puede cambiar el cliente de una cita.',
+      );
+    });
+
     test('mensaje desconocido cae en el genérico', () {
       expect(
         mensajeErrorCita(_check('otra cosa')),

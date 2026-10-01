@@ -210,7 +210,9 @@ class SupabaseCitaRepository {
 /// español — agregar nuevos códigos aquí, nunca inline en un call site.
 /// Los mensajes de `check_violation` se distinguen por frase completa y del
 /// más específico al más general: "ya tiene consulta" también contiene
-/// "mascota", así que debe evaluarse antes que "al menos una mascota".
+/// "mascota", así que debe evaluarse antes que "al menos una mascota". Los
+/// guardias del trigger de `citas` (transición de estado, columnas fijas) van
+/// primero porque pueden llegar desde cualquier escritura.
 @visibleForTesting
 String mensajeErrorCita(PostgrestException e, {bool estado = false}) {
   switch (e.code) {
@@ -222,6 +224,12 @@ String mensajeErrorCita(PostgrestException e, {bool estado = false}) {
       return 'El cliente o la mascota no existe en tu clínica.';
     case '23514':
       final m = e.message.toLowerCase();
+      if (m.contains('estado no permitido')) {
+        return 'Esta cita ya no puede cambiar a ese estado.';
+      }
+      if (m.contains('no se puede cambiar el cliente')) {
+        return 'No se puede cambiar el cliente de una cita.';
+      }
       if (m.contains('domicilio')) {
         return 'Escribe la dirección para la visita a domicilio.';
       }
