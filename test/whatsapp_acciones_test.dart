@@ -141,6 +141,26 @@ void main() {
       expect(repo.recordatorios, isEmpty);
     });
 
+    testWidgets('sin app de WhatsApp (solo navegador): no marca (VET-25)', (
+      tester,
+    ) async {
+      final repo = FakeCitaRepository(citas: [citaLunaHoy]);
+      final l = FakeLanzadorExterno()
+        ..resultado = true
+        ..resultadoApp = false;
+      await _abrir(tester, '/agenda', repo, l);
+      await tester.tap(find.text('WhatsApp'));
+      await _snack(tester);
+      expect(
+        find.text('No pudimos abrir WhatsApp. ¿Está instalado?'),
+        findsOneWidget,
+      );
+      expect(find.text('Marcado como recordatorio enviado'), findsNothing);
+      expect(repo.recordatorios, isEmpty);
+      expect(l.metodos, ['abrirEnApp']);
+      expect(l.abiertos.single.host, 'wa.me');
+    });
+
     testWidgets('teléfono fijo: apagado, con motivo, no abre nada', (
       tester,
     ) async {
@@ -176,6 +196,7 @@ void main() {
       expect(find.text('Cómo llegar'), findsOneWidget);
       await tester.tap(find.text('Cómo llegar'));
       await _snack(tester);
+      expect(l.metodos, ['abrir']);
       expect(
         l.abiertos.single.toString(),
         'https://www.google.com/maps/dir/?api=1'

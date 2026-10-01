@@ -210,5 +210,27 @@ void main() {
       expect(repo.recordatorios, isEmpty);
       expect(find.text('Enviar a Ana Uno'), findsOneWidget);
     });
+
+    testWidgets('sin app de WhatsApp (solo navegador): no marca (VET-25)', (
+      tester,
+    ) async {
+      final repo = FakeCitaRepository(citas: [a, b]);
+      final l = FakeLanzadorExterno()
+        ..resultado = true
+        ..resultadoApp = false;
+      await _abrir(tester, repo, l);
+      await abrirHoja(tester);
+      await tester.tap(find.text('Enviar a Ana Uno'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        find.text('No pudimos abrir WhatsApp. ¿Está instalado?'),
+        findsOneWidget,
+      );
+      expect(l.metodos, ['abrirEnApp']);
+      await _ida(tester);
+      expect(repo.recordatorios, isEmpty);
+      expect(find.text('Pendiente de enviar'), findsNWidgets(2));
+    });
   });
 }
