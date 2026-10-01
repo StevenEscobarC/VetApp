@@ -112,7 +112,7 @@ class _RecordarMananaSheetState extends ConsumerState<RecordarMananaSheet>
     );
     _esperandoRetorno = true;
     _vioPausa = false;
-    final ok = await lanzador.abrir(whatsappUri(numero, mensaje));
+    final ok = await lanzador.abrirEnApp(whatsappUri(numero, mensaje));
     if (!ok) {
       _esperandoRetorno = false;
       _vioPausa = false;

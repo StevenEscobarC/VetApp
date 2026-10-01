@@ -186,7 +186,8 @@ const _errorWhatsApp = 'No pudimos abrir WhatsApp. ¿Está instalado?';
 /// Abre el chat de WhatsApp del cliente con el mensaje formal (D-14) y, si el
 /// lanzamiento funcionó, marca el recordatorio como enviado con "Deshacer".
 /// El número se normaliza al usar (D-16), así que teléfonos antiguos sin
-/// normalizar también funcionan.
+/// normalizar también funcionan. Solo cuenta la app de WhatsApp: si únicamente
+/// un navegador puede abrir el enlace no se marca nada (VET-25).
 Future<void> enviarRecordatorioWhatsApp(
   BuildContext context,
   WidgetRef ref,
@@ -209,7 +210,7 @@ Future<void> enviarRecordatorioWhatsApp(
     veterinario: profile?.nombre ?? '',
     clinica: profile?.clinicaNombre,
   );
-  final ok = await lanzador.abrir(whatsappUri(numero, mensaje));
+  final ok = await lanzador.abrirEnApp(whatsappUri(numero, mensaje));
   if (!ok) {
     messenger
       ..hideCurrentSnackBar()
