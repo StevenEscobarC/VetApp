@@ -1027,3 +1027,19 @@ revoke all on function public.registrar_consulta(
 grant execute on function public.registrar_consulta(
   uuid, text, text, text, text, numeric, numeric, integer, integer, text, uuid
 ) to authenticated;
+
+-- =============================================================================
+-- Hardening: Supabase security advisor 0028/0029 (2026-10-01)
+-- Las funciones auxiliares de RLS son security definer y por defecto PUBLIC/anon
+-- las podía ejecutar vía /rest/v1/rpc. Todas las políticas son `to authenticated`,
+-- así que anon no las necesita. crear_perfil_nuevo_usuario() es solo función de
+-- trigger: disparar un trigger no requiere EXECUTE, así que nadie de la API la
+-- necesita. Idempotente.
+-- =============================================================================
+revoke execute on function public.mi_perfil() from public, anon;
+revoke execute on function public.es_veterinario() from public, anon;
+revoke execute on function public.mi_clinica_id() from public, anon;
+grant execute on function public.mi_perfil() to authenticated;
+grant execute on function public.es_veterinario() to authenticated;
+grant execute on function public.mi_clinica_id() to authenticated;
+revoke execute on function public.crear_perfil_nuevo_usuario() from public, anon, authenticated;

@@ -67,7 +67,8 @@ else
   any_fail=1
 fi
 
-for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita; do
+for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario; do
+  payload="{}"
   case "$rpc" in
     registrar_cliente_con_mascota)
       payload='{"cliente_nombre":"probe","cliente_telefono":"3000000000","mascota_nombre":"probe","mascota_especie":"perro","mascota_raza":"","mascota_fecha_nacimiento":null,"mascota_peso_kg":null}'
@@ -99,6 +100,8 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
 
   if [ "$rpc_code" = "401" ] || [ "$rpc_code" = "403" ]; then
     echo "OK rpc $rpc protegido $rpc_code"
+  elif [ "$rpc_code" = "404" ] && [ "$rpc" = "crear_perfil_nuevo_usuario" ]; then
+    echo "OK rpc $rpc no expuesta 404 (función de trigger)"
   elif [ "$rpc_code" = "404" ]; then
     echo "FAIL rpc $rpc 404 (no aplicada)"
     any_fail=1
