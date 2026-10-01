@@ -37,10 +37,12 @@ fi
 any_fail=0
 
 for t in clinicas perfiles clientes mascotas mascota_pesos consultas citas cita_mascotas; do
+  # cita_mascotas has a composite PK (cita_id, mascota_id) and no id column.
+  col=id; [ "$t" = "cita_mascotas" ] && col=cita_id
   code=$(curl -s -o /dev/null -w '%{http_code}' \
     -H "apikey: $SUPABASE_ANON_KEY" \
     -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-    "$SUPABASE_URL/rest/v1/$t?select=id&limit=1")
+    "$SUPABASE_URL/rest/v1/$t?select=$col&limit=1")
   if [ "$code" = "200" ]; then
     echo "OK $t 200"
   else

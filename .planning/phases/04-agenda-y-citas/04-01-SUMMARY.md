@@ -1,7 +1,7 @@
 ---
 phase: 04-agenda-y-citas
 plan: 01
-status: partial-awaiting-checkpoint
+status: complete
 subsystem: supabase-backend
 tags: [supabase, rls, schema, citas]
 requires: []
@@ -18,15 +18,15 @@ key-files:
 requirements: [AGND-01, AGND-02, AGND-03, AGND-06]
 ---
 
-# Phase 4 Plan 01: Agenda schema delta Summary (PARTIAL)
+# Phase 4 Plan 01: Agenda schema delta Summary
 
-Fase 4 schema delta (citas + cita_mascotas bridge, atomic crear_cita/actualizar_cita, consultas.cita_id with one consulta per (cita, mascota)) written with a 95-check RLS smoke test; **awaiting the human apply step (Task 3), not yet verified live**.
+Fase 4 schema delta (citas + cita_mascotas bridge, atomic crear_cita/actualizar_cita, consultas.cita_id with one consulta per (cita, mascota)) written with a 95-check RLS smoke test.
 
 ## Status
 
 - Task 1 (schema.sql delta): done, commit fc69a7c
 - Task 2 (smoke test 95 checks + verify_live_schema.sh incl. embed probe): done, commit 54a1d38
-- Task 3 (human applies schema.sql and runs smoke test in SQL Editor): **PENDING CHECKPOINT**
+- Task 3 (human applies schema.sql and runs smoke test in SQL Editor): done 2026-10-01 — applied by user, verified live
 
 Static checks passed: SCHEMA4_OK greps, 95 `checks := checks + 1`, `bash -n` on the probe. Nothing has been run against the cloud DB. Do not treat RLS as passing until the user reports `RLS SMOKE: PASS (95 checks)`.
 
@@ -48,8 +48,12 @@ Static checks passed: SCHEMA4_OK greps, 95 `checks := checks + 1`, `bash -n` on 
 
 42501 insufficient_privilege; 23503 'El cliente o la mascota no existe en tu clínica.' / 'La cita no existe en tu clínica.' / 'La mascota no pertenece a esta cita.'; 23514 'Elige al menos una mascota.' / 'Solo se pueden editar citas pendientes o confirmadas.' / 'No puedes quitar una mascota que ya tiene consulta registrada en esta cita.' / constraints citas_domicilio_requiere_direccion, citas_estado_check, citas_duracion_check; 23505 consultas_cita_mascota_key.
 
-## Pending checkpoint
+## Checkpoint resolved (2026-10-01)
 
-User must paste schema.sql, then rls_smoke_test.sql, in the SQL Editor of project apjonrmhkpyzbofupokb; then `bash supabase/tests/verify_live_schema.sh` must print `OK citas embed` and `LIVE_SCHEMA_OK`. Record the verbatim `RLS SMOKE:` message here once reported.
+- User applied `supabase/schema.sql` in the Supabase SQL Editor (project apjonrmhkpyzbofupokb).
+- Smoke result: `RLS SMOKE: PASS (95 checks) - cambios revertidos`.
+- `bash supabase/tests/verify_live_schema.sh` → all OK incl. `OK citas embed` (composite-FK hints valid) and `LIVE_SCHEMA_OK`.
 
-Smoke result: _pending_
+## Deviations
+
+- [Rule 1 - Bug] `verify_live_schema.sh` probed `cita_mascotas?select=id`, but the table has a composite PK (cita_id, mascota_id) and no `id` column → false 400. Probe now selects `cita_id` for that table.
