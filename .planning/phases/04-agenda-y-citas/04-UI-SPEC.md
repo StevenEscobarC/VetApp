@@ -121,7 +121,7 @@ Same 4 roles, same 2 weights (400, 600). **No new sizes or weights.**
 6. Focus ring on the currently edited field (existing); active bottom-nav item (existing); `completed` status chip color (already mapped in `AppStatusChip`).
 7. The ±15 min buttons are **not** accent (outline).
 
-Accent is never used for: card backgrounds, the WhatsApp/Cómo llegar/Confirmar buttons (outline / text), banners, or more than one primary CTA per screen. On `CitaDetailScreen` the accent slot belongs to **"Completar"** (see Interaction Contract); all other actions are outline/text.
+Accent is never used for: card backgrounds, the WhatsApp/Cómo llegar/Confirmar buttons (outline / text), banners, or more than one primary CTA per screen. On `CitaDetailScreen` the accent slot belongs to **"Completar cita"** (see Interaction Contract); all other actions are outline/text.
 
 **Status chip mapping (existing + new):**
 
@@ -196,7 +196,7 @@ Edit mode: same layout; mascotas, fecha/hora, duración, motivo, domicilio, dire
 2. Info block (Label heading + Body value pairs): Cuándo ("mié 30/09/2026 · 10:30 – 11:00 a. m."), Cliente (name; phone with tap -> not a separate action), Motivo, Dónde ("En consultorio" | dirección), Notas (or "Sin registrar" `textMuted`), Recordatorio ("Enviado 29/09 6:15 p. m." | "Sin enviar").
 3. Mascotas list rows (avatar + nombre) tappable -> ficha de la mascota; when completada, each row shows "Consulta registrada" (Label `success`) or "Sin consulta" (`textMuted`).
 4. **Action area (stacked full-width buttons, 48dp, `sm` gap)**, by estado:
-   - pendiente: **"Completar" (primary, accent — screen's one CTA)**, "Confirmar" (outline), "WhatsApp" (outline), "Cómo llegar" (outline, domicilio only), "No asistió" (outline), "Cancelar cita" (text, `destructive` label).
+   - pendiente: **"Completar cita" (primary, accent — screen's one CTA)**, "Confirmar" (outline), "WhatsApp" (outline), "Cómo llegar" (outline, domicilio only), "No asistió" (outline), "Cancelar cita" (text, `destructive` label).
    - confirmada: same without "Confirmar".
    - completada: "Ver historia clínica" (outline -> mascota ficha) only; if some mascota lacks consulta: "Registrar consulta pendiente" (outline).
    - cancelada / no_asistió: "Reabrir cita" (outline; returns to pendiente) + no other state buttons; WhatsApp hidden.
@@ -259,7 +259,7 @@ All screens: errors are `AuthFailure`-style domain failures with Spanish message
 |---------|------|
 | Primary CTA — Agenda | "Nueva cita" |
 | Primary CTA — form submit | "Guardar cita" (edit: "Guardar cambios") |
-| Primary CTA — detail | "Completar" |
+| Primary CTA — detail | "Completar cita" |
 | Primary CTA — completar flow | "Finalizar cita" ; secondary text "Completar sin consulta" |
 | Entry from fichas | "Agendar cita" |
 | Card actions | "WhatsApp" · "Cómo llegar" · "Completar" · "Confirmar" |
