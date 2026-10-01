@@ -78,7 +78,7 @@ La primera exportación descarga la tipografía Noto Sans desde Google Fonts (re
 Agrega `citas` (una o varias mascotas del mismo cliente vía `cita_mascotas`), las RPC `crear_cita` / `actualizar_cita`, el vínculo `consultas.cita_id` y la nueva firma de 11 argumentos de `registrar_consulta` (`p_cita_id`).
 
 1. En **SQL Editor**, pega y ejecuta el archivo completo [`supabase/schema.sql`](supabase/schema.sql) (idempotente; espera "Success. No rows returned").
-2. En una consulta nueva, pega y ejecuta [`supabase/tests/rls_smoke_test.sql`](supabase/tests/rls_smoke_test.sql). Espera el mensaje `RLS SMOKE: PASS (96 checks)` (70 de las Fases 1-3 + 25 de la Fase 4 + 1 de los fixes de la revisión de la Fase 4); termina en error a propósito para revertir los datos de prueba.
+2. En una consulta nueva, pega y ejecuta [`supabase/tests/rls_smoke_test.sql`](supabase/tests/rls_smoke_test.sql). Espera el mensaje `RLS SMOKE: PASS (113 checks)` (70 de las Fases 1-3 + 25 de la Fase 4 + 18 de los fixes de la revisión de la Fase 4); termina en error a propósito para revertir los datos de prueba.
 3. Corre `bash supabase/tests/verify_live_schema.sh` — debe imprimir `OK citas embed` y terminar con `LIVE_SCHEMA_OK`.
 
 ## Ejecutar Flutter

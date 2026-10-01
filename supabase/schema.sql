@@ -518,6 +518,8 @@ with check (
   )
 );
 
+-- consultas_insert se redefine en la sección Fase 4 (HI-01: valida consultas.cita_id).
+
 -- Sin política update/delete: la historia clínica es de solo-append (HIST-04) --
 -- una corrección se registra como una fila nueva, nunca editando ni borrando.
 
@@ -645,18 +647,87 @@ drop policy if exists citas_select on public.citas;
 create policy citas_select on public.citas for select to authenticated
 using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
 
+-- HI-01: un veterinario solo crea citas pendientes/confirmadas ('solicitada' es de la
+-- Fase 9; una cita no nace completada/cancelada/no_asistio).
 drop policy if exists citas_insert on public.citas;
 create policy citas_insert on public.citas for insert to authenticated
 with check (
   public.es_veterinario()
   and clinica_id = public.mi_clinica_id()
   and veterinario_id = auth.uid()
+  and estado in ('pendiente', 'confirmada')
 );
 
 drop policy if exists citas_update on public.citas;
 create policy citas_update on public.citas for update to authenticated
 using (public.es_veterinario() and clinica_id = public.mi_clinica_id())
 with check (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+-- HI-01: guarda de update directo (PostgREST) -- las mismas reglas que la app y las
+-- RPC, para que un update directo no pueda saltárselas. Una policy no ve OLD, por eso
+-- es un trigger BEFORE UPDATE (aplica a cualquier rol, también a las RPC).
+--  * cliente_id / clinica_id / veterinario_id son inmutables.
+--  * Datos de la cita (fecha, duración, modalidad, dirección, motivo, notas) solo se
+--    editan si estaba solicitada/pendiente/confirmada (igual que actualizar_cita).
+--  * recordatorio_enviado_at se puede marcar/desmarcar siempre.
+--  * Transiciones de estado permitidas (exactamente las que hace la app, incl. "Deshacer"):
+--      solicitada  -> pendiente | confirmada | cancelada        (Fase 9: aceptar/rechazar)
+--      pendiente   -> confirmada | completada | cancelada | no_asistio
+--      confirmada  -> pendiente | completada | cancelada | no_asistio
+--      cancelada / no_asistio -> pendiente                      ("Reabrir cita", siempre)
+--      cancelada / no_asistio -> confirmada                     (solo "Deshacer", ver ventana)
+--      completada  -> pendiente | confirmada                    (solo "Deshacer", ver ventana)
+--    Nunca: -> solicitada; cancelada/no_asistio -> completada (ME-04); terminal -> terminal.
+--    "Ventana de deshacer": la reversión solo se acepta si la cita cambió hace menos de
+--    10 minutos (old.updated_at); el snackbar de la app dura 6 s.
+create or replace function public.citas_validar_update()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_en_ventana boolean;
+begin
+  v_en_ventana := old.updated_at >= now() - interval '10 minutes';
+
+  if new.cliente_id is distinct from old.cliente_id
+     or new.clinica_id is distinct from old.clinica_id
+     or new.veterinario_id is distinct from old.veterinario_id then
+    raise exception 'No se puede cambiar el cliente, la clínica ni el veterinario de una cita.'
+      using errcode = 'check_violation';
+  end if;
+
+  if old.estado not in ('solicitada', 'pendiente', 'confirmada') and (
+       new.fecha_hora is distinct from old.fecha_hora
+       or new.duracion_min is distinct from old.duracion_min
+       or new.modalidad is distinct from old.modalidad
+       or new.direccion is distinct from old.direccion
+       or new.motivo is distinct from old.motivo
+       or new.notas is distinct from old.notas
+     ) then
+    raise exception 'Solo se pueden editar citas pendientes o confirmadas.'
+      using errcode = 'check_violation';
+  end if;
+
+  if new.estado is distinct from old.estado and not (
+       (old.estado = 'solicitada' and new.estado in ('pendiente', 'confirmada', 'cancelada'))
+    or (old.estado = 'pendiente' and new.estado in ('confirmada', 'completada', 'cancelada', 'no_asistio'))
+    or (old.estado = 'confirmada' and new.estado in ('pendiente', 'completada', 'cancelada', 'no_asistio'))
+    or (old.estado in ('cancelada', 'no_asistio') and new.estado = 'pendiente')
+    or (old.estado in ('cancelada', 'no_asistio') and new.estado = 'confirmada' and v_en_ventana)
+    or (old.estado = 'completada' and new.estado in ('pendiente', 'confirmada') and v_en_ventana)
+  ) then
+    raise exception 'Cambio de estado no permitido: % -> %.', old.estado, new.estado
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists citas_validar_update on public.citas;
+create trigger citas_validar_update before update on public.citas
+for each row execute procedure public.citas_validar_update();
 
 -- Sin política delete en citas: cancelar es un cambio de estado, nunca un borrado.
 -- (Solo se borran en cascada al borrar el cliente, D-20.)
@@ -665,9 +736,24 @@ drop policy if exists cita_mascotas_select on public.cita_mascotas;
 create policy cita_mascotas_select on public.cita_mascotas for select to authenticated
 using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
 
+-- HI-01: el insert directo exige la misma guarda que crear_cita/actualizar_cita: la
+-- mascota es del cliente de la cita, y la cita sigue pendiente/confirmada.
 drop policy if exists cita_mascotas_insert on public.cita_mascotas;
 create policy cita_mascotas_insert on public.cita_mascotas for insert to authenticated
-with check (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+with check (
+  public.es_veterinario()
+  and clinica_id = public.mi_clinica_id()
+  and exists (
+    select 1
+    from public.citas c
+    join public.mascotas m on m.id = cita_mascotas.mascota_id
+    where c.id = cita_mascotas.cita_id
+      and c.clinica_id = cita_mascotas.clinica_id
+      and m.clinica_id = cita_mascotas.clinica_id
+      and m.dueno_id = c.cliente_id
+      and c.estado in ('pendiente', 'confirmada')
+  )
+);
 
 drop policy if exists cita_mascotas_delete on public.cita_mascotas;
 create policy cita_mascotas_delete on public.cita_mascotas for delete to authenticated
@@ -675,6 +761,32 @@ using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
 
 -- Sin política update en cita_mascotas ni ninguna política para CLIENTE
 -- (la Fase 9 / DIR-05 agrega la suya).
+
+-- HI-01: consultas_insert (definida en la Fase 3) se redefine aquí porque ahora
+-- valida consultas.cita_id. La FK consultas.cita_id -> citas(id) es de una sola
+-- columna y las FK ignoran RLS, así que sin esto un insert directo podía ligar la
+-- consulta a una cita de OTRA clínica o a una cita donde la mascota no está.
+drop policy if exists consultas_insert on public.consultas;
+create policy consultas_insert on public.consultas for insert to authenticated
+with check (
+  public.es_veterinario()
+  and veterinario_id = auth.uid()
+  and exists (
+    select 1 from public.mascotas m
+    where m.id = consultas.mascota_id and m.clinica_id = public.mi_clinica_id()
+  )
+  and (
+    consultas.cita_id is null
+    or exists (
+      select 1
+      from public.cita_mascotas cm
+      join public.citas c on c.id = cm.cita_id and c.clinica_id = cm.clinica_id
+      where cm.cita_id = consultas.cita_id
+        and cm.mascota_id = consultas.mascota_id
+        and cm.clinica_id = public.mi_clinica_id()
+    )
+  )
+);
 
 -- AGND-01/D-03: crea la cita y sus mascotas en una sola transacción.
 create or replace function public.crear_cita(

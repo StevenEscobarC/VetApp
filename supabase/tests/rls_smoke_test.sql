@@ -25,7 +25,9 @@
 -- por clínica, incluyendo la atomicidad consulta+peso (D-02) y HIST-04
 -- (update/delete siempre 0 filas, incluso para el propio veterinario autor).
 -- Fase 4: citas, cita_mascotas, crear_cita/actualizar_cita, registrar_consulta(p_cita_id), cascada al borrar cliente (D-20).
--- Fixes 04-REVIEW: HI-02 (borrar vet con citas -> restrict, bloque O).
+-- Fixes 04-REVIEW: HI-01 (writes directos: dueño en cita_mascotas, columnas inmutables
+-- y máquina de estados de citas incl. Reabrir/Deshacer, consultas.cita_id de la misma
+-- clínica y cita, bloque N + J6), HI-02 (borrar vet con citas -> restrict, bloque O).
 
 do $$
 declare
@@ -56,6 +58,10 @@ declare
   cliente_a2_id uuid;
   mascota_a2_id uuid;
   mascota_a3_id uuid;
+  cita_b_id uuid;
+  cita_vieja_id uuid;
+  cita_cancelada_id uuid;
+  n_total int;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -861,12 +867,15 @@ begin
     when others then failures := failures || ('J5 error inesperado: ' || sqlerrm);
   end;
 
-  -- J6: estado reservado 'solicitada' aceptado (1 fila); se devuelve a pendiente.
+  -- J6: estado reservado 'solicitada' (Fase 9) -> el vet no puede ponerlo (HI-01) -> check_violation.
   checks := checks + 1;
-  update public.citas set estado = 'solicitada' where id = cita_a_id;
-  get diagnostics n = row_count;
-  if n <> 1 then failures := failures || format('J6 update a solicitada afectó %s filas, esperaba 1', n); end if;
-  update public.citas set estado = 'pendiente' where id = cita_a_id;
+  begin
+    update public.citas set estado = 'solicitada' where id = cita_a_id;
+    failures := failures || 'J6 el vet pudo pasar una cita a solicitada';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('J6 error inesperado: ' || sqlerrm);
+  end;
 
   -- J7: estado confirmada (1 fila).
   checks := checks + 1;
@@ -1013,6 +1022,235 @@ begin
   update public.consultas set cita_id = null where id = v_consulta;
   get diagnostics n = row_count;
   if n <> 0 then failures := failures || format('L5 update de consultas afectó %s filas, esperaba 0 (append-only)', n); end if;
+
+  -------------------------------------------------------------------------
+  -- Fix 04-review HI-01 / bloque N: los writes directos (PostgREST) respetan las
+  -- mismas guardas que las RPC. Estado de partida: cita_a_id pendiente, con solo
+  -- mascota_a_id (consulta ligada en L1); mascota_a3_id es del cliente A pero ya no
+  -- está en cita_a_id; mascota_a2_id es de otro cliente de la clínica A.
+  -------------------------------------------------------------------------
+  -- Setup de bloque N (como postgres, no cuenta en checks): una cita de la clínica B,
+  -- una cita completada hace 1 hora (fuera de la ventana de deshacer) con mascota_a3,
+  -- y una cita cancelada con mascota_a.
+  perform set_config('role', 'postgres', true);
+  begin
+    insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora)
+      values (clinica_b_id, cliente_b_id, vet_b_id, now()) returning id into cita_b_id;
+    insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+      values (cita_b_id, mascota_b_id, clinica_b_id);
+
+    insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora, estado, created_at, updated_at)
+      values (clinica_a_id, cliente_a_id, vet_a_id, now() - interval '2 hours', 'completada',
+              now() - interval '2 hours', now() - interval '1 hour')
+      returning id into cita_vieja_id;
+    insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+      values (cita_vieja_id, mascota_a3_id, clinica_a_id);
+
+    insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora, estado)
+      values (clinica_a_id, cliente_a_id, vet_a_id, now() + interval '3 days', 'cancelada')
+      returning id into cita_cancelada_id;
+    insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+      values (cita_cancelada_id, mascota_a_id, clinica_a_id);
+  exception when others then
+    failures := failures || ('SETUP6 setup de bloque N falló: ' || sqlerrm);
+  end;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  -- N1: insert directo en cita_mascotas con mascota de OTRO dueño -> insufficient_privilege (RLS).
+  checks := checks + 1;
+  begin
+    insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+      values (cita_a_id, mascota_a2_id, clinica_a_id);
+    failures := failures || 'N1 insert directo de mascota de otro dueño en cita_mascotas debía fallar';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('N1 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N2: insert directo con mascota del MISMO dueño -> 1 fila; se borra para volver al estado previo.
+  checks := checks + 1;
+  begin
+    insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+      values (cita_a_id, mascota_a3_id, clinica_a_id);
+    get diagnostics n = row_count;
+    if n <> 1 then failures := failures || format('N2 insert de mascota del mismo dueño afectó %s filas, esperaba 1', n); end if;
+    delete from public.cita_mascotas where cita_id = cita_a_id and mascota_id = mascota_a3_id;
+    get diagnostics n = row_count;
+    if n <> 1 then failures := failures || format('N2 limpieza borró %s filas, esperaba 1', n); end if;
+  exception when others then
+    failures := failures || ('N2 insert directo de mascota del mismo dueño debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- N3: insert directo en cita_mascotas de una cita cancelada (mismo dueño) -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+      values (cita_cancelada_id, mascota_a3_id, clinica_a_id);
+    failures := failures || 'N3 agregar mascota a una cita cancelada debía fallar';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('N3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N4: update directo de citas.cliente_id -> check_violation.
+  checks := checks + 1;
+  begin
+    update public.citas set cliente_id = cliente_a2_id where id = cita_a_id;
+    failures := failures || 'N4 cambiar el cliente de la cita debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('N4 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N5: update directo de citas.veterinario_id -> check_violation.
+  checks := checks + 1;
+  begin
+    update public.citas set veterinario_id = vet_b_id where id = cita_a_id;
+    failures := failures || 'N5 cambiar el veterinario de la cita debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('N5 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N6: insert directo de una cita ya completada -> insufficient_privilege (RLS).
+  checks := checks + 1;
+  begin
+    insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora, estado)
+      values (clinica_a_id, cliente_a_id, vet_a_id, now(), 'completada');
+    failures := failures || 'N6 insert directo de cita completada debía fallar';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('N6 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N7: "Completar" + "Deshacer": pendiente -> completada -> pendiente (dentro de la ventana).
+  checks := checks + 1;
+  begin
+    n_total := 0;
+    update public.citas set estado = 'completada' where id = cita_a_id;
+    get diagnostics n = row_count; n_total := n_total + n;
+    update public.citas set estado = 'pendiente' where id = cita_a_id;
+    get diagnostics n = row_count; n_total := n_total + n;
+    if n_total <> 2 then failures := failures || format('N7 completar+deshacer afectó %s filas, esperaba 2', n_total); end if;
+  exception when others then
+    failures := failures || ('N7 completar+deshacer debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- N8: Confirmar, "No asistió" + "Deshacer" (-> confirmada), "Marcar como pendiente".
+  checks := checks + 1;
+  begin
+    n_total := 0;
+    update public.citas set estado = 'confirmada' where id = cita_a_id;
+    get diagnostics n = row_count; n_total := n_total + n;
+    update public.citas set estado = 'no_asistio' where id = cita_a_id;
+    get diagnostics n = row_count; n_total := n_total + n;
+    update public.citas set estado = 'confirmada' where id = cita_a_id;
+    get diagnostics n = row_count; n_total := n_total + n;
+    update public.citas set estado = 'pendiente' where id = cita_a_id;
+    get diagnostics n = row_count; n_total := n_total + n;
+    if n_total <> 4 then failures := failures || format('N8 transiciones legítimas afectaron %s filas, esperaba 4', n_total); end if;
+  exception when others then
+    failures := failures || ('N8 transiciones legítimas debían funcionar, error: ' || sqlerrm);
+  end;
+
+  -- N9: cancelada -> completada -> check_violation (ME-04: no se completa una cita cancelada).
+  checks := checks + 1;
+  begin
+    update public.citas set estado = 'completada' where id = cita_cancelada_id;
+    failures := failures || 'N9 completar una cita cancelada debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('N9 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N10: "Reabrir cita": cancelada -> pendiente (siempre, sin ventana) -> 1 fila; se re-cancela.
+  checks := checks + 1;
+  begin
+    update public.citas set estado = 'pendiente' where id = cita_cancelada_id;
+    get diagnostics n = row_count;
+    if n <> 1 then failures := failures || format('N10 reabrir afectó %s filas, esperaba 1', n); end if;
+    update public.citas set estado = 'cancelada' where id = cita_cancelada_id;
+  exception when others then
+    failures := failures || ('N10 reabrir cita cancelada debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- N11: completada -> cancelada (terminal -> terminal) -> check_violation.
+  checks := checks + 1;
+  begin
+    update public.citas set estado = 'cancelada' where id = cita_vieja_id;
+    failures := failures || 'N11 pasar una cita completada a cancelada debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('N11 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N12: completada hace 1 hora -> pendiente (fuera de la ventana de deshacer) -> check_violation.
+  checks := checks + 1;
+  begin
+    update public.citas set estado = 'pendiente' where id = cita_vieja_id;
+    failures := failures || 'N12 revertir una cita completada fuera de la ventana debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('N12 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N13: editar fecha_hora de una cita completada -> check_violation.
+  checks := checks + 1;
+  begin
+    update public.citas set fecha_hora = now() where id = cita_vieja_id;
+    failures := failures || 'N13 editar la fecha de una cita completada debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('N13 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N14: recordatorio_enviado_at se marca y se deshace en cualquier estado -> 2 filas.
+  checks := checks + 1;
+  begin
+    n_total := 0;
+    update public.citas set recordatorio_enviado_at = now() where id = cita_vieja_id;
+    get diagnostics n = row_count; n_total := n_total + n;
+    update public.citas set recordatorio_enviado_at = null where id = cita_vieja_id;
+    get diagnostics n = row_count; n_total := n_total + n;
+    if n_total <> 2 then failures := failures || format('N14 marcar/deshacer recordatorio afectó %s filas, esperaba 2', n_total); end if;
+  exception when others then
+    failures := failures || ('N14 marcar recordatorio debía funcionar, error: ' || sqlerrm);
+  end;
+
+  -- N15: insert directo de consulta ligada a una cita de OTRA clínica -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    insert into public.consultas (mascota_id, veterinario_id, diagnostico, tratamiento, cita_id)
+      values (mascota_a_id, vet_a_id, 'dx', 'tx', cita_b_id);
+    failures := failures || 'N15 consulta directa ligada a cita de otra clínica debía fallar';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('N15 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N16: insert directo de consulta con una mascota que no está en la cita -> insufficient_privilege.
+  checks := checks + 1;
+  begin
+    insert into public.consultas (mascota_id, veterinario_id, diagnostico, tratamiento, cita_id)
+      values (mascota_a3_id, vet_a_id, 'dx', 'tx', cita_a_id);
+    failures := failures || 'N16 consulta directa de mascota fuera de la cita debía fallar';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('N16 error inesperado: ' || sqlerrm);
+  end;
+
+  -- N17: insert directo legítimo (mascota de la cita, cita completada de la clínica) -> 1 fila.
+  checks := checks + 1;
+  begin
+    insert into public.consultas (mascota_id, veterinario_id, diagnostico, tratamiento, cita_id)
+      values (mascota_a3_id, vet_a_id, 'dx', 'tx', cita_vieja_id);
+    get diagnostics n = row_count;
+    if n <> 1 then failures := failures || format('N17 consulta directa legítima afectó %s filas, esperaba 1', n); end if;
+  exception when others then
+    failures := failures || ('N17 consulta directa legítima debía funcionar, error: ' || sqlerrm);
+  end;
 
   -------------------------------------------------------------------------
   -- Fase 4 / bloque M: cliente sin clínica, y cascada D-20.
