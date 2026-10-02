@@ -64,10 +64,7 @@ void main() {
       expect(find.text('Rocky'), findsOneWidget);
       expect(find.textContaining('Labrador'), findsOneWidget);
       expect(find.text('Rita Gómez'), findsNWidgets(2));
-      expect(
-        find.text('Buscar por nombre, dueño o especie'),
-        findsOneWidget,
-      );
+      expect(find.text('Buscar por nombre, dueño o especie'), findsOneWidget);
       expect(find.widgetWithText(AppFilterChip, 'Todos'), findsOneWidget);
       expect(find.widgetWithText(AppFilterChip, 'Perros'), findsOneWidget);
       expect(find.widgetWithText(AppFilterChip, 'Gatos'), findsOneWidget);
@@ -105,17 +102,12 @@ void main() {
     },
   );
 
-  testWidgets('sin pacientes muestra el estado vacío inicial', (
-    tester,
-  ) async {
+  testWidgets('sin pacientes muestra el estado vacío inicial', (tester) async {
     final repo = FakeMascotaRepository();
     await tester.pumpWidget(_appUnderTest(repo: repo));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Aún no tienes pacientes registrados'),
-      findsOneWidget,
-    );
+    expect(find.text('Aún no tienes pacientes registrados'), findsOneWidget);
     expect(
       find.text('Crea tu primer paciente desde la ficha de un cliente.'),
       findsOneWidget,

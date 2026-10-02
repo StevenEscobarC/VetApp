@@ -9,6 +9,8 @@ import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/chips/app_filter_chip.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../../core/widgets/status/dosis_estado_chip.dart';
+import '../../../vaccination/presentation/providers/vacuna_providers.dart';
 import '../../domain/entities/mascota.dart';
 import '../providers/mascotas_providers.dart';
 import '../widgets/mascota_foto_avatar.dart';
@@ -153,8 +155,14 @@ class _PacientesBody extends ConsumerWidget {
       );
     }
 
+    // Un solo mapa para toda la lista (sin N+1); si carga o falla, sin chips.
+    final resumen = ref.watch(resumenVacunasMascotasProvider).asData?.value;
+
     return RefreshIndicator(
-      onRefresh: () => ref.read(mascotasProvider.notifier).refrescar(),
+      onRefresh: () {
+        ref.invalidate(resumenVacunasMascotasProvider);
+        return ref.read(mascotasProvider.notifier).refrescar();
+      },
       child: ListView.separated(
         padding: const EdgeInsets.all(AppSpacing.md),
         itemCount: visibles.length,
@@ -170,6 +178,15 @@ class _PacientesBody extends ConsumerWidget {
           final secundaria = partesSecundarias.isEmpty
               ? mascota.especie.etiqueta
               : partesSecundarias.join(' · ');
+
+          final r = resumen?[mascota.id];
+          final DosisEstado? badge = r == null
+              ? null
+              : r.vencidas > 0
+              ? DosisEstado.vencida
+              : r.proximas > 0
+              ? DosisEstado.proxima
+              : null;
 
           return AppCard(
             onTap: () => context.push('/pacientes/${mascota.id}'),
@@ -207,6 +224,10 @@ class _PacientesBody extends ConsumerWidget {
                     ],
                   ),
                 ),
+                if (badge != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  DosisEstadoChip(estado: badge, compact: true),
+                ],
               ],
             ),
           );
