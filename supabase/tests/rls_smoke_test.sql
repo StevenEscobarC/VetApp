@@ -31,7 +31,8 @@
 -- Fase 4.1 (bloque P, P1..P30): equipo de la clínica -- backfill admin, sin auto-escalación (privilegios por
 -- columna), invitaciones (uso único, vencida, revocada, inexistente, metadata falsificada), RPC solo-admin y
 -- aisladas por clínica, último admin, auto-retiro (D-14), reasignación de citas (D-15), acceso cortado al
--- retirar (T6), autoría visible (D-13), citas por veterinario (D-07) y consultas FK restrict (D-06). Total esperado: 145.
+-- retirar (T6), autoría visible (D-13), citas por veterinario (D-07) y consultas FK restrict (D-06).
+-- Fase 5 (bloque Q, 48 checks): vacunación — aislamiento, solo-append, cálculo derivado, alertas, enlace público, logo de la clínica. Total esperado: 193.
 
 do $$
 declare
@@ -83,6 +84,30 @@ declare
   v_cita_done uuid;
   v_cita_pasada uuid;
   v_ok boolean;
+  -- Fase 5 (bloque Q)
+  q_hoy date := date '2026-06-01';
+  q_vet_noadmin uuid := gen_random_uuid();
+  q_vet_x uuid := gen_random_uuid();
+  q_logo text;
+  q_cliente_ana uuid;
+  q_m uuid;
+  q_m_b uuid;
+  q_m_ana uuid;
+  q_m_cach uuid;
+  q_dosis uuid;
+  q_dosis2 uuid;
+  q_dosis3 uuid;
+  q_tok text;
+  q_tok2 text;
+  q_row record;
+  q_row2 record;
+  q_json jsonb;
+  q_arr text[];
+  q_sig text;
+  q_cita uuid;
+  q_cita2 uuid;
+  q_prox date;
+  q_n int;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -1966,6 +1991,1032 @@ begin
          )]
      ) then
     failures := failures || 'P30 faltan las FK *_veterinario_perfil_fkey o consultas.veterinario_id aún hace cascade';
+  end if;
+
+  -------------------------------------------------------------------------
+  -- Fase 5, bloque Q (Q1..Q48): vacunación y desparasitación + logo de la clínica.
+  -- Las derivaciones usan fechas explícitas (q_hoy fijo) salvo Q24-Q26, que dependen
+  -- de _hoy_bogota() por el corte de 180 días. Todo se revierte con el resto del script.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  q_logo := clinica_a_id::text || '/logo-1700000000000.jpg';
+
+  -- Setup Q: dos veterinarios NO admin en la clínica A (uno solo retirado de clínica en Q28),
+  -- un dueño con nombre largo y una mascota con dosis (una anulada) para el carné público.
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values
+      (q_vet_noadmin, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-q-noadmin@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke Q NoAdmin', 'clinica_nombre', 'Smoke Clinica Q1'),
+       now(), now()),
+      (q_vet_x, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-q-x@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke Q X', 'clinica_nombre', 'Smoke Clinica Q2'),
+       now(), now());
+    update public.perfiles set clinica_id = clinica_a_id, rol_clinica = 'veterinario', activo = true
+      where id in (q_vet_noadmin, q_vet_x);
+
+    insert into public.clientes (clinica_id, nombre, telefono)
+      values (clinica_a_id, 'Ana María Rojas Pérez', '3009998877') returning id into q_cliente_ana;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie, fecha_nacimiento)
+      values (q_cliente_ana, clinica_a_id, 'Q Luna', 'perro', q_hoy - 400) returning id into q_m_ana;
+
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    q_dosis := public.registrar_dosis(
+      p_mascota_id => q_m_ana, p_codigo_protocolo => 'bordetella', p_biologico_nombre => null,
+      p_fecha_aplicacion => date '2026-04-01', p_observaciones => 'nota interna secreta', p_lote => 'LOTE-Q1');
+    q_dosis2 := public.registrar_dosis(
+      p_mascota_id => q_m_ana, p_codigo_protocolo => 'polivalente', p_biologico_nombre => null,
+      p_fecha_aplicacion => date '2026-04-02');
+    perform public.anular_dosis(q_dosis2, 'Error de registro Q');
+  exception when others then
+    failures := failures || ('SETUPQ error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q1: protocolos_efectivos('perro') devuelve las 7 semillas de perro.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select array_agg(codigo order by codigo) into q_arr from public.protocolos_efectivos('perro');
+    if q_arr is distinct from array['antirrabica', 'bordetella', 'desp_externa', 'desp_interna',
+                                    'leptospirosis', 'polivalente', 'puppy_dp'] then
+      failures := failures || ('Q1 protocolos_efectivos(perro) devolvió: ' || coalesce(array_to_string(q_arr, ','), 'null'));
+    end if;
+  exception when others then
+    failures := failures || ('Q1 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q2: registrar_dosis feliz: veterinario_id = vet A, biologico_nombre sale del catálogo.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m2', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    q_dosis := public.registrar_dosis(q_m, 'polivalente', null, date '2026-04-01');
+    perform set_config('role', 'postgres', true);
+    select veterinario_id, biologico_nombre into q_row from public.dosis_aplicadas where id = q_dosis;
+    if q_row.veterinario_id is distinct from vet_a_id or q_row.biologico_nombre is distinct from 'Polivalente' then
+      failures := failures || format('Q2 dosis guardada con veterinario=%s nombre=%s', q_row.veterinario_id, q_row.biologico_nombre);
+    end if;
+  exception when others then
+    failures := failures || ('Q2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q3: vet B ve 0 dosis (las de A existen: control positivo con vet A).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into n from public.dosis_aplicadas;
+    if n <> 0 then failures := failures || format('Q3 vet B ve %s dosis de la clínica A', n); end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into n from public.dosis_aplicadas;
+    if n < 1 then failures := failures || 'Q3 vet A no ve sus propias dosis'; end if;
+  exception when others then
+    failures := failures || ('Q3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q4: vet B no puede registrar una dosis sobre una mascota de A.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2026-04-02');
+    failures := failures || 'Q4 vet B pudo registrar una dosis en una mascota de A';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('Q4 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q5: INSERT directo en dosis_aplicadas como authenticated falla.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    insert into public.dosis_aplicadas (mascota_id, clinica_id, veterinario_id, codigo_protocolo, biologico_nombre, tipo, fecha_aplicacion)
+      values (q_m, clinica_a_id, vet_a_id, 'polivalente', 'Directa', 'vacuna', date '2026-04-03');
+    failures := failures || 'Q5 INSERT directo en dosis_aplicadas debía fallar';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('Q5 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q6: UPDATE directo cambia 0 filas (o es rechazado).
+  checks := checks + 1;
+  begin
+    update public.dosis_aplicadas set observaciones = 'manipulada' where id = q_dosis;
+    get diagnostics n = row_count;
+    if n <> 0 then failures := failures || format('Q6 UPDATE directo afectó %s filas', n); end if;
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('Q6 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q7: DELETE directo cambia 0 filas (o es rechazado).
+  checks := checks + 1;
+  begin
+    delete from public.dosis_aplicadas where id = q_dosis;
+    get diagnostics n = row_count;
+    if n <> 0 then failures := failures || format('Q7 DELETE directo afectó %s filas', n); end if;
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('Q7 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q8: fecha futura -> check_violation.
+  checks := checks + 1;
+  begin
+    perform public.registrar_dosis(q_m, 'bordetella', null, public._hoy_bogota() + 1);
+    failures := failures || 'Q8 una dosis con fecha futura debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('Q8 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q9: anular con motivo en blanco -> check_violation.
+  checks := checks + 1;
+  begin
+    perform public.anular_dosis(q_dosis, '   ');
+    failures := failures || 'Q9 anular con motivo en blanco debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('Q9 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q10: una dosis se anula una sola vez (D-08); el segundo intento falla.
+  checks := checks + 1;
+  begin
+    perform public.anular_dosis(q_dosis, 'Error de digitación');
+    begin
+      perform public.anular_dosis(q_dosis, 'Otra vez');
+      failures := failures || 'Q10 la segunda anulación debía fallar';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('Q10 segunda anulación: error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    select anulada, motivo_anulacion, anulada_por into q_row from public.dosis_aplicadas where id = q_dosis;
+    if q_row.anulada is not true or q_row.motivo_anulacion is distinct from 'Error de digitación'
+       or q_row.anulada_por is distinct from vet_a_id then
+      failures := failures || 'Q10 la dosis no quedó anulada con motivo y autor';
+    end if;
+  exception when others then
+    failures := failures || ('Q10 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q11: anulada no cuenta para la serie (Pitfall 4): la dosis que queda es la posición 1.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m11', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    q_dosis := public.registrar_dosis(q_m, 'polivalente', null, date '2026-03-01');
+    q_dosis2 := public.registrar_dosis(q_m, 'polivalente', null, date '2026-03-22');
+    perform public.anular_dosis(q_dosis, 'Fecha mal digitada');
+    perform set_config('role', 'postgres', true);
+    select po.posicion, po.etiqueta_dosis into q_row
+      from public._dosis_posiciones(clinica_a_id, q_m) po where po.dosis_id = q_dosis2;
+    if q_row.posicion is distinct from 1 or q_row.etiqueta_dosis is distinct from 'Dosis 1 de 3' then
+      failures := failures || format('Q11 tras anular la dosis 1 la restante es posicion=%s etiqueta=%s', q_row.posicion, q_row.etiqueta_dosis);
+    end if;
+  exception when others then
+    failures := failures || ('Q11 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q12: polivalente con una dosis -> próxima +21 días, "Dosis 2 de 3".
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m12', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2026-04-01');
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m, q_hoy) f where f.codigo_protocolo = 'polivalente';
+    if q_row.proxima_fecha is distinct from date '2026-04-22' or q_row.etiqueta_proxima is distinct from 'Dosis 2 de 3' then
+      failures := failures || format('Q12 proxima=%s etiqueta=%s', q_row.proxima_fecha, q_row.etiqueta_proxima);
+    end if;
+  exception when others then
+    failures := failures || ('Q12 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q13: tres dosis -> "Refuerzo", próxima = última + 365.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m13', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2026-01-01');
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2026-01-22');
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2026-02-12');
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m, q_hoy) f where f.codigo_protocolo = 'polivalente';
+    if q_row.etiqueta_proxima is distinct from 'Refuerzo' or q_row.proxima_fecha is distinct from date '2026-02-12' + 365 then
+      failures := failures || format('Q13 etiqueta=%s proxima=%s', q_row.etiqueta_proxima, q_row.proxima_fecha);
+    end if;
+  exception when others then
+    failures := failures || ('Q13 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q14: antirrábica con duración 1095 -> +1095; con 999 -> check_violation (D-03).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m14', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(
+      p_mascota_id => q_m, p_codigo_protocolo => 'antirrabica', p_biologico_nombre => null,
+      p_fecha_aplicacion => date '2026-01-10', p_duracion_elegida_dias => 1095);
+    begin
+      perform public.registrar_dosis(
+        p_mascota_id => q_m, p_codigo_protocolo => 'antirrabica', p_biologico_nombre => null,
+        p_fecha_aplicacion => date '2026-01-11', p_duracion_elegida_dias => 999);
+      failures := failures || 'Q14 una duración fuera de las opciones debía fallar';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('Q14 duración 999: error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m, q_hoy) f where f.codigo_protocolo = 'antirrabica';
+    if q_row.proxima_fecha is distinct from date '2026-01-10' + 1095 then
+      failures := failures || format('Q14 proxima=%s esperaba %s', q_row.proxima_fecha, date '2026-01-10' + 1095);
+    end if;
+  exception when others then
+    failures := failures || ('Q14 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q15: sin_refuerzo -> estado completo y próxima nula.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m15', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(
+      p_mascota_id => q_m, p_codigo_protocolo => 'antirrabica', p_biologico_nombre => null,
+      p_fecha_aplicacion => date '2026-01-10', p_sin_refuerzo => true);
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m, q_hoy) f where f.codigo_protocolo = 'antirrabica';
+    if q_row.estado is distinct from 'completo' or q_row.proxima_fecha is not null then
+      failures := failures || format('Q15 estado=%s proxima=%s', q_row.estado, q_row.proxima_fecha);
+    end if;
+  exception when others then
+    failures := failures || ('Q15 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q16: es_refuerzo en la primera dosis de polivalente -> posición 3, próxima +365.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m16', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(
+      p_mascota_id => q_m, p_codigo_protocolo => 'polivalente', p_biologico_nombre => null,
+      p_fecha_aplicacion => date '2026-01-10', p_es_refuerzo => true);
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m, q_hoy) f where f.codigo_protocolo = 'polivalente';
+    if q_row.posicion is distinct from 3 or q_row.proxima_fecha is distinct from date '2026-01-10' + 365 then
+      failures := failures || format('Q16 posicion=%s proxima=%s', q_row.posicion, q_row.proxima_fecha);
+    end if;
+  exception when others then
+    failures := failures || ('Q16 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q17: inicia_serie reinicia la serie -> posición 1 aunque ya hubiera tres dosis.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m17', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2025-03-01');
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2025-03-22');
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2025-04-12');
+    perform public.registrar_dosis(
+      p_mascota_id => q_m, p_codigo_protocolo => 'polivalente', p_biologico_nombre => null,
+      p_fecha_aplicacion => date '2026-05-20', p_inicia_serie => true);
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m, q_hoy) f where f.codigo_protocolo = 'polivalente';
+    if q_row.posicion is distinct from 1 or q_row.proxima_fecha is distinct from date '2026-05-20' + 21 then
+      failures := failures || format('Q17 posicion=%s proxima=%s', q_row.posicion, q_row.proxima_fecha);
+    end if;
+  exception when others then
+    failures := failures || ('Q17 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q18: ventana de refuerzo (D-11): faltan 15 días -> al_dia; faltan 14 -> proxima. (q_m y q_prox se reusan en Q21.)
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m18', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(
+      p_mascota_id => q_m, p_codigo_protocolo => 'polivalente', p_biologico_nombre => null,
+      p_fecha_aplicacion => date '2025-03-01', p_es_refuerzo => true);
+    perform set_config('role', 'postgres', true);
+    q_prox := date '2025-03-01' + 365;
+    select * into q_row from public._carne_filas(clinica_a_id, q_m, q_prox - 15) f where f.codigo_protocolo = 'polivalente';
+    select * into q_row2 from public._carne_filas(clinica_a_id, q_m, q_prox - 14) f where f.codigo_protocolo = 'polivalente';
+    if q_row.estado is distinct from 'al_dia' or q_row2.estado is distinct from 'proxima' then
+      failures := failures || format('Q18 -15d=%s -14d=%s', q_row.estado, q_row2.estado);
+    end if;
+  exception when others then
+    failures := failures || ('Q18 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q19: ventana de serie: faltan 4 -> al_dia; faltan 3 -> proxima.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m19', 'perro') returning id into q_m_b;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(q_m_b, 'polivalente', null, date '2026-04-01');
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m_b, date '2026-04-22' - 4) f where f.codigo_protocolo = 'polivalente';
+    select * into q_row2 from public._carne_filas(clinica_a_id, q_m_b, date '2026-04-22' - 3) f where f.codigo_protocolo = 'polivalente';
+    if q_row.estado is distinct from 'al_dia' or q_row2.estado is distinct from 'proxima' then
+      failures := failures || format('Q19 -4d=%s -3d=%s', q_row.estado, q_row2.estado);
+    end if;
+  exception when others then
+    failures := failures || ('Q19 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q20: ventana de desparasitación: faltan 6 -> al_dia; faltan 5 -> proxima.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m20', 'perro') returning id into q_m_b;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(q_m_b, 'desp_interna', null, date '2025-03-01');
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m_b, date '2025-03-01' + 90 - 6) f where f.codigo_protocolo = 'desp_interna';
+    select * into q_row2 from public._carne_filas(clinica_a_id, q_m_b, date '2025-03-01' + 90 - 5) f where f.codigo_protocolo = 'desp_interna';
+    if q_row.estado is distinct from 'al_dia' or q_row2.estado is distinct from 'proxima' then
+      failures := failures || format('Q20 -6d=%s -5d=%s', q_row.estado, q_row2.estado);
+    end if;
+  exception when others then
+    failures := failures || ('Q20 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q21: el mismo día de la próxima -> proxima; un día después -> vencida con dias_vencida = 1 (D-11). Usa q_m/q_prox de Q18.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m, q_prox) f where f.codigo_protocolo = 'polivalente';
+    select * into q_row2 from public._carne_filas(clinica_a_id, q_m, q_prox + 1) f where f.codigo_protocolo = 'polivalente';
+    if q_row.estado is distinct from 'proxima' or q_row2.estado is distinct from 'vencida'
+       or q_row2.dias_vencida is distinct from 1 then
+      failures := failures || format('Q21 hoy=prox:%s, +1d:%s dias_vencida=%s', q_row.estado, q_row2.estado, q_row2.dias_vencida);
+    end if;
+  exception when others then
+    failures := failures || ('Q21 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q22: desparasitación interna por edad (D-03): cachorro de 20 días -> +15; adulto -> +90.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie, fecha_nacimiento)
+      values (cliente_a_id, clinica_a_id, 'Q cachorro', 'perro', q_hoy - 30) returning id into q_m_cach;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie, fecha_nacimiento)
+      values (cliente_a_id, clinica_a_id, 'Q adulto', 'perro', q_hoy - 400) returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(q_m_cach, 'desp_interna', null, date '2026-05-22');
+    perform public.registrar_dosis(q_m, 'desp_interna', null, date '2026-05-22');
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m_cach, q_hoy) f where f.codigo_protocolo = 'desp_interna';
+    select * into q_row2 from public._carne_filas(clinica_a_id, q_m, q_hoy) f where f.codigo_protocolo = 'desp_interna';
+    if q_row.proxima_fecha is distinct from date '2026-05-22' + 15 or q_row2.proxima_fecha is distinct from date '2026-05-22' + 90 then
+      failures := failures || format('Q22 cachorro=%s adulto=%s', q_row.proxima_fecha, q_row2.proxima_fecha);
+    end if;
+  exception when others then
+    failures := failures || ('Q22 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q23: una dosis externa cuenta para la serie (posición avanza) y se marca externa en el carné.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m23', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2026-03-01');
+    perform public.registrar_dosis(
+      p_mascota_id => q_m, p_codigo_protocolo => 'polivalente', p_biologico_nombre => null,
+      p_fecha_aplicacion => date '2026-03-22', p_externa => true, p_clinica_externa => 'Otra Clínica Vet');
+    q_json := public.carne_de_mascota(q_m);
+    perform set_config('role', 'postgres', true);
+    select * into q_row from public._carne_filas(clinica_a_id, q_m, q_hoy) f where f.codigo_protocolo = 'polivalente';
+    if q_row.posicion is distinct from 2 or q_row.etiqueta_proxima is distinct from 'Dosis 3 de 3'
+       or not (q_json -> 'dosis') @> '[{"externa": true}]'::jsonb then
+      failures := failures || format('Q23 posicion=%s etiqueta=%s o la dosis externa no está marcada', q_row.posicion, q_row.etiqueta_proxima);
+    end if;
+  exception when others then
+    failures := failures || ('Q23 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q24: D-13 (depende de hoy): vencida de 180 días aparece; de 181 queda oculta (ocultas_antiguas).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m24a', 'perro') returning id into q_m;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m24b', 'perro') returning id into q_m_b;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    q_dosis := public.registrar_dosis(
+      p_mascota_id => q_m, p_codigo_protocolo => 'polivalente', p_biologico_nombre => null,
+      p_fecha_aplicacion => public._hoy_bogota() - 545, p_es_refuerzo => true);
+    q_dosis2 := public.registrar_dosis(
+      p_mascota_id => q_m_b, p_codigo_protocolo => 'polivalente', p_biologico_nombre => null,
+      p_fecha_aplicacion => public._hoy_bogota() - 546, p_es_refuerzo => true);
+    select count(*) into n from public.vacunas_pendientes() where mascota_id = q_m;
+    select count(*) into q_n from public.vacunas_pendientes() where mascota_id = q_m_b;
+    select * into q_row from public.vacunas_resumen();
+    if n <> 1 or q_n <> 0 then
+      failures := failures || format('Q24 a 180 dias aparece %s veces y a 181 dias %s veces', n, q_n);
+    end if;
+    if q_row.vencidas < 1 or q_row.ocultas_antiguas < 1 then
+      failures := failures || format('Q24 vacunas_resumen vencidas=%s ocultas_antiguas=%s', q_row.vencidas, q_row.ocultas_antiguas);
+    end if;
+  exception when others then
+    failures := failures || ('Q24 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q25: posponer 7 días oculta la alerta; restaurar la devuelve (usa q_m/q_dosis de Q24).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.gestionar_alerta_vacuna(q_dosis, 'posponer', null, 7);
+    select count(*) into n from public.vacunas_pendientes() where mascota_id = q_m;
+    perform public.gestionar_alerta_vacuna(q_dosis, 'restaurar');
+    select count(*) into q_n from public.vacunas_pendientes() where mascota_id = q_m;
+    if n <> 0 or q_n <> 1 then
+      failures := failures || format('Q25 pospuesta=%s restaurada=%s (esperaba 0 y 1)', n, q_n);
+    end if;
+  exception when others then
+    failures := failures || ('Q25 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q26: descartar oculta; una dosis nueva del mismo biológico muestra la alerta nueva (D-12).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.gestionar_alerta_vacuna(q_dosis, 'descartar', 'No volverá', null);
+    select count(*) into n from public.vacunas_pendientes() where mascota_id = q_m;
+    q_dosis3 := public.registrar_dosis(
+      p_mascota_id => q_m, p_codigo_protocolo => 'polivalente', p_biologico_nombre => null,
+      p_fecha_aplicacion => public._hoy_bogota() - 380, p_es_refuerzo => true);
+    select count(*) into q_n from public.vacunas_pendientes()
+      where mascota_id = q_m and codigo_protocolo = 'polivalente' and ultima_dosis_id = q_dosis3;
+    if n <> 0 or q_n <> 1 then
+      failures := failures || format('Q26 descartada=%s alerta nueva tras dosis=%s (esperaba 0 y 1)', n, q_n);
+    end if;
+  exception when others then
+    failures := failures || ('Q26 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q27: vet B no gestiona alertas de una dosis de A.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.gestionar_alerta_vacuna(q_dosis, 'descartar', 'intruso', null);
+    failures := failures || 'Q27 vet B pudo gestionar una alerta de la clínica A';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('Q27 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q28: D-09: quien solo dejó una dosis en A y pasó a la clínica B sigue legible por vet A.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m28', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', q_vet_x, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(q_m, 'bordetella', null, date '2026-04-10');
+    perform set_config('role', 'postgres', true);
+    update public.perfiles set clinica_id = clinica_b_id where id = q_vet_x;
+    if not exists (select 1 from public.perfiles where id = q_vet_x and clinica_id = clinica_b_id) then
+      failures := failures || 'Q28 setup: el autor no quedó en la clínica B';
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into n from public.perfiles where id = q_vet_x;
+    if n <> 1 then
+      failures := failures || format('Q28 vet A ve %s perfiles del autor de dosis movido de clínica (esperaba 1)', n);
+    end if;
+  exception when others then
+    failures := failures || ('Q28 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q29: la FK dosis_veterinario_perfil_fkey existe y es restrict.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  if (select count(*) from pg_constraint
+        where conname = 'dosis_veterinario_perfil_fkey' and conrelid = 'public.dosis_aplicadas'::regclass
+          and contype = 'f' and confdeltype = 'r') <> 1 then
+    failures := failures || 'Q29 falta dosis_veterinario_perfil_fkey o no es restrict';
+  end if;
+
+  -- Q30: obtener_o_crear_enlace_carne devuelve 64 hex y el mismo token en la segunda llamada.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    q_tok := public.obtener_o_crear_enlace_carne(q_m_ana);
+    q_tok2 := public.obtener_o_crear_enlace_carne(q_m_ana);
+    if q_tok is null or q_tok !~ '^[0-9a-f]{64}$' or q_tok2 is distinct from q_tok then
+      failures := failures || format('Q30 token=%s segunda llamada=%s', q_tok, q_tok2);
+    end if;
+  exception when others then
+    failures := failures || ('Q30 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q31: regenerar cambia el token; el viejo deja de funcionar y el nuevo sí (D-16).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    q_tok2 := public.regenerar_enlace_carne(q_m_ana);
+    perform set_config('role', 'postgres', true);
+    if q_tok2 is null or q_tok2 = q_tok then
+      failures := failures || 'Q31 el token regenerado debía ser distinto';
+    end if;
+    if public.carne_publico(q_tok) is not null then
+      failures := failures || 'Q31 el token viejo sigue devolviendo el carné';
+    end if;
+    if public.carne_publico(q_tok2) is null then
+      failures := failures || 'Q31 el token nuevo no devuelve el carné';
+    end if;
+    q_tok := q_tok2;
+  exception when others then
+    failures := failures || ('Q31 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q32: forma del carné público (D-15, D-20): claves exactas, sin ids ni contacto, "Nombre I.".
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    q_json := public.carne_publico(q_tok);
+    select array_agg(k order by k) into q_arr from jsonb_object_keys(q_json) k;
+    if q_arr is distinct from array['biologicos', 'clinica', 'dosis', 'hoy', 'mascota', 'propietario'] then
+      failures := failures || ('Q32 claves de primer nivel: ' || coalesce(array_to_string(q_arr, ','), 'null'));
+    end if;
+    if (q_json -> 'mascota' -> 'id') is not null or (q_json -> 'mascota' -> 'dueno_id') is not null then
+      failures := failures || 'Q32 la mascota pública expone id o dueno_id';
+    end if;
+    if q_json ->> 'propietario' is distinct from 'Ana M.' then
+      failures := failures || format('Q32 propietario=%s esperaba "Ana M."', q_json ->> 'propietario');
+    end if;
+    if q_json::text like '%3009998877%' or q_json::text like '%Rojas%' or q_json::text like '%nota interna%' then
+      failures := failures || 'Q32 el carné público filtra teléfono, apellido completo u observaciones internas';
+    end if;
+  exception when others then
+    failures := failures || ('Q32 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q33: una dosis anulada no sale en el carné público (D-23) pero sí (anulada) en el del veterinario.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    q_json := public.carne_publico(q_tok);
+    if jsonb_array_length(q_json -> 'dosis') <> 1
+       or (q_json -> 'dosis') @> '[{"biologico_nombre": "Polivalente"}]'::jsonb then
+      failures := failures || format('Q33 el carné público trae %s dosis (esperaba 1, sin la anulada)', jsonb_array_length(q_json -> 'dosis'));
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    q_json := public.carne_de_mascota(q_m_ana);
+    if not (q_json -> 'dosis') @> '[{"anulada": true}]'::jsonb then
+      failures := failures || 'Q33 carne_de_mascota no muestra la dosis anulada';
+    end if;
+  exception when others then
+    failures := failures || ('Q33 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q34: anon no puede ejecutar ninguna RPC ni función interna nueva.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  begin
+  foreach q_sig in array array[
+    'public.protocolos_efectivos(text,boolean)',
+    'public.guardar_protocolo(text,text,text,text[],int,int,int,int[])',
+    'public.restablecer_protocolo(text)',
+    'public.desactivar_protocolo(text)',
+    'public.registrar_dosis(uuid,text,text,date,int,boolean,boolean,boolean,boolean,text,text,text,text,uuid,boolean)',
+    'public.anular_dosis(uuid,text)',
+    'public.previsualizar_dosis(uuid,text,date,int,boolean,boolean,boolean)',
+    'public.carne_de_mascota(uuid)',
+    'public.vacunas_pendientes()',
+    'public.vacunas_resumen()',
+    'public.vacunas_resumen_mascotas()',
+    'public.gestionar_alerta_vacuna(uuid,text,text,int)',
+    'public.obtener_o_crear_enlace_carne(uuid)',
+    'public.regenerar_enlace_carne(uuid)',
+    'public.carne_publico(text)',
+    'public._carne_filas(uuid,uuid,date)',
+    'public._dosis_posiciones(uuid,uuid)'
+  ] loop
+    if has_function_privilege('anon', q_sig, 'execute') then
+      failures := failures || ('Q34 anon puede ejecutar ' || q_sig);
+    end if;
+  end loop;
+  exception when others then
+    failures := failures || ('Q34 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q35: authenticated NO ejecuta carne_publico / _carne_filas / _dosis_posiciones (VAC-04).
+  checks := checks + 1;
+  begin
+  foreach q_sig in array array[
+    'public.carne_publico(text)',
+    'public._carne_filas(uuid,uuid,date)',
+    'public._dosis_posiciones(uuid,uuid)'
+  ] loop
+    if has_function_privilege('authenticated', q_sig, 'execute') then
+      failures := failures || ('Q35 authenticated puede ejecutar ' || q_sig);
+    end if;
+  end loop;
+  exception when others then
+    failures := failures || ('Q35 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q36: vet B no ve enlaces de A ni su carné (control positivo: vet A sí ve el enlace).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into n from public.carne_enlaces;
+    if n < 1 then failures := failures || 'Q36 vet A no ve su propio enlace de carné'; end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into n from public.carne_enlaces;
+    if n <> 0 then failures := failures || format('Q36 vet B ve %s enlaces de la clínica A', n); end if;
+    begin
+      perform public.carne_de_mascota(q_m_ana);
+      failures := failures || 'Q36 vet B pudo leer el carné de una mascota de A';
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('Q36 carne_de_mascota: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('Q36 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q37: solo el admin edita el catálogo (D-24); el override de polivalente queda como personalizado.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', q_vet_noadmin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.guardar_protocolo('polivalente', 'Polivalente', 'vacuna', array['perro'], 3, 28, 365, '{}'::int[]);
+      failures := failures || 'Q37 un veterinario no admin pudo modificar el catálogo';
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('Q37 no admin: error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.guardar_protocolo('polivalente', 'Polivalente', 'vacuna', array['perro'], 3, 28, 365, '{}'::int[]);
+    select personalizado, intervalo_serie_dias into q_row from public.protocolos_efectivos('perro') where codigo = 'polivalente';
+    if q_row.personalizado is not true or q_row.intervalo_serie_dias is distinct from 28 then
+      failures := failures || format('Q37 override: personalizado=%s intervalo=%s', q_row.personalizado, q_row.intervalo_serie_dias);
+    end if;
+  exception when others then
+    failures := failures || ('Q37 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q38: el override de A no se filtra a B; después se restablece el catálogo de A.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select personalizado, intervalo_serie_dias into q_row from public.protocolos_efectivos('perro') where codigo = 'polivalente';
+    if q_row.personalizado is not false or q_row.intervalo_serie_dias is distinct from 21 then
+      failures := failures || format('Q38 vet B ve personalizado=%s intervalo=%s (esperaba false y 21)', q_row.personalizado, q_row.intervalo_serie_dias);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.restablecer_protocolo('polivalente');
+    select personalizado into q_row from public.protocolos_efectivos('perro') where codigo = 'polivalente';
+    if q_row.personalizado is not false then
+      failures := failures || 'Q38 restablecer_protocolo no devolvió la semilla';
+    end if;
+  exception when others then
+    failures := failures || ('Q38 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q39: D-22: la cita debe incluir a la mascota; con una cita válida se guarda cita_id.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m39', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    q_cita := public.crear_cita(cliente_a_id, array[q_m], now() + interval '9 days');
+    q_cita2 := public.crear_cita(cliente_a_id, array[mascota_a_id], now() + interval '10 days');
+    begin
+      perform public.registrar_dosis(
+        p_mascota_id => q_m, p_codigo_protocolo => 'bordetella', p_biologico_nombre => null,
+        p_fecha_aplicacion => date '2026-04-10', p_cita_id => q_cita2);
+      failures := failures || 'Q39 una cita que no incluye a la mascota debía fallar';
+    exception
+      when foreign_key_violation then null;
+      when others then failures := failures || ('Q39 cita ajena: error inesperado: ' || sqlerrm);
+    end;
+    q_dosis := public.registrar_dosis(
+      p_mascota_id => q_m, p_codigo_protocolo => 'bordetella', p_biologico_nombre => null,
+      p_fecha_aplicacion => date '2026-04-10', p_cita_id => q_cita);
+    perform set_config('role', 'postgres', true);
+    if not exists (select 1 from public.dosis_aplicadas where id = q_dosis and cita_id = q_cita) then
+      failures := failures || 'Q39 la dosis no guardó cita_id';
+    end if;
+  exception when others then
+    failures := failures || ('Q39 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q40: previsualizar_dosis coincide con lo que _carne_filas informa tras registrar la misma dosis.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (cliente_a_id, clinica_a_id, 'Q m40', 'perro') returning id into q_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2026-04-01');
+    select * into q_row from public.previsualizar_dosis(q_m, 'polivalente', date '2026-04-22');
+    perform public.registrar_dosis(q_m, 'polivalente', null, date '2026-04-22');
+    perform set_config('role', 'postgres', true);
+    select * into q_row2 from public._carne_filas(clinica_a_id, q_m, q_hoy) f where f.codigo_protocolo = 'polivalente';
+    if q_row.proxima_fecha is null
+       or q_row.proxima_fecha is distinct from q_row2.proxima_fecha
+       or q_row.etiqueta_proxima is distinct from q_row2.etiqueta_proxima
+       or q_row.posicion is distinct from q_row2.posicion then
+      failures := failures || format('Q40 previsualizar=(%s,%s,%s) vs carne=(%s,%s,%s)',
+        q_row.posicion, q_row.proxima_fecha, q_row.etiqueta_proxima,
+        q_row2.posicion, q_row2.proxima_fecha, q_row2.etiqueta_proxima);
+    end if;
+  exception when others then
+    failures := failures || ('Q40 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q41: esquema del logo: columna logo_path y bucket clinica-logos privado, 1 MB, solo JPEG (D-26).
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  if not exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'clinicas' and column_name = 'logo_path'
+     ) or not exists (
+       select 1 from storage.buckets
+       where id = 'clinica-logos' and public = false and file_size_limit = 1048576
+         and allowed_mime_types = array['image/jpeg']
+     ) then
+    failures := failures || 'Q41 falta clinicas.logo_path o el bucket clinica-logos no es privado/1 MB/solo JPEG';
+  end if;
+
+  -- Q42: el admin sube el logo; un veterinario no admin no puede.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    insert into storage.objects (bucket_id, name) values ('clinica-logos', q_logo);
+  exception when others then
+    failures := failures || ('Q42 el admin no pudo subir el logo: ' || sqlerrm);
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', q_vet_noadmin, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    insert into storage.objects (bucket_id, name)
+      values ('clinica-logos', clinica_a_id::text || '/logo-1700000000001.jpg');
+    failures := failures || 'Q42 un veterinario no admin pudo subir un logo';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('Q42 no admin: error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q43: el admin no escribe en la carpeta de otra clínica ni con nombres fuera del patrón.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    insert into storage.objects (bucket_id, name)
+      values ('clinica-logos', clinica_b_id::text || '/logo-1700000000000.jpg');
+    failures := failures || 'Q43 el admin de A pudo escribir en la carpeta de B';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('Q43 carpeta de B: error inesperado: ' || sqlerrm);
+  end;
+  begin
+    insert into storage.objects (bucket_id, name) values ('clinica-logos', clinica_a_id::text || '/../x.jpg');
+    failures := failures || 'Q43 un nombre con ../ debía ser rechazado';
+  exception when others then null;
+  end;
+  begin
+    insert into storage.objects (bucket_id, name)
+      values ('clinica-logos', clinica_a_id::text || '/sub/logo-1700000000002.jpg');
+    failures := failures || 'Q43 un nombre en subcarpeta debía ser rechazado';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('Q43 subcarpeta: error inesperado: ' || sqlerrm);
+  end;
+  begin
+    insert into storage.objects (bucket_id, name)
+      values ('clinica-logos', clinica_a_id::text || '/logo-1700000000003.png');
+    failures := failures || 'Q43 un logo .png debía ser rechazado';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('Q43 png: error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q44: vet B no ve el logo de A; los miembros de A sí; un no admin no puede borrarlo.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into n from storage.objects
+      where bucket_id = 'clinica-logos' and name like clinica_a_id::text || '/%';
+    if n <> 0 then failures := failures || format('Q44 vet B ve %s logos de la clínica A', n); end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', q_vet_noadmin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into n from storage.objects
+      where bucket_id = 'clinica-logos' and name like clinica_a_id::text || '/%';
+    if n <> 1 then failures := failures || format('Q44 un miembro de A ve %s logos (esperaba 1)', n); end if;
+    begin
+      delete from storage.objects where bucket_id = 'clinica-logos';
+      get diagnostics n = row_count;
+      if n <> 0 then failures := failures || format('Q44 un no admin borró %s logos', n); end if;
+    exception when others then null;
+    end;
+    perform set_config('role', 'postgres', true);
+    if not exists (select 1 from storage.objects where bucket_id = 'clinica-logos' and name = q_logo) then
+      failures := failures || 'Q44 el logo desapareció tras el intento de borrado de un no admin';
+    end if;
+  exception when others then
+    failures := failures || ('Q44 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q45: actualizar_clinica es solo admin y no hay UPDATE directo sobre clinicas.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', q_vet_noadmin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.actualizar_clinica('Hack', 'x', 'y', '1', null);
+      failures := failures || 'Q45 un veterinario no admin pudo ejecutar actualizar_clinica';
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('Q45 no admin: error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      update public.clinicas set nombre = 'x' where id = clinica_a_id;
+      get diagnostics n = row_count;
+      if n <> 0 then failures := failures || format('Q45 UPDATE directo sobre clinicas afectó %s filas', n); end if;
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('Q45 UPDATE directo: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('Q45 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q46: validaciones de actualizar_clinica y camino feliz (recorta espacios, guarda logo_path).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.actualizar_clinica('   ', 'Cali', 'Cra 1', '3000000000', null);
+      failures := failures || 'Q46 un nombre en blanco debía fallar';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('Q46 nombre en blanco: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.actualizar_clinica('Clínica Smoke', 'Cali', 'Cra 1', '3000000000',
+        clinica_b_id::text || '/logo-1700000000000.jpg');
+      failures := failures || 'Q46 un logo en la carpeta de B debía fallar';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('Q46 logo de B: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.actualizar_clinica('Clínica Smoke', 'Cali', 'Cra 1', '3000000000',
+        clinica_a_id::text || '/logo-1700000000099.jpg');
+      failures := failures || 'Q46 un logo inexistente en storage debía fallar';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('Q46 logo inexistente: error inesperado: ' || sqlerrm);
+    end;
+    q_json := public.actualizar_clinica('  Clínica Smoke ', 'Cali', 'Cra 1', '3000000000', q_logo);
+    if q_json ->> 'logo_path' is distinct from q_logo then
+      failures := failures || format('Q46 actualizar_clinica devolvió logo_path=%s', q_json ->> 'logo_path');
+    end if;
+    perform set_config('role', 'postgres', true);
+    if not exists (
+      select 1 from public.clinicas where id = clinica_a_id and nombre = 'Clínica Smoke' and logo_path = q_logo
+    ) then
+      failures := failures || 'Q46 la fila de clinicas no quedó con nombre recortado y logo_path';
+    end if;
+  exception when others then
+    failures := failures || ('Q46 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q47: el logo viaja como ruta en el carné (veterinario y público), sin URL ni token; null al quitarlo.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    q_json := public.carne_de_mascota(q_m_ana);
+    if q_json -> 'clinica' ->> 'logo_path' is distinct from q_logo then
+      failures := failures || format('Q47 carne_de_mascota logo_path=%s', q_json -> 'clinica' ->> 'logo_path');
+    end if;
+    perform set_config('role', 'postgres', true);
+    q_json := public.carne_publico(q_tok);
+    select array_agg(k order by k) into q_arr from jsonb_object_keys(q_json -> 'clinica') k;
+    if q_arr is distinct from array['ciudad', 'direccion', 'logo_path', 'nombre', 'telefono'] then
+      failures := failures || ('Q47 claves de clinica en el carné público: ' || coalesce(array_to_string(q_arr, ','), 'null'));
+    end if;
+    if q_json -> 'clinica' ->> 'logo_path' is distinct from q_logo
+       or (q_json -> 'clinica')::text like '%http%' or (q_json -> 'clinica')::text like '%token=%' then
+      failures := failures || 'Q47 el logo del carné público no es solo la ruta (o trae URL/token)';
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.actualizar_clinica('Clínica Smoke', 'Cali', 'Cra 1', '3000000000', null);
+    perform set_config('role', 'postgres', true);
+    q_json := public.carne_publico(q_tok);
+    if jsonb_typeof(q_json -> 'clinica' -> 'logo_path') is distinct from 'null' then
+      failures := failures || 'Q47 tras quitar el logo, logo_path del carné público debía ser null';
+    end if;
+  exception when others then
+    failures := failures || ('Q47 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Q48: actualizar_clinica: anon no la ejecuta, authenticated sí.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  if has_function_privilege('anon', 'public.actualizar_clinica(text,text,text,text,text)', 'execute')
+     or not has_function_privilege('authenticated', 'public.actualizar_clinica(text,text,text,text,text)', 'execute') then
+    failures := failures || 'Q48 grants de actualizar_clinica incorrectos (anon debe fallar, authenticated ejecutar)';
   end if;
 
   -------------------------------------------------------------------------
