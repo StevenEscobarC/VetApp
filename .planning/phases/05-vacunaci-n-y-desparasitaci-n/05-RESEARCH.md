@@ -384,14 +384,14 @@ Los números de ruta y firmas exactas los define el planner leyendo `agenda_rout
 | A7 | Supabase no ofrece rate limit por IP para Edge Functions sin configuración adicional | Threat Model | Si lo ofrece, usarlo como defensa en profundidad |
 | A8 | GitHub Pages gratis para repo público, sin headers personalizables | Standard Stack | Si cambian condiciones, migrar a Cloudflare Pages (misma carpeta) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Dónde calcular (SQL vs Dart)** — RESOLVED por este research: SQL (`_carne_filas`); CONTEXT lo dejó a discreción.
 2. **Foto en carné público (D-15) con bucket privado** — RESOLVED: Edge Function firma TTL 300 s. Fallback si el despliegue de la función se bloquea: RPC anon `carne_publico` sin foto en una primera entrega y foto en seguimiento (el planner puede partir la oleada así).
-3. **¿Quién edita el catálogo (admin vs cualquier vet)?** — OPEN, recomendación admin (A4); confirmar en plan o discuss rápido.
-4. **¿Algún dato del dueño en el público?** — OPEN, recomendación ninguno (A3).
-5. **Mascota sin dosis de un biológico ("nunca vacunada")** — OPEN, fuera de alcance (D-10 solo habla de dosis próximas/vencidas); backlog junto a "¿Puede ir a guardería?".
-6. **Vincular dosis ↔ cita (`cita_id` nullable)** — OPEN, recomendación: agregar columna nullable `cita_id` (como `consultas.cita_id`) para marcar "dosis registrada" en `completar_cita_screen`; si se omite, usar la heurística "dosis de hoy para esa mascota". Decisión de plan.
+3. **¿Quién edita el catálogo (admin vs cualquier vet)?** — RESOLVED: D-24 (solo admin en clínicas 2+ vets).
+4. **¿Algún dato del dueño en el público?** — RESOLVED: D-20 (el usuario eligió nombre + inicial del apellido; difiere de la recomendación "ninguno").
+5. **Mascota sin dosis de un biológico ("nunca vacunada")** — RESOLVED: D-21 fuera de alcance (D-10 solo habla de dosis próximas/vencidas); backlog junto a "¿Puede ir a guardería?".
+6. **Vincular dosis ↔ cita (`cita_id` nullable)** — RESOLVED: D-22 (vincular). Recomendación: agregar columna nullable `cita_id` (como `consultas.cita_id`) para marcar "dosis registrada" en `completar_cita_screen`; si se omite, usar la heurística "dosis de hoy para esa mascota". Decisión de plan.
 7. **Mecanismo público** — RESOLVED: página estática en GitHub Pages + Edge Function JSON (CONTEXT lo dejó a discreción).
 8. **Revocación/regeneración** — RESOLVED por D-16: `regenerar_enlace_carne` reemplaza el token; `desactivar_enlace_carne` además bloquea sin reemplazo.
 9. **Tono/plantilla WhatsApp** — RESOLVED: formal con "usted" (D-12, Fase 4 D-14); plantillas arriba.

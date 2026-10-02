@@ -45,6 +45,14 @@ Depende de la **Fase 4.1** (Equipo de la clínica): cada dosis registra qué vet
 - **D-18:** El dueño lo ve **sin cuenta** (VAC-05).
 - **D-19:** El carné público y su PDF llevan un pie discreto **"Hecho con VetApp"** (crecimiento orgánico: cada carné compartido es marketing hacia dueños y otras clínicas). Decidido por el usuario 2026-10-02 a partir de la recomendación de `vetapp-negocio`. Si en la Fase 5.1 (Planes y límites) se decide ocultarlo en planes pagos, eso se resuelve allá; aquí siempre se muestra.
 
+### Respuestas posteriores al research (2026-10-02)
+- **D-20:** El carné público y su PDF muestran del dueño **solo nombre + inicial del apellido** ("Dueño: María G."); nunca teléfono, dirección ni apellido completo (Ley 1581, dato mínimo).
+- **D-21:** **Sin alerta de "nunca vacunada"** en esta fase: las alertas salen solo de dosis registradas (diferido a backlog).
+- **D-22:** La dosis registrada desde "Completar cita" queda **vinculada a la cita** (`cita_id` nullable en la dosis); la cita completada muestra "Dosis registrada: {Biológico}". Mismo patrón consulta↔cita de la Fase 4.
+- **D-23:** Las **dosis anuladas se ocultan** en el carné público y el PDF (en la app se ven tachadas).
+- **D-24:** En clínicas con 2+ veterinarios, **solo el admin edita el catálogo de protocolos** (Más > Protocolos); un vet solo lo edita siempre.
+- **D-25:** Hosting del carné público: **página estática en GitHub Pages** (repo público `StevenEscobarC/VetApp`) que lee el token del fragmento `#` y llama a una Edge Function de Supabase que devuelve JSON (Supabase no sirve `text/html` en el dominio gratuito). Respaldo si el despliegue de la Edge Function se bloquea: RPC anónima sin foto en la primera entrega. Detalles en 05-RESEARCH.md.
+
 ### Claude's Discretion
 - Schema exacto: tabla de dosis aplicadas (con `anulada`, `motivo_anulacion`, `externa`, `clinica_externa`, `producto`, `lote`, `duracion_elegida`/intervalo, `veterinario_id`), tablas de protocolos (global semilla + por clínica), cálculo de próxima dosis/estado (vista SQL o función vs dominio Dart — que no se desincronice), RLS y tests (vía `vetapp-supabase`). Reconciliar con la entidad existente `vacuna.dart` (eliminar `proximaDosis` como campo guardado, ampliar `TipoBiologico` o reemplazar el enum por el catálogo).
 - **Mecanismo de la página pública**: Edge Function de Supabase que sirve HTML, RPC anónima `security definer` por token consumida por una página web estática, u otro — research evalúa (hosting, costo cero, branding terracota/crema, que no exponga más que D-15). El token debe ser revocable (D-16).
