@@ -29,7 +29,7 @@ class MasScreen extends ConsumerWidget {
     final matricula = ref.watch(authProfileProvider).value?.matricula;
     return Scaffold(
       appBar: const AppTopBar(title: 'Más'),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,6 +108,26 @@ class MasScreen extends ConsumerWidget {
                         color: AppColors.textSecondary,
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              onTap: () => context.push('/mas/protocolos'),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Row(
+                  children: [
+                    const Icon(Icons.tune),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Protocolos de vacunación',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
                   ],
                 ),
               ),
