@@ -94,7 +94,10 @@ class SupabaseAuthRepository {
       );
     } on AuthException catch (error) {
       throw AuthFailure(
-        mensajeErrorAuth(error, conCodigo: data.containsKey('codigo_invitacion')),
+        mensajeErrorAuth(
+          error,
+          conCodigo: data.containsKey('codigo_invitacion'),
+        ),
       );
     } catch (_) {
       throw const AuthFailure(
