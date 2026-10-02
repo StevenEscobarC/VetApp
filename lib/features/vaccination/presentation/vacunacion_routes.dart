@@ -1,11 +1,12 @@
 import 'package:go_router/go_router.dart';
 
 import 'screens/registrar_dosis_screen.dart';
+import 'screens/vacunas_pendientes_screen.dart';
 
 /// Rutas de vacunación de primer nivel (fuera del shell de la barra
 /// inferior) para que cualquier punto de entrada empuje la misma pantalla.
-/// 05-09 agrega aquí '/vacunas'.
 final List<GoRoute> vacunacionRoutes = [
+  GoRoute(path: '/vacunas', builder: (_, _) => const VacunasPendientesScreen()),
   GoRoute(
     path: '/dosis/nueva',
     builder: (_, state) {
