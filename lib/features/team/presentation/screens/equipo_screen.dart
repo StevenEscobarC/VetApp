@@ -11,6 +11,7 @@ import '../../domain/miembro.dart';
 import '../../domain/team_failure.dart';
 import '../providers/team_providers.dart';
 import '../widgets/invitacion_card.dart';
+import '../widgets/miembro_acciones_sheet.dart';
 import '../widgets/miembro_tile.dart';
 
 /// Equipo de la clínica (TEAM-02/TEAM-03): lista de veterinarios con su rol.
@@ -129,6 +130,17 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
               miembro: m,
               indice: indices[m.id] ?? 0,
               esYo: m.id == perfil?.id,
+              onTap: esAdmin
+                  ? () => mostrarAccionesMiembro(
+                      context,
+                      ref,
+                      miembro: m,
+                      esYo: m.id == perfil?.id,
+                      hayOtroAdmin: activos.any(
+                        (o) => o.esAdmin && o.id != m.id,
+                      ),
+                    )
+                  : null,
             ),
             const SizedBox(height: AppSpacing.sm),
           ],

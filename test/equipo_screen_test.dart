@@ -331,4 +331,203 @@ void main() {
       expect(find.text('K7MQ-4P2X'), findsNothing);
     });
   });
+
+  group('acciones de miembro', () {
+    final luisAdmin = Miembro(
+      id: 'vet-2',
+      nombre: 'Luis Gómez',
+      rolClinica: 'admin',
+      activo: true,
+      createdAt: DateTime(2026, 2, 1),
+    );
+    final pablo = Miembro(
+      id: 'vet-4',
+      nombre: 'Pablo Díaz',
+      rolClinica: 'veterinario',
+      activo: true,
+      createdAt: DateTime(2026, 4, 1),
+    );
+
+    Future<FakeTeamRepository> abrir(
+      WidgetTester tester,
+      List<Miembro> miembros, {
+      int citas = 0,
+      String tocar = 'Luis Gómez',
+    }) async {
+      final repo = FakeTeamRepository(miembrosFixture: miembros)
+        ..citasAbiertas = citas;
+      await tester.pumpWidget(_equipo(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining(tocar));
+      await tester.pumpAndSettle();
+      return repo;
+    }
+
+    testWidgets('Hacer administrador confirma y avisa', (tester) async {
+      final repo = await abrir(tester, [miembroAna, miembroLuis]);
+      expect(find.text('Retirar del equipo'), findsOneWidget);
+      await tester.tap(find.text('Hacer administrador'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Hacer administrador a Luis Gómez?'), findsOneWidget);
+      expect(
+        find.text('Podrá invitar, retirar miembros y cambiar roles.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Hacer administrador'));
+      await tester.pumpAndSettle();
+      expect(repo.rolesCambiados, [('vet-2', 'admin')]);
+      expect(find.text('Luis Gómez ahora es administrador'), findsOneWidget);
+    });
+
+    testWidgets('admin colega ofrece Hacer veterinario', (tester) async {
+      await abrir(tester, [miembroAna, luisAdmin]);
+      expect(find.text('Hacer veterinario'), findsOneWidget);
+    });
+
+    testWidgets('Retirar sin citas abiertas', (tester) async {
+      final repo = await abrir(tester, [miembroAna, miembroLuis]);
+      await tester.tap(find.text('Retirar del equipo'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Retirar a Luis Gómez del equipo?'), findsOneWidget);
+      await tester.tap(find.text('Retirar'));
+      await tester.pumpAndSettle();
+      expect(repo.retiradas, [('vet-2', null)]);
+      expect(find.text('Luis Gómez ya no tiene acceso'), findsOneWidget);
+    });
+
+    testWidgets('Retirar con citas y otro veterinario abre reasignar', (
+      tester,
+    ) async {
+      final repo = await abrir(tester, [
+        miembroAna,
+        miembroLuis,
+        pablo,
+      ], citas: 3);
+      await tester.tap(find.text('Retirar del equipo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Retirar'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Luis Gómez tiene 3 citas próximas sin atender. ¿A quién se las '
+          'asignamos?',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Ana Ramírez (Tú)'), findsWidgets);
+      expect(find.text('Reasignar 3 citas'), findsOneWidget);
+      await tester.tap(find.text('Pablo Díaz').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Reasignar 3 citas'));
+      await tester.pumpAndSettle();
+      expect(repo.retiradas, [('vet-2', 'vet-4')]);
+    });
+
+    testWidgets('Volver en reasignar cancela sin retirar', (tester) async {
+      final repo = await abrir(tester, [
+        miembroAna,
+        miembroLuis,
+        pablo,
+      ], citas: 1);
+      await tester.tap(find.text('Retirar del equipo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Retirar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Reasignar 1 cita'), findsOneWidget);
+      await tester.tap(find.text('Volver'));
+      await tester.pumpAndSettle();
+      expect(repo.retiradas, isEmpty);
+    });
+
+    testWidgets('con citas y solo yo como opcion pasa null', (tester) async {
+      final repo = await abrir(tester, [miembroAna, miembroLuis], citas: 2);
+      await tester.tap(find.text('Retirar del equipo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Retirar'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Reasignar'), findsNothing);
+      expect(repo.retiradas, [('vet-2', null)]);
+    });
+
+    testWidgets('fila propia como unico admin solo explica', (tester) async {
+      await abrir(tester, [miembroAna, miembroLuis], tocar: 'Ana Ramírez');
+      expect(
+        find.text(
+          'Eres el único administrador. Nombra a otro antes de dejar el '
+          'cargo.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Salir de la clínica'), findsNothing);
+      expect(find.text('Dejar de ser administrador'), findsNothing);
+    });
+
+    testWidgets('fila propia con otro admin: dejar cargo y salir', (
+      tester,
+    ) async {
+      final repo = await abrir(tester, [
+        miembroAna,
+        luisAdmin,
+      ], tocar: 'Ana Ramírez');
+      await tester.tap(find.text('Dejar de ser administrador'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Dejar de ser administrador?'), findsOneWidget);
+      expect(
+        find.text('Seguirás en la clínica como veterinario.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Confirmar cambio'));
+      await tester.pumpAndSettle();
+      expect(repo.rolesCambiados, [('vet-1', 'veterinario')]);
+
+      await tester.tap(find.textContaining('Ana Ramírez'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salir de la clínica'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Salir de la clínica?'), findsOneWidget);
+      await tester.tap(find.text('Salir'));
+      await tester.pumpAndSettle();
+      expect(repo.retiradas, [('vet-1', null)]);
+    });
+
+    testWidgets('no admin no abre acciones', (tester) async {
+      final repo = FakeTeamRepository(
+        miembrosFixture: [miembroAna, miembroLuis],
+      );
+      await tester.pumpWidget(_equipo(repo, perfil: vetColegaProfile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ana Ramírez'));
+      await tester.pumpAndSettle();
+      expect(find.text('Retirar del equipo'), findsNothing);
+      expect(find.text('Hacer veterinario'), findsNothing);
+    });
+
+    testWidgets('retirados no abren acciones', (tester) async {
+      final repo = FakeTeamRepository(
+        miembrosFixture: [miembroAna, miembroRetirado],
+      );
+      await tester.pumpWidget(_equipo(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Retirados (1)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Marta Ruiz'));
+      await tester.pumpAndSettle();
+      expect(find.text('Retirar del equipo'), findsNothing);
+    });
+
+    testWidgets('TeamFailure se muestra en snackbar', (tester) async {
+      final repo = await abrir(tester, [miembroAna, miembroLuis]);
+      repo.errorCambio = const TeamFailure(
+        'La clínica debe tener al menos un administrador.',
+      );
+      await tester.tap(find.text('Hacer administrador'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hacer administrador'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('La clínica debe tener al menos un administrador.'),
+        findsOneWidget,
+      );
+    });
+  });
 }
