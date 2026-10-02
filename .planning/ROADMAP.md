@@ -247,9 +247,9 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Schema delta Fase 5: protocolos (semillas), dosis append-only, alertas, enlaces, _carne_filas (fuente única) y 15 RPCs
-- [ ] 05-02-PLAN.md — Contrato Dart: entidades derivadas, VacunaFailure, WhatsApp, DosisEstadoChip, SupabaseVacunaRepository, fake
-- [ ] 05-03-PLAN.md — Superficie pública: Edge Function `carne` (JSON) + página estática GitHub Pages + workflow
+- [x] 05-01-PLAN.md — Schema delta Fase 5: protocolos (semillas), dosis append-only, alertas, enlaces, _carne_filas (fuente única) y 15 RPCs
+- [x] 05-02-PLAN.md — Contrato Dart: entidades derivadas, VacunaFailure, WhatsApp, DosisEstadoChip, SupabaseVacunaRepository, fake
+- [x] 05-03-PLAN.md — Superficie pública: Edge Function `carne` (JSON) + página estática GitHub Pages + workflow
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -342,7 +342,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
 | 4. Agenda y Citas | 11/11 | Complete    | 2026-10-01 |
-| 5. Vacunación y Desparasitación | 0/TBD | Not started | - |
+| 5. Vacunación y Desparasitación | 3/13 | In Progress|  |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
 | 8. Dashboard y Diseño Visual | 0/TBD | Not started | - |
