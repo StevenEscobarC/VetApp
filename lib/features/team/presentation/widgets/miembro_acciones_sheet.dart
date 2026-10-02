@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -97,15 +96,11 @@ class _Destructivo extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: double.infinity,
-    height: 48,
-    child: TextButton.icon(
-      style: TextButton.styleFrom(foregroundColor: AppColors.destructive),
-      onPressed: onPressed,
-      icon: const Icon(Icons.person_remove_outlined),
-      label: Text(label),
-    ),
+  Widget build(BuildContext context) => AppButton(
+    label: label,
+    icon: Icons.person_remove_outlined,
+    variant: AppButtonVariant.destructive,
+    onPressed: onPressed,
   );
 }
 
@@ -126,13 +121,18 @@ Future<bool> _confirmar(
           onPressed: () => Navigator.of(ctx).pop(false),
           child: const Text('Volver'),
         ),
-        TextButton(
-          style: destructivo
-              ? TextButton.styleFrom(foregroundColor: AppColors.destructive)
-              : null,
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: Text(accion),
-        ),
+        if (destructivo)
+          AppButton(
+            label: accion,
+            variant: AppButtonVariant.destructive,
+            expand: false,
+            onPressed: () => Navigator.of(ctx).pop(true),
+          )
+        else
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(accion),
+          ),
       ],
     ),
   );
@@ -214,7 +214,11 @@ Future<void> _salir(BuildContext context, WidgetRef ref, Miembro m) async {
   if (!ok || !context.mounted) return;
   final actions = ref.read(teamActionsProvider);
   // El servidor asigna las citas al administrador más antiguo (D-14).
-  await _ejecutar(context, () => actions.retirar(m.id), 'Saliste de la clínica');
+  await _ejecutar(
+    context,
+    () => actions.retirar(m.id),
+    'Saliste de la clínica',
+  );
 }
 
 Future<void> _retirar(BuildContext context, WidgetRef ref, Miembro m) async {

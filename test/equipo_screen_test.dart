@@ -263,6 +263,7 @@ void main() {
       final comp = FakeCompartidor();
       await tester.pumpWidget(pantalla(repo, compartidor: comp));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Compartir código'));
       await tester.tap(find.text('Compartir código'));
       await tester.pumpAndSettle();
       expect(comp.compartidos, hasLength(1));
@@ -284,6 +285,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Compartir código'));
       await tester.tap(find.text('Compartir código'));
       await tester.pumpAndSettle();
       expect(lanz.abiertos, hasLength(1));
@@ -311,6 +313,7 @@ void main() {
         ..invitacion = invitacionFixture;
       await tester.pumpWidget(pantalla(repo));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Copiar código'));
       await tester.tap(find.text('Copiar código'));
       await tester.pumpAndSettle();
       final set = calls.firstWhere((c) => c.method == 'Clipboard.setData');

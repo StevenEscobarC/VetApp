@@ -151,12 +151,14 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
             Text(
               'Eres el único veterinario de la clínica. Invita a un colega '
               'para compartir pacientes y agenda.',
-              style: textTheme.bodyMedium,
+              style: textTheme.bodyLarge?.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
           if (esAdmin && activos.length == 1) ...[
             if (_unirseAbierto)
-              const UnirseConCodigoForm()
+              const UnirseConCodigoForm(variant: AppButtonVariant.outline)
             else
               AppButton(
                 label: '¿Te registraste sin código? Unirme a otra clínica',
@@ -178,11 +180,32 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
               )
             else if (invitacion?.isLoading ?? false)
               const _SkeletonTile()
+            else if (invitacion?.hasError ?? false)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'No pudimos cargar el código.',
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  AppButton(
+                    label: 'Reintentar',
+                    variant: AppButtonVariant.text,
+                    expand: false,
+                    onPressed: () => ref.invalidate(invitacionVigenteProvider),
+                  ),
+                ],
+              )
             else
               Text(
                 'No hay códigos activos. Genera uno para invitar a un '
                 'colega.',
-                style: textTheme.bodyLarge,
+                style: textTheme.bodyLarge?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
           ],
           if (retirados.isNotEmpty) ...[

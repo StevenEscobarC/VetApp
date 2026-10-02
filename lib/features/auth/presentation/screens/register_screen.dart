@@ -141,7 +141,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         onSelectionChanged: (value) => setState(() => _role = value.first),
       ),
       if (_role == 'VETERINARIO') ...[
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
         Row(
           children: [
             Expanded(
@@ -166,21 +166,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ],
         ),
       ],
-      const SizedBox(height: 20),
+      const SizedBox(height: AppSpacing.md + AppSpacing.xs),
       AppTextField(label: 'Nombre completo', controller: _name),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpacing.md),
       AppTextField(
         label: 'Correo electrónico',
         controller: _email,
         keyboardType: TextInputType.emailAddress,
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpacing.md),
       AppTextField(
         label: 'Teléfono',
         controller: _phone,
         keyboardType: TextInputType.phone,
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpacing.md),
       AppTextField(
         label: 'Contraseña',
         controller: _password,
@@ -188,25 +188,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         hintText: 'Mínimo 8 caracteres',
       ),
       if (_role == 'VETERINARIO' && _conCodigo) ...[
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.lg),
         CodigoInvitacionField(controller: _codigo, errorText: _codigoError),
       ],
       if (_role == 'VETERINARIO' && !_conCodigo) ...[
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.lg),
         Text(
           'Datos de la clínica',
           style: Theme.of(context).textTheme.titleMedium,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
         AppTextField(label: 'Nombre de la clínica', controller: _clinic),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.md),
         AppTextField(label: 'Ciudad', controller: _city),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.md),
         AppTextField(label: 'Dirección', controller: _address),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.md),
         AppTextField(label: 'Teléfono de la clínica', controller: _clinicPhone),
       ],
-      const SizedBox(height: 24),
+      const SizedBox(height: AppSpacing.lg),
       AppButton(label: 'Crear cuenta', onPressed: _submit, isLoading: _loading),
     ],
   );

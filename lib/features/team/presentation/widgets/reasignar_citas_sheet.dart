@@ -78,33 +78,37 @@ class _ReasignarCitasSheetState extends State<_ReasignarCitasSheet> {
             ),
             const SizedBox(height: AppSpacing.md),
             for (final m in widget.candidatos)
-              InkWell(
-                onTap: () => setState(() => _elegido = m.id),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 56),
-                  child: Row(
-                    children: [
-                      Icon(
-                        m.id == _elegido
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_unchecked,
-                        color: m.id == _elegido
-                            ? AppColors.primary
-                            : AppColors.textMuted,
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      VetAvatar(
-                        nombre: m.nombre,
-                        indice: widget.indices[m.id] ?? 0,
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          m.id == widget.yoId ? '${m.nombre} (Tú)' : m.nombre,
-                          style: textTheme.bodyLarge,
+              Semantics(
+                button: true,
+                selected: m.id == _elegido,
+                child: InkWell(
+                  onTap: () => setState(() => _elegido = m.id),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 56),
+                    child: Row(
+                      children: [
+                        Icon(
+                          m.id == _elegido
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          color: m.id == _elegido
+                              ? AppColors.primaryText
+                              : AppColors.textMuted,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: AppSpacing.sm),
+                        VetAvatar(
+                          nombre: m.nombre,
+                          indice: widget.indices[m.id] ?? 0,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            m.id == widget.yoId ? '${m.nombre} (Tú)' : m.nombre,
+                            style: textTheme.bodyLarge,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

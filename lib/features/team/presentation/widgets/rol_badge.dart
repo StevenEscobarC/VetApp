@@ -35,7 +35,7 @@ class RolBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
-        vertical: 6,
+        vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
         color: AppColors.surfaceMuted,
@@ -46,11 +46,11 @@ class RolBadge extends StatelessWidget {
         children: [
           if (spec.icon != null) ...[
             Icon(spec.icon, size: 16, color: spec.color),
-            const SizedBox(width: 6),
+            const SizedBox(width: AppSpacing.xs),
           ],
           Text(
             spec.label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: spec.color,
               fontWeight: FontWeight.w600,
             ),

@@ -103,9 +103,9 @@ class _AccesoRevocadoScreenState extends ConsumerState<AccesoRevocadoScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'El administrador te retiró del equipo. Tus consultas '
-                      'siguen en la clínica. Puedes crear tu propia clínica o '
-                      'unirte a otra con un código de invitación.',
+                      'El administrador te retiró del equipo. Tus consultas y '
+                      'registros anteriores permanecen en la clínica con tu '
+                      'nombre.',
                       textAlign: TextAlign.center,
                       style: textTheme.bodyLarge?.copyWith(
                         color: AppColors.textSecondary,
@@ -123,6 +123,9 @@ class _AccesoRevocadoScreenState extends ConsumerState<AccesoRevocadoScreen> {
                           if (_modo != _Modo.crear)
                             AppButton(
                               label: 'Crear mi propia clínica',
+                              variant: _modo == _Modo.unirse
+                                  ? AppButtonVariant.outline
+                                  : AppButtonVariant.primary,
                               onPressed: () =>
                                   setState(() => _modo = _Modo.crear),
                             )
@@ -175,7 +178,12 @@ class _AccesoRevocadoScreenState extends ConsumerState<AccesoRevocadoScreen> {
 /// Campo de código + 'Unirme', compartido por 'Acceso revocado' y por Equipo
 /// (clínica vacía). Solo captura [TeamFailure]; el éxito refresca el perfil.
 class UnirseConCodigoForm extends ConsumerStatefulWidget {
-  const UnirseConCodigoForm({super.key});
+  const UnirseConCodigoForm({
+    super.key,
+    this.variant = AppButtonVariant.primary,
+  });
+
+  final AppButtonVariant variant;
 
   @override
   ConsumerState<UnirseConCodigoForm> createState() =>
@@ -196,7 +204,8 @@ class _UnirseConCodigoFormState extends ConsumerState<UnirseConCodigoForm> {
   Future<void> _unirme() async {
     if (!esCodigoInvitacionCompleto(_codigo.text)) {
       setState(
-        () => _error = 'Ese código no es válido. Revísalo e inténtalo de nuevo.',
+        () =>
+            _error = 'Ese código no es válido. Revísalo e inténtalo de nuevo.',
       );
       return;
     }
@@ -219,7 +228,12 @@ class _UnirseConCodigoFormState extends ConsumerState<UnirseConCodigoForm> {
     children: [
       CodigoInvitacionField(controller: _codigo, errorText: _error),
       const SizedBox(height: AppSpacing.md),
-      AppButton(label: 'Unirme', isLoading: _cargando, onPressed: _unirme),
+      AppButton(
+        label: 'Unirme',
+        variant: widget.variant,
+        isLoading: _cargando,
+        onPressed: _unirme,
+      ),
     ],
   );
 }

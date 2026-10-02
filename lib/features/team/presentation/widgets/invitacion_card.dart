@@ -38,12 +38,16 @@ class InvitacionCard extends ConsumerWidget {
       // queryParameters, que emitiría '+' por cada espacio.
       await ref
           .read(lanzadorExternoProvider)
-          .abrir(Uri.parse('https://wa.me/?text=${Uri.encodeComponent(mensaje)}'));
+          .abrir(
+            Uri.parse('https://wa.me/?text=${Uri.encodeComponent(mensaje)}'),
+          );
     }
   }
 
   Future<void> _copiar(BuildContext context) async {
-    await Clipboard.setData(ClipboardData(text: formatearCodigoInvitacion(invitacion.codigo)));
+    await Clipboard.setData(
+      ClipboardData(text: formatearCodigoInvitacion(invitacion.codigo)),
+    );
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -62,10 +66,11 @@ class InvitacionCard extends ConsumerWidget {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Volver'),
           ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.destructive),
+          AppButton(
+            label: 'Revocar',
+            variant: AppButtonVariant.destructive,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Revocar'),
           ),
         ],
       ),
@@ -85,9 +90,8 @@ class InvitacionCard extends ConsumerWidget {
     final textTheme = Theme.of(context).textTheme;
     final ahora = ref.watch(clockProvider)();
     final restante = invitacion.expiraEn.difference(ahora);
-    final colorVigencia = restante <= const Duration(hours: 6)
-        ? AppColors.warning
-        : AppColors.success;
+    final porVencer = restante <= const Duration(hours: 6);
+    final colorVigencia = porVencer ? AppColors.warning : AppColors.success;
     final codigo = formatearCodigoInvitacion(invitacion.codigo);
     final letras = invitacion.codigo.split('');
     final hablado = '${letras.take(4).join(' ')}, ${letras.skip(4).join(' ')}';
@@ -112,7 +116,7 @@ class InvitacionCard extends ConsumerWidget {
                 child: SelectableText(
                   codigo,
                   textAlign: TextAlign.center,
-                  style: textTheme.headlineMedium?.copyWith(
+                  style: textTheme.displaySmall?.copyWith(
                     letterSpacing: 2,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
@@ -120,10 +124,25 @@ class InvitacionCard extends ConsumerWidget {
               ),
             ),
           ),
-          Text(
-            textoVigenciaInvitacion(invitacion.expiraEn, ahora),
-            textAlign: TextAlign.center,
-            style: textTheme.labelLarge?.copyWith(color: colorVigencia),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                porVencer ? Icons.warning_amber_outlined : Icons.schedule,
+                size: 16,
+                color: colorVigencia,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: Text(
+                  textoVigenciaInvitacion(invitacion.expiraEn, ahora),
+                  textAlign: TextAlign.center,
+                  style: textTheme.labelLarge?.copyWith(
+                    color: AppColors.primaryText,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -148,13 +167,10 @@ class InvitacionCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.destructive,
-              minimumSize: const Size.fromHeight(48),
-            ),
+          AppButton(
+            label: 'Revocar código',
+            variant: AppButtonVariant.destructive,
             onPressed: () => _revocar(context, ref),
-            child: const Text('Revocar código'),
           ),
         ],
       ),

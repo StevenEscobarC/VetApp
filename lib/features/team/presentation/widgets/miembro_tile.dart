@@ -27,6 +27,7 @@ class MiembroTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final matricula = miembro.matricula?.trim() ?? '';
+    final apagado = !miembro.activo;
     return AppCard(
       onTap: onTap,
       child: ConstrainedBox(
@@ -56,13 +57,19 @@ class MiembroTile extends StatelessWidget {
                           ),
                       ],
                     ),
-                    style: textTheme.bodyLarge,
+                    style: apagado
+                        ? textTheme.bodyLarge?.copyWith(
+                            color: AppColors.textMuted,
+                          )
+                        : textTheme.bodyLarge,
                   ),
                   if (matricula.isNotEmpty)
                     Text(
                       'Mat. $matricula',
                       style: textTheme.labelLarge?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: apagado
+                            ? AppColors.textMuted
+                            : AppColors.textSecondary,
                       ),
                     ),
                 ],
