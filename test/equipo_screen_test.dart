@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:vetapp/core/data/clock_provider.dart';
+import 'package:vetapp/core/utils/compartir.dart';
+import 'package:vetapp/core/utils/lanzador_externo.dart';
+import 'helpers/fake_compartir.dart';
+import 'helpers/fake_url_launcher.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -158,5 +164,171 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('3 miembros'), findsOneWidget);
+  });
+
+  group('invitaciones', () {
+    final ahora = DateTime.utc(2026, 10, 1, 15);
+
+    Widget pantalla(
+      FakeTeamRepository repo, {
+      FakeCompartidor? compartidor,
+      FakeLanzadorExterno? lanzador,
+      AuthProfile perfil = vetAdminProfile,
+    }) => routerHarness(
+      initialLocation: '/equipo',
+      routes: [
+        GoRoute(path: '/equipo', builder: (_, _) => const EquipoScreen()),
+      ],
+      overrides: [
+        ..._overrides(repo, perfil: perfil),
+        clockProvider.overrideWithValue(() => ahora),
+        compartidorProvider.overrideWithValue(compartidor ?? FakeCompartidor()),
+        lanzadorExternoProvider.overrideWithValue(
+          lanzador ?? FakeLanzadorExterno(),
+        ),
+      ],
+    );
+
+    testWidgets('admin sin código: CTA genera y muestra la tarjeta', (
+      tester,
+    ) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna]);
+      await tester.pumpWidget(pantalla(repo));
+      await tester.pumpAndSettle();
+      expect(find.text('Invitaciones'), findsOneWidget);
+      expect(
+        find.text('No hay códigos activos. Genera uno para invitar a un colega.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      expect(find.text('K7MQ-4P2X'), findsOneWidget);
+      expect(find.text('Código generado'), findsOneWidget);
+      expect(find.text('Generar código nuevo'), findsOneWidget);
+    });
+
+    testWidgets('con código vigente pide confirmar antes de generar', (
+      tester,
+    ) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna])
+        ..invitacion = invitacionFixture;
+      await tester.pumpWidget(pantalla(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Generar código nuevo'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Generar un código nuevo?'), findsOneWidget);
+      expect(find.text('El código actual dejará de funcionar.'), findsOneWidget);
+      await tester.tap(find.text('Volver'));
+      await tester.pumpAndSettle();
+      expect(repo.generadas, 0);
+      await tester.tap(find.text('Generar código nuevo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Generar nuevo'));
+      await tester.pumpAndSettle();
+      expect(repo.generadas, 1);
+    });
+
+    testWidgets('Compartir envía el mensaje al compartidor', (tester) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna])
+        ..invitacion = invitacionFixture;
+      final comp = FakeCompartidor();
+      await tester.pumpWidget(pantalla(repo, compartidor: comp));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Compartir código'));
+      await tester.pumpAndSettle();
+      expect(comp.compartidos, hasLength(1));
+      expect(comp.compartidos.first, contains('Clínica Patitas'));
+      expect(comp.compartidos.first, contains('K7MQ-4P2X'));
+    });
+
+    testWidgets('si compartir falla abre WhatsApp con texto codificado', (
+      tester,
+    ) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna])
+        ..invitacion = invitacionFixture;
+      final lanz = FakeLanzadorExterno();
+      await tester.pumpWidget(
+        pantalla(
+          repo,
+          compartidor: FakeCompartidor(error: Exception('sin hoja')),
+          lanzador: lanz,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Compartir código'));
+      await tester.pumpAndSettle();
+      expect(lanz.abiertos, hasLength(1));
+      final uri = lanz.abiertos.first.toString();
+      expect(uri, startsWith('https://wa.me/?text=Hola%2C%20te%20invito'));
+      expect(uri, isNot(contains('+')));
+    });
+
+    testWidgets('Copiar código usa el portapapeles', (tester) async {
+      final calls = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          calls.add(call);
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna])
+        ..invitacion = invitacionFixture;
+      await tester.pumpWidget(pantalla(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Copiar código'));
+      await tester.pumpAndSettle();
+      final set = calls.firstWhere((c) => c.method == 'Clipboard.setData');
+      expect((set.arguments as Map)['text'], 'K7MQ-4P2X');
+      expect(find.text('Código copiado'), findsOneWidget);
+    });
+
+    testWidgets('Revocar confirma y revoca', (tester) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna])
+        ..invitacion = invitacionFixture;
+      await tester.pumpWidget(pantalla(repo));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Revocar código'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Revocar código'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Revocar este código?'), findsOneWidget);
+      expect(find.text('Nadie podrá usar el código K7MQ-4P2X.'), findsOneWidget);
+      await tester.tap(find.text('Revocar'));
+      await tester.pumpAndSettle();
+      expect(repo.revocadas, ['inv-1']);
+      expect(find.text('Código revocado'), findsOneWidget);
+    });
+
+    testWidgets('error al generar muestra snackbar', (tester) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna])
+        ..errorInvitacion = const TeamFailure(
+          'No pudimos generar el código. Intenta de nuevo.',
+        );
+      await tester.pumpWidget(pantalla(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No pudimos generar el código. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('no admin no ve invitaciones ni CTA', (tester) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna, miembroLuis])
+        ..invitacion = invitacionFixture;
+      await tester.pumpWidget(pantalla(repo, perfil: vetColegaProfile));
+      await tester.pumpAndSettle();
+      expect(find.text('Invitaciones'), findsNothing);
+      expect(find.text('Invitar veterinario'), findsNothing);
+      expect(find.text('K7MQ-4P2X'), findsNothing);
+    });
   });
 }

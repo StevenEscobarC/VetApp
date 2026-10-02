@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../domain/invitacion.dart';
 import '../../domain/miembro.dart';
 import '../../domain/team_failure.dart';
 
@@ -39,8 +40,67 @@ class SupabaseTeamRepository {
     }
   }
 
-  String _messageFor(PostgrestException error) {
+  /// Invitación vigente (sin usar, sin revocar, no vencida) de [clinicaId], o
+  /// `null`. Solo el administrador puede leerla (RLS).
+  Future<Invitacion?> invitacionVigente(String clinicaId) async {
+    try {
+      final row = await _client
+          .from('clinica_invitaciones')
+          .select('id, codigo, expira_en')
+          .eq('clinica_id', clinicaId)
+          .isFilter('usada_por', null)
+          .eq('revocada', false)
+          .gt('expira_en', DateTime.now().toUtc().toIso8601String())
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (row == null) return null;
+      return _invitacionDe(row);
+    } on PostgrestException catch (e) {
+      throw TeamFailure(_messageFor(e));
+    } catch (_) {
+      throw const TeamFailure('No pudimos cargar el equipo. Intenta de nuevo.');
+    }
+  }
+
+  /// Genera un código nuevo; el servidor revoca el vigente anterior.
+  Future<Invitacion> generarInvitacion() async {
+    try {
+      final rows = await _client.rpc('generar_invitacion_clinica');
+      return _invitacionDe((rows as List).first as Map<String, dynamic>);
+    } on PostgrestException catch (e) {
+      throw TeamFailure(_messageFor(e, fallback: _fallbackGenerar));
+    } catch (_) {
+      throw const TeamFailure(_fallbackGenerar);
+    }
+  }
+
+  Future<void> revocarInvitacion(String id) async {
+    try {
+      await _client.rpc('revocar_invitacion', params: {'p_id': id});
+    } on PostgrestException catch (e) {
+      throw TeamFailure(_messageFor(e, fallback: _fallbackRevocar));
+    } catch (_) {
+      throw const TeamFailure(_fallbackRevocar);
+    }
+  }
+
+  static const _fallbackGenerar =
+      'No pudimos generar el código. Intenta de nuevo.';
+  static const _fallbackRevocar =
+      'No pudimos revocar el código. Intenta de nuevo.';
+
+  Invitacion _invitacionDe(Map<String, dynamic> row) => Invitacion(
+    id: row['id'] as String,
+    codigo: row['codigo'] as String,
+    expiraEn: DateTime.parse(row['expira_en'] as String).toUtc(),
+  );
+
+  String _messageFor(
+    PostgrestException error, {
+    String fallback = 'No pudimos cargar el equipo. Intenta de nuevo.',
+  }) {
     if (error.code == '42501') return 'Solo un administrador puede hacer esto.';
-    return 'No pudimos cargar el equipo. Intenta de nuevo.';
+    return fallback;
   }
 }
