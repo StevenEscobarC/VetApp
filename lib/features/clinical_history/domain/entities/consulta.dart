@@ -45,6 +45,8 @@ class Consulta {
     this.anamnesis,
     this.examenFisico = const ExamenFisico(),
     this.evolucion,
+    this.veterinarioNombre,
+    this.veterinarioActivo,
   });
 
   final String id;
@@ -56,4 +58,8 @@ class Consulta {
   final String? anamnesis;
   final ExamenFisico examenFisico;
   final String? evolucion;
+
+  /// Autor embebido desde `perfiles` (Fase 4.1, TEAM-03); null si no se cargó.
+  final String? veterinarioNombre;
+  final bool? veterinarioActivo;
 }

@@ -13,8 +13,7 @@ import '../../domain/formato_consulta.dart';
 /// tests nunca disparen la descarga real (`PdfGoogleFonts` va sobre HTTPS
 /// en el primer uso). Mismo seam de test que [CapturadorFoto]
 /// (lib/core/utils/captura_foto.dart) y `capturadorFotoProvider`.
-typedef CargarFuentesPdf =
-    Future<({pw.Font regular, pw.Font bold})> Function();
+typedef CargarFuentesPdf = Future<({pw.Font regular, pw.Font bold})> Function();
 
 Future<({pw.Font regular, pw.Font bold})> _cargarFuentesReales() async {
   final regular = await PdfGoogleFonts.notoSansRegular();
@@ -104,7 +103,10 @@ class HistoriaClinicaPdfService {
             style: estiloRegular.copyWith(fontSize: 9),
           ),
           build: (context) => [
-            pw.Text('Especie: ${mascota.especie.etiqueta}', style: estiloRegular),
+            pw.Text(
+              'Especie: ${mascota.especie.etiqueta}',
+              style: estiloRegular,
+            ),
             pw.Text(
               'Raza: ${(raza == null || raza.isEmpty) ? 'Sin registrar' : raza}',
               style: estiloRegular,

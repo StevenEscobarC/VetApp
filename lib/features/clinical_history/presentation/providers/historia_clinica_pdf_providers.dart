@@ -20,10 +20,7 @@ final historiaClinicaPdfServiceProvider = Provider<HistoriaClinicaPdfService>(
 /// `UIActivityViewController`): nunca sube el archivo ni genera un link
 /// público (D-05).
 typedef CompartirPdf =
-    Future<void> Function({
-      required Uint8List bytes,
-      required String filename,
-    });
+    Future<void> Function({required Uint8List bytes, required String filename});
 
 final compartirPdfProvider = Provider<CompartirPdf>((ref) {
   return ({required Uint8List bytes, required String filename}) async {
