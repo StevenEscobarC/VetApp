@@ -9,6 +9,14 @@ const _luna = MascotaDeCita(id: 'm-luna', nombre: 'Luna', especie: 'perro');
 const _max = MascotaDeCita(id: 'm-max', nombre: 'Max', especie: 'gato');
 
 void main() {
+  group('firmaVeterinario', () {
+    test('antepone Dr(a). y recorta', () {
+      expect(firmaVeterinario('Laura Gómez'), 'Dr(a). Laura Gómez');
+      expect(firmaVeterinario('  Laura Gómez '), 'Dr(a). Laura Gómez');
+    });
+    test('vacío si no hay nombre', () => expect(firmaVeterinario('  '), ''));
+  });
+
   group('mensajeRecordatorio', () {
     test('consultorio', () {
       expect(

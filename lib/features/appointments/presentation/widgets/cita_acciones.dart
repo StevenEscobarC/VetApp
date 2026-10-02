@@ -207,7 +207,9 @@ Future<void> enviarRecordatorioWhatsApp(
   }
   final mensaje = mensajeRecordatorio(
     cita: cita,
-    veterinario: profile?.nombre ?? '',
+    veterinario: firmaVeterinario(
+      cita.veterinarioNombre ?? profile?.nombre ?? '',
+    ),
     clinica: profile?.clinicaNombre,
   );
   final ok = await lanzador.abrirEnApp(whatsappUri(numero, mensaje));
