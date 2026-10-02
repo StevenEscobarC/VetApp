@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../team/domain/codigo_invitacion.dart';
 import '../../domain/auth_failure.dart';
 
 class AuthProfile {
@@ -73,24 +74,28 @@ class SupabaseAuthRepository {
     String? ciudad,
     String? direccion,
     String? clinicaTelefono,
+    String? codigoInvitacion,
   }) async {
+    final data = datosRegistro(
+      nombre: nombre,
+      telefono: telefono,
+      rol: rol,
+      clinicaNombre: clinicaNombre,
+      ciudad: ciudad,
+      direccion: direccion,
+      clinicaTelefono: clinicaTelefono,
+      codigoInvitacion: codigoInvitacion,
+    );
     try {
       await _client.auth.signUp(
         email: email.trim(),
         password: password,
-        data: {
-          'nombre': nombre.trim(),
-          'telefono': telefono.trim(),
-          'rol': rol,
-          if (clinicaNombre != null) 'clinica_nombre': clinicaNombre.trim(),
-          if (ciudad != null) 'clinica_ciudad': ciudad.trim(),
-          if (direccion != null) 'clinica_direccion': direccion.trim(),
-          if (clinicaTelefono != null)
-            'clinica_telefono': clinicaTelefono.trim(),
-        },
+        data: data,
       );
     } on AuthException catch (error) {
-      throw AuthFailure(_messageFor(error));
+      throw AuthFailure(
+        mensajeErrorAuth(error, conCodigo: data.containsKey('codigo_invitacion')),
+      );
     } catch (_) {
       throw const AuthFailure(
         'No fue posible crear la cuenta. Intenta de nuevo.',
@@ -148,28 +153,67 @@ class SupabaseAuthRepository {
 
   Future<void> signOut() => _client.auth.signOut();
 
-  String _messageFor(AuthException error) {
-    final message = error.message.toLowerCase();
-    if (message.contains('invalid login credentials')) {
-      return 'Correo o contraseña incorrectos.';
-    }
-    if (message.contains('already registered') ||
-        message.contains('already exists')) {
-      return 'Ya existe una cuenta con este correo.';
-    }
-    if (message.contains('email not confirmed')) {
-      return 'Confirma tu correo electrónico antes de iniciar sesión.';
-    }
-    // Dev note: if this fires often during local testing, disable "Confirm
-    // email" in Supabase (Authentication > Providers > Email) to stop the
-    // rate-limited confirmation emails entirely.
-    if (message.contains('rate limit')) {
-      return 'Se alcanzó el límite de correos por ahora. Intenta de nuevo en unos minutos.';
-    }
-    if (message.contains('password')) {
-      return 'La contraseña debe tener al menos 8 caracteres.';
-    }
-    if (message.contains('email')) return 'Ingresa un correo válido.';
-    return 'No fue posible completar la solicitud. Intenta de nuevo.';
+  String _messageFor(AuthException error) => mensajeErrorAuth(error);
+}
+
+/// Arma la metadata de `auth.signUp`. Con código de invitación (solo
+/// VETERINARIO) viaja únicamente `codigo_invitacion`; nunca se envían
+/// `clinica_id`, `rol_clinica`, `activo` ni `matricula` (el servidor los
+/// decide).
+Map<String, dynamic> datosRegistro({
+  required String nombre,
+  required String telefono,
+  required String rol,
+  String? clinicaNombre,
+  String? ciudad,
+  String? direccion,
+  String? clinicaTelefono,
+  String? codigoInvitacion,
+}) {
+  final codigo = rol == 'VETERINARIO' && codigoInvitacion != null
+      ? normalizarCodigoInvitacion(codigoInvitacion)
+      : '';
+  return {
+    'nombre': nombre.trim(),
+    'telefono': telefono.trim(),
+    'rol': rol,
+    if (codigo.isNotEmpty) 'codigo_invitacion': codigo,
+    if (codigo.isEmpty) ...{
+      if (clinicaNombre != null) 'clinica_nombre': clinicaNombre.trim(),
+      if (ciudad != null) 'clinica_ciudad': ciudad.trim(),
+      if (direccion != null) 'clinica_direccion': direccion.trim(),
+      if (clinicaTelefono != null) 'clinica_telefono': clinicaTelefono.trim(),
+    },
+  };
+}
+
+/// Traduce errores de Supabase Auth a mensajes en español. Con [conCodigo] el
+/// 500 genérico del trigger de signup se interpreta como código inválido (el
+/// mensaje SQL real no llega al cliente).
+String mensajeErrorAuth(AuthException error, {bool conCodigo = false}) {
+  final message = error.message.toLowerCase();
+  if (conCodigo && message.contains('database error saving new user')) {
+    return 'Ese código no es válido o ya venció. Pídele al administrador uno nuevo.';
   }
+  if (message.contains('invalid login credentials')) {
+    return 'Correo o contraseña incorrectos.';
+  }
+  if (message.contains('already registered') ||
+      message.contains('already exists')) {
+    return 'Ya existe una cuenta con este correo.';
+  }
+  if (message.contains('email not confirmed')) {
+    return 'Confirma tu correo electrónico antes de iniciar sesión.';
+  }
+  // Dev note: if this fires often during local testing, disable "Confirm
+  // email" in Supabase (Authentication > Providers > Email) to stop the
+  // rate-limited confirmation emails entirely.
+  if (message.contains('rate limit')) {
+    return 'Se alcanzó el límite de correos por ahora. Intenta de nuevo en unos minutos.';
+  }
+  if (message.contains('password')) {
+    return 'La contraseña debe tener al menos 8 caracteres.';
+  }
+  if (message.contains('email')) return 'Ingresa un correo válido.';
+  return 'No fue posible completar la solicitud. Intenta de nuevo.';
 }
