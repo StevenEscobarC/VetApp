@@ -145,26 +145,20 @@ class InvitacionCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: AppButton(
-                  label: 'Compartir código',
-                  icon: Icons.share_outlined,
-                  variant: AppButtonVariant.outline,
-                  onPressed: () => _compartir(context, ref),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: AppButton(
-                  label: 'Copiar código',
-                  icon: Icons.content_copy_outlined,
-                  variant: AppButtonVariant.outline,
-                  onPressed: () => _copiar(context),
-                ),
-              ),
-            ],
+          // Apilados a ancho completo: lado a lado desbordaban en pantallas
+          // de teléfono (QA 04.1 G1).
+          AppButton(
+            label: 'Compartir código',
+            icon: Icons.share_outlined,
+            variant: AppButtonVariant.outline,
+            onPressed: () => _compartir(context, ref),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: 'Copiar código',
+            icon: Icons.content_copy_outlined,
+            variant: AppButtonVariant.outline,
+            onPressed: () => _copiar(context),
           ),
           const SizedBox(height: AppSpacing.xs),
           AppButton(
