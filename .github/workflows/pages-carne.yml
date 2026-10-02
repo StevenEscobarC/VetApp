@@ -1,0 +1,54 @@
+# Despliega public_carne/ en GitHub Pages.
+# public_carne/c/config.js se genera aqui en tiempo de despliegue a partir de la
+# variable de repositorio CARNE_FUNCTION_URL (la URL de la funcion no es secreta).
+# Nunca debe versionarse. La service role vive solo en Supabase, no aqui.
+name: Carné público (GitHub Pages)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'public_carne/**'
+      - '.github/workflows/pages-carne.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generar config.js
+        env:
+          CARNE_FUNCTION_URL: ${{ vars.CARNE_FUNCTION_URL }}
+        run: |
+          if [ -z "$CARNE_FUNCTION_URL" ]; then
+            echo "Falta la variable de repositorio CARNE_FUNCTION_URL" >&2
+            exit 1
+          fi
+          printf 'window.CARNE_CONFIG = { functionUrl: %s };\n' '${{ toJSON(vars.CARNE_FUNCTION_URL) }}' > public_carne/c/config.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public_carne
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
