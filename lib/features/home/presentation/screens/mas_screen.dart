@@ -89,6 +89,26 @@ class MasScreen extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             AppCard(
+              onTap: () => context.push('/mas/clinica'),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Row(
+                  children: [
+                    const Icon(Icons.storefront_outlined),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Datos de la clínica',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
               onTap: () => context.push('/mas/recordatorios'),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 56),
