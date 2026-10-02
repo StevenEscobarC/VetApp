@@ -50,11 +50,11 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 
 ### Equipo de la clínica (TEAM)
 
-- [ ] **TEAM-01**: El admin de la clínica puede invitar a otro veterinario con un código de un solo uso que vence (el vet invitado lo ingresa al registrarse y queda en la misma clínica)
-- [ ] **TEAM-02**: Dentro de una clínica existen dos roles — admin y veterinario — y solo el admin invita, retira y cambia roles (sin auto-escalación de privilegios; nunca queda una clínica sin admin)
-- [ ] **TEAM-03**: Al retirar a un veterinario pierde el acceso de inmediato, pero sus consultas/citas/vacunas se conservan con su autoría (desactivar, nunca borrar)
-- [ ] **TEAM-04**: Cada cita tiene un veterinario asignado (por defecto quien la crea, reasignable); la agenda muestra "Mías" por defecto con filtro "Todas", y los cruces y recordatorios locales se calculan por veterinario
-- [ ] **TEAM-05**: El perfil del veterinario incluye matrícula profesional opcional (Comvezcol), usada en documentos como el carné de vacunación
+- [x] **TEAM-01**: El admin de la clínica puede invitar a otro veterinario con un código de un solo uso que vence (el vet invitado lo ingresa al registrarse y queda en la misma clínica)
+- [x] **TEAM-02**: Dentro de una clínica existen dos roles — admin y veterinario — y solo el admin invita, retira y cambia roles (sin auto-escalación de privilegios; nunca queda una clínica sin admin)
+- [x] **TEAM-03**: Al retirar a un veterinario pierde el acceso de inmediato, pero sus consultas/citas/vacunas se conservan con su autoría (desactivar, nunca borrar)
+- [x] **TEAM-04**: Cada cita tiene un veterinario asignado (por defecto quien la crea, reasignable); la agenda muestra "Mías" por defecto con filtro "Todas", y los cruces y recordatorios locales se calculan por veterinario
+- [x] **TEAM-05**: El perfil del veterinario incluye matrícula profesional opcional (Comvezcol), usada en documentos como el carné de vacunación
 
 ### Vacunación (VAC)
 
