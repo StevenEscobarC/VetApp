@@ -14,6 +14,7 @@ import '../../../clinical_history/domain/consulta_failure.dart';
 import '../../../clinical_history/presentation/providers/consultas_providers.dart';
 import '../../../clinical_history/presentation/providers/historia_clinica_pdf_providers.dart';
 import '../../../clinical_history/presentation/widgets/historia_clinica_timeline.dart';
+import '../../../vaccination/presentation/widgets/carne_resumen_section.dart';
 import '../../domain/entities/mascota.dart';
 import '../../domain/entities/peso_registro.dart';
 import '../../domain/mascota_failure.dart';
@@ -216,6 +217,7 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
               textAlign: TextAlign.center,
             ),
           ),
+          CarneBadge(mascotaId: widget.mascotaId, rutaBase: rutaBase),
           const SizedBox(height: AppSpacing.lg),
           AppButton(
             label: 'Editar',
@@ -265,6 +267,8 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
             icon: Icons.add,
             onPressed: () => context.push('$rutaBase/consultas/nueva'),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          CarneResumenSection(mascotaId: widget.mascotaId, rutaBase: rutaBase),
           const SizedBox(height: AppSpacing.sm),
           // `go` (no push): el destino vive en la rama Agenda del shell y,
           // al guardar, el formulario regresa a la AgendaScreen (D-07).

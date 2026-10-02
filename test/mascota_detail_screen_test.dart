@@ -19,12 +19,16 @@ import 'package:vetapp/features/patients/domain/entities/peso_registro.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/features/patients/presentation/screens/mascota_detail_screen.dart';
+import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
+import 'package:vetapp/features/vaccination/domain/entities/protocolo.dart';
+import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_consultas.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/fake_pdf.dart';
+import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
 /// Historial de peso de Rocky (m-1), seedeado deliberadamente fuera de
@@ -51,7 +55,65 @@ final _pesosRocky = [
   ),
 ];
 
+Carne _carneVacia(String id) => Carne(
+  hoy: DateTime.utc(2026, 10, 2),
+  mascotaId: id,
+  mascotaNombre: 'Rocky',
+  especie: 'perro',
+  raza: '',
+  duenoNombre: '',
+  duenoTelefono: '',
+  clinicaNombre: '',
+  clinicaCiudad: '',
+  biologicos: const [],
+  dosis: const [],
+);
+
+/// Carné con una dosis de polivalente en el estado dado.
+Carne _carneConEstado(String id, EstadoCarne estado) => Carne(
+  hoy: DateTime.utc(2026, 10, 2),
+  mascotaId: id,
+  mascotaNombre: 'Rocky',
+  especie: 'perro',
+  raza: '',
+  duenoNombre: '',
+  duenoTelefono: '',
+  clinicaNombre: '',
+  clinicaCiudad: '',
+  biologicos: [
+    BiologicoCarne(
+      codigoProtocolo: 'polivalente',
+      biologicoNombre: 'Polivalente',
+      tipo: TipoDosis.vacuna,
+      ultimaDosisId: 'd-1',
+      ultimaFecha: DateTime.utc(2026, 8, 30),
+      posicion: 1,
+      dosisSerie: 3,
+      proximaFecha: DateTime.utc(2026, 9, 20),
+      etiquetaProxima: '',
+      estado: estado,
+      diasVencida: estado == EstadoCarne.vencida ? 12 : 0,
+      ventanaDias: 30,
+      sugerirReiniciar: false,
+    ),
+  ],
+  dosis: [
+    DosisCarne(
+      id: 'd-1',
+      codigoProtocolo: 'polivalente',
+      biologicoNombre: 'Polivalente',
+      tipo: TipoDosis.vacuna,
+      fechaAplicacion: DateTime.utc(2026, 8, 30),
+      esUltima: true,
+      externa: false,
+      esRefuerzo: false,
+      anulada: false,
+    ),
+  ],
+);
+
 Widget _appUnderTest({
+  FakeVacunaRepository? vacunas,
   required FakeMascotaRepository repo,
   FakeMascotaFotoDatasource? fotos,
   CapturadorFoto? capturador,
@@ -75,6 +137,11 @@ Widget _appUnderTest({
               rutaBase: state.uri.path,
             ),
             routes: [
+              GoRoute(
+                path: 'carne',
+                builder: (_, state) =>
+                    Text('CARNE ${state.pathParameters['id']}'),
+              ),
               GoRoute(
                 path: 'consultas/nueva',
                 builder: (_, state) => formularioReal
@@ -102,6 +169,15 @@ Widget _appUnderTest({
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
       mascotaRepositoryProvider.overrideWithValue(repo),
+      vacunaRepositoryProvider.overrideWithValue(
+        vacunas ??
+            FakeVacunaRepository(
+              carnes: {
+                'm-1': _carneVacia('m-1'),
+                'm-2': _carneVacia('m-2'),
+              },
+            ),
+      ),
       mascotaFotoDatasourceProvider.overrideWithValue(
         fotos ?? FakeMascotaFotoDatasource(),
       ),
@@ -122,6 +198,77 @@ Widget _appUnderTest({
 }
 
 void main() {
+  testWidgets('sin dosis: sección Carné vacía y sin insignia', (tester) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+    await tester.pumpWidget(_appUnderTest(repo: repo));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Carné de vacunación'), findsOneWidget);
+    expect(find.text('Sin vacunas registradas'), findsOneWidget);
+    expect(find.text('Vacunas al día'), findsNothing);
+    expect(find.text('Vencida'), findsNothing);
+  });
+
+  testWidgets('con vencidas: insignia Vencida y sección con pendientes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+    final vacunas = FakeVacunaRepository(
+      carnes: {'m-1': _carneConEstado('m-1', EstadoCarne.vencida)},
+    );
+    await tester.pumpWidget(_appUnderTest(repo: repo, vacunas: vacunas));
+    await tester.pumpAndSettle();
+
+    // Insignia bajo el nombre + chip de la sección.
+    expect(find.text('Vencida'), findsNWidgets(2));
+    expect(find.text('1 pendientes'), findsOneWidget);
+    expect(find.text('1 dosis'), findsOneWidget);
+  });
+
+  testWidgets('con dosis y sin pendientes: Vacunas al día', (tester) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+    final vacunas = FakeVacunaRepository(
+      carnes: {'m-1': _carneConEstado('m-1', EstadoCarne.alDia)},
+    );
+    await tester.pumpWidget(_appUnderTest(repo: repo, vacunas: vacunas));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vacunas al día'), findsOneWidget);
+  });
+
+  testWidgets('tocar la sección navega a /pacientes/<id>/carne', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+    final vacunas = FakeVacunaRepository(
+      carnes: {'m-1': _carneConEstado('m-1', EstadoCarne.proxima)},
+    );
+    await tester.pumpWidget(_appUnderTest(repo: repo, vacunas: vacunas));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('1 pendientes'));
+    await tester.tap(find.text('1 pendientes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CARNE m-1'), findsOneWidget);
+  });
+
   testWidgets(
     '"Agendar cita" es un botón outline que navega a /agenda/nueva con '
     'clienteId y mascotaId',
