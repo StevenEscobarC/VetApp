@@ -255,15 +255,15 @@ Plans:
 
 - [x] 05-05-PLAN.md — Registrar dosis (/dosis/nueva): biológico, fecha, chips de duración, Otro, externa, próxima calculada
 - [x] 05-06-PLAN.md — Compartir carné: enlace permanente, WhatsApp, hoja nativa, PDF "Hecho con VetApp", regenerar
-- [ ] 05-14-PLAN.md — Logo de la clínica (D-26..D-28): logo_path, bucket privado clinica-logos, RPC actualizar_clinica solo admin, logo_path en el carné + contrato Dart (lib/features/clinic)
+- [x] 05-14-PLAN.md — Logo de la clínica (D-26..D-28): logo_path, bucket privado clinica-logos, RPC actualizar_clinica solo admin, logo_path en el carné + contrato Dart (lib/features/clinic)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 05-04-PLAN.md — Smoke Q1..Q48 (193 checks, incl. logo) + sondas + [BLOCKING] aplicar en vivo (MCP) y pegar smoke
-- [ ] 05-07-PLAN.md — Carné en la ficha (/pacientes/:id/carne), tarjetas por biológico, anular con motivo, badge
-- [ ] 05-08-PLAN.md — Más > Protocolos (catálogo editable, solo admin en multi-vet)
-- [ ] 05-09-PLAN.md — Vacunas pendientes (/vacunas): Recordar/Agendar/Registrar/Descartar-posponer
-- [ ] 05-10-PLAN.md — Completar cita -> registrar dosis vinculada a la cita
+- [x] 05-07-PLAN.md — Carné en la ficha (/pacientes/:id/carne), tarjetas por biológico, anular con motivo, badge
+- [x] 05-08-PLAN.md — Más > Protocolos (catálogo editable, solo admin en multi-vet)
+- [x] 05-09-PLAN.md — Vacunas pendientes (/vacunas): Recordar/Agendar/Registrar/Descartar-posponer
+- [x] 05-10-PLAN.md — Completar cita -> registrar dosis vinculada a la cita
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -349,7 +349,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
 | 4. Agenda y Citas | 11/11 | Complete    | 2026-10-01 |
-| 5. Vacunación y Desparasitación | 5/16 | In Progress|  |
+| 5. Vacunación y Desparasitación | 10/17 | In Progress|  |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
 | 8. Dashboard y Diseño Visual | 0/TBD | Not started | - |
