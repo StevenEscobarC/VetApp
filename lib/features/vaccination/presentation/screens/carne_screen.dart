@@ -14,6 +14,7 @@ import '../providers/registrar_dosis_providers.dart';
 import '../providers/vacuna_providers.dart';
 import '../vacunacion_routes.dart';
 import '../widgets/biologico_group_header.dart';
+import '../widgets/carne_clinica_header.dart';
 import '../widgets/compartir_carne_sheet.dart';
 import '../widgets/dosis_registrada_snackbar.dart';
 import '../widgets/dosis_card.dart';
@@ -234,7 +235,7 @@ class _Contenido extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        // Punto de extensión: 05-16 antepone aquí el membrete de la clínica.
+        CarneClinicaHeader(carne: carne),
         if (activas >= 1 && peor != null) ...[
           Container(
             padding: const EdgeInsets.all(AppSpacing.sm),

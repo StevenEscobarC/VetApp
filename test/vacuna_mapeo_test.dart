@@ -88,6 +88,26 @@ void main() {
       expect(carne.biologicos.first.proximaFecha, DateTime.utc(2026, 2, 1));
     });
 
+    test('clinicaLogoPath: mapea, vacío o ausente es null', () {
+      Map<String, dynamic> conClinica(Map<String, dynamic> c) =>
+          {..._json([]), 'clinica': c};
+      expect(
+        Carne.desdeJson(
+          conClinica({
+            'nombre': 'X',
+            'ciudad': 'Y',
+            'logo_path': 'c1/logo-1700000000000.jpg',
+          }),
+        ).clinicaLogoPath,
+        'c1/logo-1700000000000.jpg',
+      );
+      expect(
+        Carne.desdeJson(conClinica({'logo_path': ''})).clinicaLogoPath,
+        isNull,
+      );
+      expect(carne.clinicaLogoPath, isNull);
+    });
+
     test('peorEstado y pendientes', () {
       expect(carne.peorEstado, EstadoCarne.vencida);
       expect(carne.pendientes, 1);
