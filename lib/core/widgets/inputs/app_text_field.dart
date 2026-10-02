@@ -24,12 +24,14 @@ class AppTextField extends StatelessWidget {
     this.textCapitalization = TextCapitalization.none,
     this.inputFormatters,
     this.maxLength,
+    this.autofocus = false,
   });
 
   final IconData? prefixIcon;
   final TextCapitalization textCapitalization;
   final List<TextInputFormatter>? inputFormatters;
   final int? maxLength;
+  final bool autofocus;
 
   final String label;
   final TextEditingController? controller;
@@ -64,6 +66,7 @@ class AppTextField extends StatelessWidget {
             textCapitalization: textCapitalization,
             inputFormatters: inputFormatters,
             maxLength: maxLength,
+            autofocus: autofocus,
             decoration: InputDecoration(
               prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
               counterText: maxLength == null ? null : '',
