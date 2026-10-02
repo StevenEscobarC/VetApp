@@ -195,7 +195,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         const SizedBox(height: AppSpacing.lg),
         Text(
           'Datos de la clínica',
-          style: Theme.of(context).textTheme.titleMedium,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
         AppTextField(label: 'Nombre de la clínica', controller: _clinic),

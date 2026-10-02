@@ -125,7 +125,7 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Miembros', style: textTheme.titleMedium),
+          Text('Miembros', style: textTheme.titleLarge),
           const SizedBox(height: AppSpacing.sm),
           for (final m in activos) ...[
             MiembroTile(
@@ -168,7 +168,7 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
           ],
           if (esAdmin) ...[
             const SizedBox(height: AppSpacing.lg),
-            Text('Invitaciones', style: textTheme.titleMedium),
+            Text('Invitaciones', style: textTheme.titleLarge),
             const SizedBox(height: AppSpacing.sm),
             if (vigente != null)
               KeyedSubtree(
