@@ -242,7 +242,36 @@ Plans:
   4. El veterinario puede generar un link público de solo lectura con el carné de vacunación de una mascota, sin exponer la historia clínica completa
   5. El dueño puede ver el carné de vacunación compartido sin necesidad de cuenta
 
-**Plans**: TBD
+**Plans**: 13 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — Schema delta Fase 5: protocolos (semillas), dosis append-only, alertas, enlaces, _carne_filas (fuente única) y 15 RPCs
+- [ ] 05-02-PLAN.md — Contrato Dart: entidades derivadas, VacunaFailure, WhatsApp, DosisEstadoChip, SupabaseVacunaRepository, fake
+- [ ] 05-03-PLAN.md — Superficie pública: Edge Function `carne` (JSON) + página estática GitHub Pages + workflow
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-04-PLAN.md — Smoke Q1..Q40 (185 checks) + sondas + [BLOCKING] aplicar en vivo (MCP) y pegar smoke
+- [ ] 05-05-PLAN.md — Registrar dosis (/dosis/nueva): biológico, fecha, chips de duración, Otro, externa, próxima calculada
+- [ ] 05-06-PLAN.md — Compartir carné: enlace permanente, WhatsApp, hoja nativa, PDF "Hecho con VetApp", regenerar
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05-07-PLAN.md — Carné en la ficha (/pacientes/:id/carne), tarjetas por biológico, anular con motivo, badge
+- [ ] 05-08-PLAN.md — Más > Protocolos (catálogo editable, solo admin en multi-vet)
+- [ ] 05-09-PLAN.md — Vacunas pendientes (/vacunas): Recordar/Agendar/Registrar/Descartar-posponer
+- [ ] 05-10-PLAN.md — Completar cita -> registrar dosis vinculada a la cita
+- [ ] 05-11-PLAN.md — [BLOCKING] Desplegar Edge Function + GitHub Pages, sondas y README (respaldo documentado)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 05-12-PLAN.md — Tarjeta Inicio, acceso rápido "Vacunar" (Inicio/Agenda) y badges en lista de pacientes
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 05-13-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca, UAT vetapp-qa y verificación en celular real
 **UI hint**: yes
 
 ### Phase 05.1: Planes y límites (INSERTED)

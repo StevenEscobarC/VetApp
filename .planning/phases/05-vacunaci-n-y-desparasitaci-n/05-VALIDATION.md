@@ -51,6 +51,34 @@ To be filled by planner/executor per task. Requirement → test map:
 | VAC-05 | Edge Function: token mal formado → 404; válido → JSON mínimo; página renderiza sin cuenta | manual + curl | `curl` documentado en plan; verificación visual en celular | manual-only (justificación: host externo) |
 
 
+### Per-task map (planner, 2026-10-02)
+
+| Plan-Task | Wave | Requirement | Automated Command | File Exists? | Status |
+|-----------|------|-------------|-------------------|--------------|--------|
+| 05-01-T1 | 1 | VAC-01/02/03 | grep gates (4 tables after Fase 5 header, no proxima column, es_autor OR dosis) | ✅ schema.sql | ⬜ |
+| 05-01-T2 | 1 | VAC-01..05 | grep loop over 15 RPCs + carne_publico service_role-only (CONTRATO_OK) | ✅ schema.sql | ⬜ |
+| 05-02-T1 | 1 | VAC-02/03 | `flutter test test/vacuna_mapeo_test.dart test/whatsapp_vacunas_test.dart test/dosis_estado_chip_test.dart` | ❌ W0 (this task) | ⬜ |
+| 05-02-T2 | 1 | VAC-01..04 | `flutter test test/supabase_vacuna_repository_test.dart` | ❌ W0 (this task) | ⬜ |
+| 05-03-T1 | 1 | VAC-04/05 | grep gates EDGE_OK | ❌ (this task) | ⬜ |
+| 05-03-T2 | 1 | VAC-05 | `node --test test/web/carne_logica.test.mjs` + no-innerHTML gate (PAGE_OK) | ❌ W0 (this task) | ⬜ |
+| 05-03-T3 | 1 | VAC-05 | WORKFLOW_OK grep gates | ❌ (this task) | ⬜ |
+| 05-04-T1 | 2 | VAC-01..05 | 185 `checks := checks + 1` + Q1..Q40 labels | ✅ extend | ⬜ |
+| 05-04-T2 | 2 | VAC-04 | `bash -n verify_live_schema.sh` (PROBE_SYNTAX_OK) | ✅ extend | ⬜ |
+| 05-04-T3 | 2 | VAC-01..05 | manual: `RLS SMOKE: PASS (185 checks)` + `LIVE_SCHEMA_OK` | — | ⬜ |
+| 05-05-T1/T2 | 2 | VAC-01/02 | `flutter test test/registrar_dosis_screen_test.dart` | ❌ W0 (T1) | ⬜ |
+| 05-06-T1 | 2 | VAC-04 | `flutter test test/carne_pdf_service_test.dart` | ❌ W0 (this task) | ⬜ |
+| 05-06-T2 | 2 | VAC-04 | `flutter test test/compartir_carne_sheet_test.dart` | ❌ W0 (this task) | ⬜ |
+| 05-07-T1..T3 | 3 | VAC-01..04 | `flutter test test/carne_screen_test.dart test/mascota_detail_screen_test.dart` | ❌ W0 (T1) | ⬜ |
+| 05-08-T1/T2 | 3 | VAC-02 | `flutter test test/protocolos_screen_test.dart` | ❌ W0 (T1) | ⬜ |
+| 05-09-T1/T2 | 3 | VAC-03 | `flutter test test/vacunas_pendientes_screen_test.dart test/cita_form_screen_test.dart` | ❌ W0 (T1) | ⬜ |
+| 05-10-T1/T2 | 3 | VAC-01 | `flutter test test/completar_cita_screen_test.dart` | ✅ extend | ⬜ |
+| 05-11-T1 | 3 | VAC-04/05 | manual authorization | — | ⬜ |
+| 05-11-T2 | 3 | VAC-04/05 | `REQUIRE_CARNE_FN=1 bash supabase/tests/verify_live_schema.sh` + curl Pages 200 (CARNE_LIVE_OK) | ✅ | ⬜ |
+| 05-12-T1..T3 | 4 | VAC-01/03 | `flutter test test/inicio_screen_test.dart test/mascota_search_sheet_test.dart test/pacientes_list_screen_test.dart test/agenda_screen_test.dart` | ❌ W0 (T1) | ⬜ |
+| 05-13-T1 | 5 | all | PHASE5_GATE_OK (`flutter analyze && flutter test` + node test + live probe) | ✅ | ⬜ |
+| 05-13-T2 | 5 | all | 05-QA-REPORT.md F1..F12 | — | ⬜ |
+| 05-13-T3 | 5 | VAC-04/05 | manual real phone | — | ⬜ |
+
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
