@@ -3,7 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/buttons/app_button.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/chips/app_filter_chip.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../team/domain/codigo_invitacion.dart';
+import '../../../team/presentation/widgets/codigo_invitacion_field.dart';
 import '../../domain/auth_failure.dart';
 import '../providers/auth_providers.dart';
 import 'auth_scaffold.dart';
@@ -24,6 +28,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _city = TextEditingController();
   final _address = TextEditingController();
   final _clinicPhone = TextEditingController();
+  final _codigo = TextEditingController();
+  bool _conCodigo = false;
+  String? _codigoError;
   String _role = 'CLIENTE';
   bool _loading = false;
   String? _error;
@@ -38,6 +45,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _city.dispose();
     _address.dispose();
     _clinicPhone.dispose();
+    _codigo.dispose();
     super.dispose();
   }
 
@@ -51,13 +59,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
       return;
     }
-    if (_role == 'VETERINARIO' && _clinic.text.trim().isEmpty) {
+    final usaCodigo = _role == 'VETERINARIO' && _conCodigo;
+    if (usaCodigo && !esCodigoInvitacionCompleto(_codigo.text)) {
+      setState(() {
+        _error = null;
+        _codigoError =
+            'Ese código no es válido. Revísalo e inténtalo de nuevo.';
+      });
+      return;
+    }
+    if (_role == 'VETERINARIO' && !usaCodigo && _clinic.text.trim().isEmpty) {
       setState(() => _error = 'Ingresa el nombre de tu clínica.');
       return;
     }
     setState(() {
       _loading = true;
       _error = null;
+      _codigoError = null;
     });
     try {
       final repository = ref.read(authRepositoryProvider);
@@ -67,10 +85,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         nombre: _name.text,
         telefono: _phone.text,
         rol: _role,
-        clinicaNombre: _role == 'VETERINARIO' ? _clinic.text : null,
-        ciudad: _role == 'VETERINARIO' ? _city.text : null,
-        direccion: _role == 'VETERINARIO' ? _address.text : null,
-        clinicaTelefono: _role == 'VETERINARIO' ? _clinicPhone.text : null,
+        clinicaNombre: _role == 'VETERINARIO' && !usaCodigo
+            ? _clinic.text
+            : null,
+        ciudad: _role == 'VETERINARIO' && !usaCodigo ? _city.text : null,
+        direccion: _role == 'VETERINARIO' && !usaCodigo ? _address.text : null,
+        clinicaTelefono: _role == 'VETERINARIO' && !usaCodigo
+            ? _clinicPhone.text
+            : null,
+        codigoInvitacion: usaCodigo ? _codigo.text : null,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -81,7 +104,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         if (context.canPop()) context.pop();
       }
     } on AuthFailure catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(() {
+          if (usaCodigo) {
+            _codigoError = error.message;
+          } else {
+            _error = error.message;
+          }
+        });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -109,6 +140,32 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         selected: {_role},
         onSelectionChanged: (value) => setState(() => _role = value.first),
       ),
+      if (_role == 'VETERINARIO') ...[
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: AppFilterChip(
+                label: 'Crear mi clínica',
+                selected: !_conCodigo,
+                onTap: () => setState(() {
+                  _conCodigo = false;
+                  _codigo.clear();
+                  _codigoError = null;
+                }),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: AppFilterChip(
+                label: 'Tengo un código',
+                selected: _conCodigo,
+                onTap: () => setState(() => _conCodigo = true),
+              ),
+            ),
+          ],
+        ),
+      ],
       const SizedBox(height: 20),
       AppTextField(label: 'Nombre completo', controller: _name),
       const SizedBox(height: 16),
@@ -130,7 +187,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         obscureText: true,
         hintText: 'Mínimo 8 caracteres',
       ),
-      if (_role == 'VETERINARIO') ...[
+      if (_role == 'VETERINARIO' && _conCodigo) ...[
+        const SizedBox(height: 24),
+        CodigoInvitacionField(controller: _codigo, errorText: _codigoError),
+      ],
+      if (_role == 'VETERINARIO' && !_conCodigo) ...[
         const SizedBox(height: 24),
         Text(
           'Datos de la clínica',
