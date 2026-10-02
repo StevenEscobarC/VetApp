@@ -29,7 +29,7 @@ class MasScreen extends ConsumerWidget {
     final matricula = ref.watch(authProfileProvider).value?.matricula;
     return Scaffold(
       appBar: const AppTopBar(title: 'Más'),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
