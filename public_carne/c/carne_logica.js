@@ -136,6 +136,7 @@ export function modeloVista(json) {
       ciudad: txt(c.ciudad),
       direccion: txt(c.direccion),
       telefono: txt(c.telefono),
+      logoUrl: typeof c.logo_url === 'string' ? c.logo_url : '',
     },
     grupos,
   };

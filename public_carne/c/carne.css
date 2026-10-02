@@ -26,6 +26,8 @@ h1, h2, p, dl, dd, dt { margin: 0; }
 .oculto { display: none; }
 
 .banda { padding-bottom: 8px; border-bottom: 2px solid var(--primario); margin-bottom: 16px; }
+.banda-clinica { display: flex; align-items: center; gap: 8px; }
+.logo-clinica { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; }
 .tarjeta { background: var(--superficie); border: 1px solid var(--borde); border-radius: 16px; padding: 16px; }
 .mascota { display: flex; gap: 16px; align-items: center; }
 .avatar { flex: none; width: 64px; height: 64px; border-radius: 50%; background: var(--muted); display: flex; align-items: center; justify-content: center; font: 400 28px "Caprasimo", Georgia, serif; overflow: hidden; }
