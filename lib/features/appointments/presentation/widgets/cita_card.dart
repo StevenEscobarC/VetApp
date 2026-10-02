@@ -49,7 +49,8 @@ class CitaCard extends ConsumerWidget {
     final miembro = activos
         .where((m) => m.id == cita.veterinarioId)
         .firstOrNull;
-    final retirado = miembro == null;
+    // Sin datos aún (lista vacía) no se marca como retirado: evita el parpadeo.
+    final retirado = activos.isNotEmpty && miembro == null;
     final indices = ref.watch(indicesColorVetProvider);
     final indice = indices[cita.veterinarioId] ?? 0;
     final nombreVet = (cita.veterinarioNombre ?? miembro?.nombre ?? '').trim();
@@ -62,6 +63,12 @@ class CitaCard extends ConsumerWidget {
         children: [
           Row(
             children: [
+              Expanded(
+                child: Text(
+                  rangoHoras(aBogota(cita.fechaHora), aBogota(cita.fin)),
+                  style: textTheme.labelLarge,
+                ),
+              ),
               if (marcarVet) ...[
                 VetAvatar(
                   nombre: nombreVet,
@@ -80,21 +87,21 @@ class CitaCard extends ConsumerWidget {
                 ),
                 if (retirado && !cita.estado.esTerminal) ...[
                   const SizedBox(width: AppSpacing.xs),
+                  const Icon(
+                    Icons.warning_amber_outlined,
+                    size: 16,
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
                   Text(
                     'Sin atender',
                     style: textTheme.labelLarge?.copyWith(
-                      color: AppColors.warning,
+                      color: AppColors.primaryText,
                     ),
                   ),
                 ],
                 const SizedBox(width: AppSpacing.sm),
               ],
-              Expanded(
-                child: Text(
-                  rangoHoras(aBogota(cita.fechaHora), aBogota(cita.fin)),
-                  style: textTheme.labelLarge,
-                ),
-              ),
               AppStatusChip(status: estadoAStatus(cita.estado)),
             ],
           ),

@@ -56,10 +56,7 @@ Future<Miembro?> elegirVeterinario(
                             ),
                             const SizedBox(width: AppSpacing.sm),
                             Expanded(
-                              child: Text(
-                                'Dr(a). ${m.nombre}',
-                                style: textTheme.bodyLarge,
-                              ),
+                              child: Text(m.nombre, style: textTheme.bodyLarge),
                             ),
                             if (m.id == yoId) ...[
                               Text(

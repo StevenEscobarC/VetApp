@@ -350,8 +350,9 @@ class _Contenido extends ConsumerWidget {
 
     Widget cancelar() => SizedBox(
       width: double.infinity,
-      child: TextButton(
-        style: TextButton.styleFrom(foregroundColor: AppColors.destructive),
+      child: AppButton(
+        label: 'Cancelar cita',
+        variant: AppButtonVariant.destructive,
         onPressed: () async {
           if (!await confirmarCancelacion(context, cita) || !context.mounted) {
             return;
@@ -364,7 +365,6 @@ class _Contenido extends ConsumerWidget {
             mensaje: 'Cita cancelada',
           );
         },
-        child: const Text('Cancelar cita'),
       ),
     );
 

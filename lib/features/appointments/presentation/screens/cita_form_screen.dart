@@ -644,15 +644,21 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
             if (multiVet && _veterinarioId != null) ...[
               const SizedBox(height: AppSpacing.lg),
               titulo('Veterinario'),
-              InkWell(
-                onTap: () => _elegirVeterinario(yo?.id ?? ''),
+              Semantics(
+                button: true,
+                label:
+                    'Veterinario: Dr(a). ${_veterinarioNombre ?? ''}, cambiar',
+                excludeSemantics: true,
                 child: AppCard(
+                  onTap: () => _elegirVeterinario(yo?.id ?? ''),
                   child: Row(
                     children: [
                       VetAvatar(
                         nombre: _veterinarioNombre ?? '',
                         indice:
-                            ref.watch(indicesColorVetProvider)[_veterinarioId] ??
+                            ref.watch(
+                              indicesColorVetProvider,
+                            )[_veterinarioId] ??
                             0,
                         size: 40,
                       ),

@@ -342,7 +342,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byType(BottomSheet),
-          matching: find.text('Dr(a). Ana Ramírez'),
+          matching: find.text('Ana Ramírez'),
         ),
       );
       await tester.pump();

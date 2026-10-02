@@ -836,10 +836,10 @@ void main() {
       await tester.tap(find.text('Dr(a). Ana Ramírez'));
       await tester.pumpAndSettle();
       expect(find.text('Asignar a'), findsOneWidget);
-      expect(find.text('Dr(a). Luis Torres'), findsOneWidget);
-      expect(find.text('Dr(a). Marta Ruiz'), findsNothing);
+      expect(find.text('Luis Torres'), findsOneWidget);
+      expect(find.text('Marta Ruiz'), findsNothing);
 
-      await tester.tap(find.text('Dr(a). Luis Torres'));
+      await tester.tap(find.text('Luis Torres'));
       await tester.pumpAndSettle();
       expect(find.text('Asignar a'), findsNothing);
       expect(find.text('Dr(a). Luis Torres'), findsOneWidget);
@@ -871,7 +871,7 @@ void main() {
       // Con Luis no hay cruce.
       await tester.tap(find.text('Dr(a). Ana Ramírez'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Dr(a). Luis Torres'));
+      await tester.tap(find.text('Luis Torres'));
       await tester.pumpAndSettle();
       await _tocarGuardar(tester);
       expect(find.text('Se cruza con otra cita'), findsNothing);
@@ -965,11 +965,11 @@ void main() {
 
       await tester.tap(find.text('Dr(a). Luis Torres'));
       await tester.pumpAndSettle();
-      await tester.tap(enHoja('Dr(a). Ana Ramírez'));
+      await tester.tap(enHoja('Ana Ramírez'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Dr(a). Ana Ramírez'));
       await tester.pumpAndSettle();
-      await tester.tap(enHoja('Dr(a). Luis Torres'));
+      await tester.tap(enHoja('Luis Torres'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
       await tester.pumpAndSettle();
