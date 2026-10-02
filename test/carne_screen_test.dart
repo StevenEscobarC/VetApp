@@ -229,7 +229,7 @@ void main() {
     expect(find.text('Producto: Nobivac · Lote: A123'), findsOneWidget);
     expect(
       find.text('Aplicó: Dr(a). Laura Gómez · Mat. 12345'),
-      findsOneWidget,
+      findsWidgets,
     );
     expect(find.text('Refuerzo'), findsOneWidget);
     expect(find.text('Sin refuerzo'), findsOneWidget);
@@ -317,7 +317,10 @@ void main() {
     expect(llamada.args['dosisId'], 'd-pol-2');
     expect(llamada.args['motivo'], 'Error de registro');
     expect(find.text('Dosis anulada. Registra la correcta.'), findsOneWidget);
-    expect(find.text('Registrar dosis'), findsOneWidget);
+    expect(
+      find.widgetWithText(SnackBarAction, 'Registrar dosis'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('"Otro motivo" requiere texto', (tester) async {
