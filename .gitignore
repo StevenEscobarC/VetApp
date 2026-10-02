@@ -49,3 +49,4 @@ dart_define.json
 
 # GSD executor worktrees (temporary, auto-managed)
 .claude/worktrees/
+.planning/phases/*/qa/*.local.json
