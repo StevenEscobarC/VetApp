@@ -29,8 +29,8 @@ class VetAvatar extends StatelessWidget {
 
   static const List<Color> _paleta = [
     AppColors.success,
-    Color(0xFF3F5A73),
-    Color(0xFF7A4A6B),
+    AppColors.vetSlate,
+    AppColors.vetPlum,
     AppColors.primaryStrong,
   ];
 
@@ -53,7 +53,7 @@ class VetAvatar extends StatelessWidget {
       child: Text(
         inicialesDe(nombre),
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: retirado ? AppColors.textMuted : Colors.white,
+          color: retirado ? AppColors.textMuted : AppColors.onPrimary,
           fontWeight: FontWeight.w600,
         ),
       ),

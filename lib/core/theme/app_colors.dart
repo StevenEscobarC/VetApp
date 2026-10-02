@@ -39,6 +39,10 @@ class AppColors {
   static const Color successBg = Color(0xFFF0FAE1);
   static const Color warningBg = Color(0xFFFFF2EB);
 
+  /// Paleta de avatares de veterinario (excluye el terracota primario).
+  static const Color vetSlate = Color(0xFF3F5A73);
+  static const Color vetPlum = Color(0xFF7A4A6B);
+
   static const Color ring = Color(0xFFC67139);
 
   // Dark mode: valores derivados, no aprobados en el mockup; reconfirmar en la Fase 8.

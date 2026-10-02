@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
-enum AppButtonVariant { primary, outline, text }
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+
+enum AppButtonVariant { primary, outline, text, destructive }
 
 /// Reusable button covering the three variants the theme defines.
 /// Handles a loading state (disables + spinner) so callers never
@@ -33,26 +36,48 @@ class AppButton extends StatelessWidget {
             child: CircularProgressIndicator(
               strokeWidth: 2.5,
               color: switch (variant) {
-                AppButtonVariant.primary => Theme.of(context).colorScheme.onPrimary,
+                AppButtonVariant.primary => Theme.of(
+                  context,
+                ).colorScheme.onPrimary,
                 _ => Theme.of(context).colorScheme.primary,
               },
             ),
           )
         : icon == null
-            ? Text(label)
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 20),
-                  const SizedBox(width: 8),
-                  Text(label),
-                ],
-              );
+        ? Text(label)
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20),
+              const SizedBox(width: 8),
+              Text(label),
+            ],
+          );
 
     final button = switch (variant) {
-      AppButtonVariant.primary => ElevatedButton(onPressed: effectiveOnPressed, child: child),
-      AppButtonVariant.outline => OutlinedButton(onPressed: effectiveOnPressed, child: child),
-      AppButtonVariant.text => TextButton(onPressed: effectiveOnPressed, child: child),
+      AppButtonVariant.primary => ElevatedButton(
+        onPressed: effectiveOnPressed,
+        child: child,
+      ),
+      AppButtonVariant.outline => OutlinedButton(
+        onPressed: effectiveOnPressed,
+        child: child,
+      ),
+      AppButtonVariant.text => TextButton(
+        onPressed: effectiveOnPressed,
+        child: child,
+      ),
+      AppButtonVariant.destructive => TextButton(
+        onPressed: effectiveOnPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.destructive,
+          minimumSize: const Size(
+            AppSpacing.touchTarget,
+            AppSpacing.touchTarget,
+          ),
+        ),
+        child: child,
+      ),
     };
 
     return expand ? SizedBox(width: double.infinity, child: button) : button;

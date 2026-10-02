@@ -15,5 +15,5 @@ class AppSpacing {
   static const double radiusLg = 16;
 
   /// Minimum touch target per WCAG / Material guidance.
-  static const double touchTarget = 44;
+  static const double touchTarget = 48;
 }
