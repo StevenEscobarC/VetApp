@@ -8,6 +8,8 @@ import 'package:vetapp/core/data/clock_provider.dart';
 import 'package:vetapp/core/utils/zona_bogota.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
+import 'package:vetapp/features/appointments/domain/entities/cita.dart';
+import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 
 import 'helpers/fake_auth.dart';
@@ -33,17 +35,19 @@ _setup({
   String? lanzamiento,
   Object? error,
   bool autenticado = true,
+  AuthProfile perfil = vetProfile,
+  List<Cita>? citas,
 }) {
   final svc = FakeRecordatoriosService()
     ..permiso = permiso
     ..lanzamiento = lanzamiento;
-  final repo = FakeCitaRepository(citas: citasSemanaFixture, error: error);
+  final repo = FakeCitaRepository(citas: citas ?? citasSemanaFixture, error: error);
   final abiertas = <String>[];
   final c = ProviderContainer(
     retry: (retryCount, error) => null,
     overrides: [
       authProfileProvider.overrideWith(
-        () => FakeAuthProfileNotifier(profile: autenticado ? vetProfile : null),
+        () => FakeAuthProfileNotifier(profile: autenticado ? perfil : null),
       ),
       citaRepositoryProvider.overrideWithValue(repo),
       recordatoriosServiceProvider.overrideWithValue(svc),
@@ -169,6 +173,32 @@ void main() {
     t.c.read(recordatoriosSyncProvider);
     await _settle();
     await t.c.read(recordatoriosSyncProvider).sincronizar();
+    expect(t.svc.reprogramaciones, isEmpty);
+  });
+
+  test('solo planifica las citas de mi veterinario (vet-1)', () async {
+    final t = _setup(citas: citasEquipoFixture);
+    t.c.read(recordatoriosSyncProvider);
+    await _settle();
+    final ids = t.svc.reprogramaciones.single.map((p) => p.citaId);
+    expect(ids, ['cita-2', 'cita-4', 'cita-5']);
+    expect(ids, isNot(contains('cita-colega')));
+  });
+
+  test('con el perfil del colega (vet-2) solo planifica la suya', () async {
+    final t = _setup(citas: citasEquipoFixture, perfil: vetColegaProfile);
+    t.c.read(recordatoriosSyncProvider);
+    await _settle();
+    expect(t.svc.reprogramaciones.single.map((p) => p.citaId), [
+      'cita-colega',
+    ]);
+  });
+
+  test('veterinario retirado cancela todo y no reprograma (T9)', () async {
+    final t = _setup(citas: citasEquipoFixture, perfil: vetRetiradoProfile);
+    t.c.read(recordatoriosSyncProvider);
+    await _settle();
+    expect(t.svc.cancelarTodoLlamadas, greaterThanOrEqualTo(1));
     expect(t.svc.reprogramaciones, isEmpty);
   });
 }
