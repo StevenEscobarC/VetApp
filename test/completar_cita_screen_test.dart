@@ -248,7 +248,11 @@ void main() {
       expect(find.text('Registrar dosis aplicada'), findsNWidgets(2));
       expect(find.byIcon(Icons.vaccines_outlined), findsNWidgets(2));
       expect(
-        find.bySemanticsLabel('Registrar dosis aplicada, Luna'),
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.label == 'Registrar dosis aplicada, Luna',
+        ),
         findsOneWidget,
       );
 

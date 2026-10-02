@@ -8,6 +8,10 @@ import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
+import '../../../vaccination/presentation/providers/dosis_cita_providers.dart';
+import '../../../vaccination/presentation/vacunacion_routes.dart';
+import '../../../vaccination/presentation/widgets/dosis_registrada_snackbar.dart';
+import '../../../vaccination/presentation/providers/registrar_dosis_providers.dart';
 import '../../domain/entities/cita.dart';
 import '../providers/citas_providers.dart';
 import '../widgets/cita_acciones.dart';
@@ -98,6 +102,73 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
       cita.estado != EstadoCita.cancelada &&
       cita.estado != EstadoCita.noAsistio;
 
+  /// Oferta "Registrar dosis aplicada" (D-05b) solo para citas de
+  /// Vacunación/Desparasitación; null para el resto de motivos.
+  Widget? _dosisBloque(Cita cita, MascotaDeCita m) {
+    final esVacunacion = cita.motivo == 'Vacunación';
+    if (!esVacunacion && cita.motivo != 'Desparasitación') return null;
+    final registradas = ref
+        .watch(dosisDeCitaProvider(cita.id))
+        .maybeWhen(
+          data: (d) => [
+            for (final x in d)
+              if (x.mascotaId == m.id) x.biologicoNombre,
+          ],
+          orElse: () => const <String>[],
+        );
+    final textTheme = Theme.of(context).textTheme;
+    if (registradas.isNotEmpty) {
+      return Row(
+        children: [
+          const Icon(
+            Icons.check_circle_outline,
+            size: 18,
+            color: AppColors.success,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              'Dosis registrada: ${registradas.join(', ')}',
+              style: textTheme.labelLarge?.copyWith(color: AppColors.success),
+            ),
+          ),
+        ],
+      );
+    }
+    return Semantics(
+      label: 'Registrar dosis aplicada, ${m.nombre}',
+      excludeSemantics: true,
+      button: true,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: InkWell(
+          onTap: () async {
+            final r = await context.push<DosisRegistrada>(
+              rutaRegistrarDosis(
+                mascotaId: m.id,
+                citaId: cita.id,
+                categoria: esVacunacion ? 'vacunacion' : 'desparasitacion',
+              ),
+            );
+            ref.invalidate(dosisDeCitaProvider(cita.id));
+            if (r != null && mounted) mostrarDosisRegistrada(context, r);
+          },
+          child: Row(
+            children: [
+              const Icon(
+                Icons.vaccines_outlined,
+                size: 20,
+                color: AppColors.primaryText,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text('Registrar dosis aplicada', style: textTheme.labelLarge),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _contenido(Cita cita) {
     final textTheme = Theme.of(context).textTheme;
     if (!_completable(cita)) {
@@ -155,6 +226,7 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
                   '/agenda/${cita.id}/completar/consulta/${m.id}',
                 ),
                 onOmitir: () => setState(() => _omitidas.add(m.id)),
+                dosis: _dosisBloque(cita, m),
               ),
             ),
           const SizedBox(height: AppSpacing.md),
@@ -198,6 +270,7 @@ class _MascotaCard extends StatelessWidget {
     required this.omitida,
     required this.onRegistrar,
     required this.onOmitir,
+    this.dosis,
   });
 
   final MascotaDeCita mascota;
@@ -205,6 +278,7 @@ class _MascotaCard extends StatelessWidget {
   final bool omitida;
   final VoidCallback onRegistrar;
   final VoidCallback onOmitir;
+  final Widget? dosis;
 
   @override
   Widget build(BuildContext context) {
@@ -250,6 +324,7 @@ class _MascotaCard extends StatelessWidget {
               estado,
             ],
           ),
+          if (dosis != null) ...[const SizedBox(height: AppSpacing.sm), dosis!],
           if (!registrada) ...[
             const SizedBox(height: AppSpacing.sm),
             Wrap(
