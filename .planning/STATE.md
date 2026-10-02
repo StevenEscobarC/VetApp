@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: "Phase 5 + 4.1 context gathered — next: plan 04.1 (antes de la 5)"
-last_updated: "2026-10-01T21:40:45.163Z"
-last_activity: 2026-10-01 -- Phase 04.1 planning complete
+last_updated: "2026-10-02T02:04:30.178Z"
+last_activity: 2026-10-02 -- Phase 04.1 execution started
 progress:
   total_phases: 10
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** El veterinario puede llevar toda su consulta — pacientes, historia clínica, agenda — desde el celular, sin depender de un computador ni de una recepcionista.
-**Current focus:** Phase 05 — vacunación y desparasitación
+**Current focus:** Phase 04.1 — Equipo de la clínica
 
 ## Current Position
 
-Phase: 05 (vacunacion-y-desparasitacion)
-Plan: Not started — no CONTEXT.md/PLAN.md yet
-Status: Ready to execute
-Last activity: 2026-10-01 -- Phase 04.1 planning complete
+Phase: 04.1 (Equipo de la clínica) — EXECUTING
+Plan: 1 of 11
+Status: Executing Phase 04.1
+Last activity: 2026-10-02 -- Phase 04.1 execution started
 
 Progress: [████░░░░░] 44% (4 de 9 fases completas; Fase 5 sin discutir)
 
