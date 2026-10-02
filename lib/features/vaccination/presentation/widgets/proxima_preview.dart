@@ -44,7 +44,7 @@ class ProximaPreview extends StatelessWidget {
           ),
           error: (_, _) => Text(
             'No pudimos calcular la próxima fecha.',
-            style: textTheme.bodyMedium?.copyWith(
+            style: textTheme.bodyLarge?.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
@@ -66,7 +66,7 @@ class ProximaPreview extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.event, color: AppColors.textSecondary),
+                    const Icon(Icons.event_outlined, color: AppColors.textSecondary),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
@@ -82,7 +82,7 @@ class ProximaPreview extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     contexto,
-                    style: textTheme.bodyMedium?.copyWith(
+                    style: textTheme.bodyLarge?.copyWith(
                       color: AppColors.textSecondary,
                     ),
                   ),
@@ -108,7 +108,7 @@ class ProximaPreview extends StatelessWidget {
                         Text(
                           'Pasó mucho tiempo desde la dosis anterior. '
                           'Puede reiniciar la serie.',
-                          style: textTheme.bodyMedium,
+                          style: textTheme.bodyLarge,
                         ),
                         AppButton(
                           label: iniciaSerie

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/status/dosis_estado_chip.dart';
 import '../providers/alertas_providers.dart';
@@ -34,9 +35,11 @@ class VacunasPendientesCard extends ConsumerWidget {
               style: textTheme.labelMedium,
             ),
           ),
-          TextButton(
+          AppButton(
+            label: 'Reintentar',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => ref.invalidate(resumenVacunasProvider),
-            child: const Text('Reintentar'),
           ),
         ],
       ),
@@ -61,11 +64,11 @@ class VacunasPendientesCard extends ConsumerWidget {
           children: [
             if (r.vencidas > 0) ...[
               const DosisEstadoChip(estado: DosisEstado.vencida, compact: true),
-              Text('${r.vencidas} vencidas', style: textTheme.bodyMedium),
+              Text('${r.vencidas} vencidas', style: textTheme.bodyLarge),
             ],
             if (r.proximas > 0) ...[
               const DosisEstadoChip(estado: DosisEstado.proxima, compact: true),
-              Text('${r.proximas} próximas', style: textTheme.bodyMedium),
+              Text('${r.proximas} próximas', style: textTheme.bodyLarge),
             ],
           ],
         );

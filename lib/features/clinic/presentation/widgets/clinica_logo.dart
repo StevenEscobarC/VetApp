@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_spacing.dart';
 import '../providers/clinica_providers.dart';
 
 /// Logo cuadrado con esquinas redondeadas de la clínica (D-26). Prioridad:
@@ -31,7 +32,7 @@ class ClinicaLogo extends ConsumerWidget {
         child: SizedBox.square(
           dimension: size,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
             child: imagen,
           ),
         ),

@@ -78,11 +78,11 @@ class _Esqueleto extends StatelessWidget {
     padding: EdgeInsets.all(AppSpacing.md),
     child: Column(
       children: [
-        AppCard(child: SizedBox(height: 96, width: double.infinity)),
+        _Bloque(height: 96),
         SizedBox(height: AppSpacing.sm),
-        AppCard(child: SizedBox(height: 56, width: double.infinity)),
+        _Bloque(height: 56),
         SizedBox(height: AppSpacing.sm),
-        AppCard(child: SizedBox(height: 56, width: double.infinity)),
+        _Bloque(height: 56),
       ],
     ),
   );
@@ -107,7 +107,7 @@ class _SoloLectura extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xs),
           Text(valor.trim().isEmpty ? '—' : valor, style: textTheme.bodyLarge),
         ],
       ),
@@ -254,7 +254,9 @@ class _FormularioState extends ConsumerState<_Formulario> {
                     logoPath: _preview == null ? _actual.logoPath : null,
                     size: 96,
                   )
-                : const _AgregarLogo(),
+                : _AgregarLogo(
+                    onTap: _guardando ? null : () => _elegir(FuenteFoto.galeria),
+                  ),
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -327,7 +329,7 @@ class _FormularioState extends ConsumerState<_Formulario> {
         if (_error != null) ...[
           Text(
             _error!,
-            style: textTheme.bodyMedium?.copyWith(color: AppColors.destructive),
+            style: textTheme.bodyLarge?.copyWith(color: AppColors.destructive),
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
@@ -342,21 +344,40 @@ class _FormularioState extends ConsumerState<_Formulario> {
 }
 
 class _AgregarLogo extends StatelessWidget {
-  const _AgregarLogo();
+  const _AgregarLogo({required this.onTap});
+
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
     dimension: 96,
     child: AppCard(
-      padding: const EdgeInsets.all(AppSpacing.sm),
+      onTap: onTap,
+      padding: const EdgeInsets.all(AppSpacing.xs),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.add_photo_alternate_outlined),
-          const SizedBox(height: 4),
-          Text('Agregar logo', style: Theme.of(context).textTheme.labelSmall),
+          const SizedBox(height: AppSpacing.xs),
+          Text('Agregar logo', style: Theme.of(context).textTheme.labelLarge),
         ],
       ),
+    ),
+  );
+}
+
+class _Bloque extends StatelessWidget {
+  const _Bloque({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: height,
+    width: double.infinity,
+    decoration: BoxDecoration(
+      color: AppColors.surfaceMuted,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     ),
   );
 }

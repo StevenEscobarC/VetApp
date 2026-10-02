@@ -343,9 +343,11 @@ class _RegistrarDosisScreenState extends ConsumerState<RegistrarDosisScreen> {
                     textCapitalization: TextCapitalization.sentences,
                     onChanged: (_) => setState(() {}),
                   ),
-                  TextButton(
+                  AppButton(
+                    label: 'Elegir del catálogo',
+                    variant: AppButtonVariant.text,
+                    expand: false,
                     onPressed: _abrirSelector,
-                    child: const Text('Elegir del catálogo'),
                   ),
                 ] else
                   AppCard(
@@ -440,7 +442,7 @@ class _RegistrarDosisScreenState extends ConsumerState<RegistrarDosisScreen> {
                 ] else if (p != null && p.opcionesDuracionDias.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.md),
                   DuracionChips(
-                    titulo: 'Duración',
+                    titulo: 'Duración del producto',
                     opciones: p.opcionesDuracionDias,
                     seleccion: sel!.duracion,
                     onChanged: (d) => setState(() => _duracion = d),
@@ -528,7 +530,7 @@ class _RegistrarDosisScreenState extends ConsumerState<RegistrarDosisScreen> {
                             Expanded(
                               child: Text(
                                 x.producto,
-                                style: textTheme.bodyMedium,
+                                style: textTheme.bodyLarge,
                               ),
                             ),
                             if (x.lote != null)

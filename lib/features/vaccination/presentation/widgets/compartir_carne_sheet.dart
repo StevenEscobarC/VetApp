@@ -10,6 +10,7 @@ import '../../../../core/utils/compartir.dart';
 import '../../../../core/utils/lanzador_externo.dart';
 import '../../../../core/utils/telefono_co.dart';
 import '../../../../core/utils/zona_bogota.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../appointments/domain/whatsapp_recordatorio.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../clinical_history/domain/consulta_failure.dart';
@@ -133,14 +134,17 @@ class _CompartirCarneSheetState extends ConsumerState<_CompartirCarneSheet> {
           'aviso de enlace no válido. Deberá compartir el nuevo.',
         ),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Volver',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Volver'),
           ),
-          TextButton(
+          AppButton(
+            label: 'Regenerar',
+            variant: AppButtonVariant.destructive,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.destructive),
-            child: const Text('Regenerar'),
           ),
         ],
       ),
@@ -190,7 +194,8 @@ class _CompartirCarneSheetState extends ConsumerState<_CompartirCarneSheet> {
                   ? null
                   : numero == null
                   ? 'Sin teléfono registrado'
-                  : 'Dueño: ${carne.duenoNombre} · ${carne.duenoTelefono}',
+                  : 'Dueño: ${carne.duenoNombre} · '
+                        '${normalizarTelefono(carne.duenoTelefono).formateado}',
               onTap: listo && numero != null
                   ? () => _whatsapp(carne, token)
                   : null,
@@ -241,10 +246,12 @@ class _CompartirCarneSheetState extends ConsumerState<_CompartirCarneSheet> {
               ),
             ),
           ),
-          TextButton(
+          AppButton(
+            label: 'Reintentar',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () =>
                 ref.invalidate(enlaceCarneProvider(widget.mascotaId)),
-            child: const Text('Reintentar'),
           ),
         ],
       );
@@ -305,9 +312,13 @@ class _Fila extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final habilitada = onTap != null || cargando;
-    final color = destructiva ? AppColors.destructive : AppColors.foreground;
-    return Opacity(
-      opacity: onTap == null && !cargando ? 0.5 : 1,
+    final color = !habilitada
+        ? AppColors.textMuted
+        : destructiva
+        ? AppColors.destructive
+        : AppColors.foreground;
+    return Semantics(
+      enabled: habilitada,
       child: InkWell(
         onTap: onTap,
         child: ConstrainedBox(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
+import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/status/dosis_estado_chip.dart';
 import '../../../../core/widgets/status/vet_avatar.dart';
@@ -50,7 +51,7 @@ class DosisCard extends StatelessWidget {
           };
     final colorTexto = anulada ? AppColors.textMuted : null;
     final tachado = anulada ? TextDecoration.lineThrough : null;
-    final estiloCuerpo = textTheme.bodyMedium?.copyWith(
+    final estiloCuerpo = textTheme.bodyLarge?.copyWith(
       color: colorTexto,
       decoration: tachado,
     );
@@ -183,7 +184,7 @@ class DosisCard extends StatelessWidget {
                               ),
                               if (dosis.anuladaAt != null)
                                 Text(
-                                  formatearFecha(dosis.anuladaAt!.toLocal()),
+                                  formatearFecha(aBogota(dosis.anuladaAt!)),
                                   style: textTheme.labelMedium?.copyWith(
                                     color: AppColors.textMuted,
                                   ),

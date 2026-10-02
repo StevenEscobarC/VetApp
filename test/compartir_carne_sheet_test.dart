@@ -118,7 +118,7 @@ void main() {
       find.text('Quien tenga el enlace podrá ver el carné.'),
       findsOneWidget,
     );
-    expect(find.text('Dueño: Ana Ramírez · 3001234567'), findsOneWidget);
+    expect(find.text('Dueño: Ana Ramírez · +57 300 123 4567'), findsOneWidget);
   });
 
   testWidgets('WhatsApp abre wa.me con el enlace y mensaje formal', (

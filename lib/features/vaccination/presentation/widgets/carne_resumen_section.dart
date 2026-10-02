@@ -158,7 +158,7 @@ class CarneBadge extends ConsumerWidget {
             size: 16,
             color: AppColors.success,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppSpacing.xs),
           Text(
             'Vacunas al día',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(

@@ -6,7 +6,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
-import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/status/dosis_estado_chip.dart';
 import '../../domain/entities/carne.dart';
 import '../../domain/estado_dosis_ui.dart';
@@ -168,7 +167,13 @@ class _Esqueleto extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
         for (var i = 0; i < 3; i++) ...[
-          const AppCard(child: SizedBox(height: 96, width: double.infinity)),
+          Container(
+            height: 96,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+          ),
           const SizedBox(height: AppSpacing.md),
         ],
       ],
@@ -215,7 +220,7 @@ class _Contenido extends StatelessWidget {
                 'Registra la primera dosis de ${carne.mascotaNombre} o la '
                 'que ya trae en su carné de papel.',
                 textAlign: TextAlign.center,
-                style: textTheme.bodyMedium?.copyWith(
+                style: textTheme.bodyLarge?.copyWith(
                   color: AppColors.textSecondary,
                 ),
               ),

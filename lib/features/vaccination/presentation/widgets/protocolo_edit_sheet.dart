@@ -139,6 +139,7 @@ class _ProtocoloEditSheetState extends ConsumerState<ProtocoloEditSheet> {
     required String titulo,
     required String contenido,
     required String accion,
+    bool destructiva = true,
   }) async {
     final r = await showDialog<bool>(
       context: context,
@@ -146,14 +147,19 @@ class _ProtocoloEditSheetState extends ConsumerState<ProtocoloEditSheet> {
         title: Text(titulo),
         content: Text(contenido),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Volver',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Volver'),
           ),
-          TextButton(
+          AppButton(
+            label: accion,
+            variant: destructiva
+                ? AppButtonVariant.destructive
+                : AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.destructive),
-            child: Text(accion),
           ),
         ],
       ),
@@ -165,9 +171,10 @@ class _ProtocoloEditSheetState extends ConsumerState<ProtocoloEditSheet> {
     final ok = await _confirmar(
       titulo: '¿Restablecer valores estándar?',
       contenido:
-          'Se descartarán los cambios de tu clínica y se usarán los valores '
-          'estándar de este protocolo.',
+          'Se usarán los intervalos estándar para ${_p!.nombre}. Las dosis '
+          'ya registradas no cambian.',
       accion: 'Restablecer',
+      destructiva: false,
     );
     if (!ok || !mounted) return;
     await _ejecutar(
@@ -389,13 +396,10 @@ class _ProtocoloEditSheetState extends ConsumerState<ProtocoloEditSheet> {
             ],
             if (puedeDesactivar) ...[
               const SizedBox(height: AppSpacing.sm),
-              TextButton(
+              AppButton(
+                label: 'Desactivar',
+                variant: AppButtonVariant.destructive,
                 onPressed: _guardando ? null : _desactivar,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.destructive,
-                  minimumSize: const Size.fromHeight(AppSpacing.touchTarget),
-                ),
-                child: const Text('Desactivar'),
               ),
             ],
           ],
