@@ -16,6 +16,8 @@ import 'package:vetapp/features/appointments/presentation/screens/cita_form_scre
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clients/domain/entities/cliente.dart';
 import 'package:vetapp/features/clients/presentation/providers/clientes_providers.dart';
+import 'package:vetapp/features/team/domain/miembro.dart';
+import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 import 'package:vetapp/features/patients/domain/entities/mascota.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 
@@ -24,6 +26,7 @@ import 'helpers/fake_citas.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/fake_recordatorios.dart';
+import 'helpers/fake_team.dart';
 import 'helpers/router_harness.dart';
 
 const _maria = Cliente(
@@ -74,6 +77,10 @@ List<Override> _overrides(
     FakeClienteRepository(clientes: [_maria, _nuevo]),
   ),
   mascotaRepositoryProvider.overrideWithValue(mascotas),
+  teamRepositoryProvider.overrideWithValue(FakeTeamRepository()),
+  esClinicaMultiVetProvider.overrideWithValue(false),
+  miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
+  indicesColorVetProvider.overrideWithValue(const <String, int>{}),
   authProfileProvider.overrideWith(
     () => FakeAuthProfileNotifier(profile: vetProfile),
   ),
@@ -92,7 +99,10 @@ Widget _app({
   locale: const Locale('es', 'CO'),
   initialLocation: initial,
   routes: routes ?? [agendaRoute],
-  overrides: _overrides(repo, mascotas ?? FakeMascotaRepository(mascotas: [_luna])),
+  overrides: _overrides(
+    repo,
+    mascotas ?? FakeMascotaRepository(mascotas: [_luna]),
+  ),
 );
 
 void _grande(WidgetTester tester) {
@@ -262,28 +272,29 @@ void main() {
       expect(_guardar(tester), isNull);
     });
 
-    testWidgets('busca cliente, lo selecciona y preselecciona su única mascota', (
-      tester,
-    ) async {
-      _grande(tester);
-      await tester.pumpWidget(
-        _app(repo: FakeCitaRepository(citas: citasSemanaFixture)),
-      );
-      await tester.pumpAndSettle();
+    testWidgets(
+      'busca cliente, lo selecciona y preselecciona su única mascota',
+      (tester) async {
+        _grande(tester);
+        await tester.pumpWidget(
+          _app(repo: FakeCitaRepository(citas: citasSemanaFixture)),
+        );
+        await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextFormField), 'Mar');
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
-      expect(find.text('María Pérez'), findsOneWidget);
+        await tester.enterText(find.byType(TextFormField), 'Mar');
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pumpAndSettle();
+        expect(find.text('María Pérez'), findsOneWidget);
 
-      await tester.tap(find.text('María Pérez'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('María Pérez'));
+        await tester.pumpAndSettle();
 
-      expect(find.byTooltip('Quitar cliente'), findsOneWidget);
-      expect(find.text('Luna'), findsOneWidget);
-      expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
-      expect(_guardar(tester), isNotNull);
-    });
+        expect(find.byTooltip('Quitar cliente'), findsOneWidget);
+        expect(find.text('Luna'), findsOneWidget);
+        expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+        expect(_guardar(tester), isNotNull);
+      },
+    );
 
     testWidgets('sin coincidencias muestra el mensaje vacío', (tester) async {
       _grande(tester);
@@ -292,7 +303,10 @@ void main() {
       await tester.enterText(find.byType(TextFormField), 'zzz');
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
-      expect(find.text('No encontramos a nadie con ese nombre.'), findsOneWidget);
+      expect(
+        find.text('No encontramos a nadie con ese nombre.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('el stepper sugiere el primer hueco y avanza de a 15 min', (
@@ -419,7 +433,9 @@ void main() {
       expect(repo.creadas.single.motivo, 'Cirugía');
     });
 
-    testWidgets('Otro pide el motivo y guarda el texto escrito', (tester) async {
+    testWidgets('Otro pide el motivo y guarda el texto escrito', (
+      tester,
+    ) async {
       _grande(tester);
       final repo = FakeCitaRepository(citas: citasSemanaFixture);
       await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
@@ -462,37 +478,40 @@ void main() {
   });
 
   group('CitaFormScreen - cruces (D-09)', () {
-    testWidgets('advierte con una cita y permite cambiar hora o agendar igual', (
-      tester,
-    ) async {
-      _grande(tester);
-      final repo = FakeCitaRepository(citas: citasSemanaFixture);
-      await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'advierte con una cita y permite cambiar hora o agendar igual',
+      (tester) async {
+        _grande(tester);
+        final repo = FakeCitaRepository(citas: citasSemanaFixture);
+        await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
+        await tester.pumpAndSettle();
 
-      await _sumar(tester, 3); // 9:45 -> 10:30
-      expect(find.text('10:30 a. m.'), findsWidgets);
-      await _tocarGuardar(tester);
+        await _sumar(tester, 3); // 9:45 -> 10:30
+        expect(find.text('10:30 a. m.'), findsWidgets);
+        await _tocarGuardar(tester);
 
-      expect(find.text('Se cruza con otra cita'), findsOneWidget);
-      expect(
-        find.text('Se cruza con Luna a las 10:30 a. m. ¿Agendar igual?'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Cambiar hora'));
-      await tester.pumpAndSettle();
-      expect(repo.creadas, isEmpty);
+        expect(find.text('Se cruza con otra cita'), findsOneWidget);
+        expect(
+          find.text('Se cruza con Luna a las 10:30 a. m. ¿Agendar igual?'),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Cambiar hora'));
+        await tester.pumpAndSettle();
+        expect(repo.creadas, isEmpty);
 
-      await _tocarGuardar(tester);
-      await tester.tap(find.text('Agendar igual'));
-      await tester.pumpAndSettle();
-      expect(repo.creadas, hasLength(1));
-      expect(repo.creadas.single.fechaHora, deBogota(2026, 9, 30, 10, 30));
-    });
+        await _tocarGuardar(tester);
+        await tester.tap(find.text('Agendar igual'));
+        await tester.pumpAndSettle();
+        expect(repo.creadas, hasLength(1));
+        expect(repo.creadas.single.fechaHora, deBogota(2026, 9, 30, 10, 30));
+      },
+    );
 
     testWidgets('lista varias citas que se cruzan', (tester) async {
       _grande(tester);
-      final repo = FakeCitaRepository(citas: [...citasSemanaFixture, _maxCruce]);
+      final repo = FakeCitaRepository(
+        citas: [...citasSemanaFixture, _maxCruce],
+      );
       await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
       await tester.pumpAndSettle();
 

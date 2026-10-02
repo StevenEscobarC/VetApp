@@ -72,4 +72,30 @@ void main() {
       );
     });
   });
+
+  group('citaDesdeFila', () {
+    Map<String, dynamic> fila() => {
+      'id': 'c1',
+      'clinica_id': 'cli-1',
+      'cliente_id': 'c-1',
+      'veterinario_id': 'vet-2',
+      'fecha_hora': '2026-09-30T15:30:00Z',
+      'duracion_min': 30,
+      'modalidad': 'consultorio',
+      'motivo': 'Control',
+      'estado': 'pendiente',
+    };
+
+    test('lee el nombre del embed veterinario', () {
+      final c = citaDesdeFila({
+        ...fila(),
+        'veterinario': {'nombre': 'Luis Torres'},
+      });
+      expect(c.veterinarioNombre, 'Luis Torres');
+    });
+
+    test('sin embed el nombre es null', () {
+      expect(citaDesdeFila(fila()).veterinarioNombre, isNull);
+    });
+  });
 }

@@ -11,7 +11,14 @@ import 'package:vetapp/features/appointments/presentation/providers/recordatorio
 import 'package:vetapp/features/appointments/presentation/screens/agenda_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:vetapp/core/widgets/status/vet_avatar.dart';
+import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/team/domain/miembro.dart';
+import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
+
+import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_team.dart';
 import 'helpers/fake_recordatorios.dart';
 import 'helpers/router_harness.dart';
 
@@ -28,7 +35,145 @@ Widget _agenda(FakeCitaRepository repo, {DateTime? ahora}) => routerHarness(
 
 Finder _celda(int y, int m, int d) => find.byKey(ValueKey('dia-$y-$m-$d'));
 
+Widget _agendaEquipo(List<Cita> citas, {List<Miembro> equipo = const []}) =>
+    routerHarness(
+      initialLocation: '/agenda',
+      routes: [agendaRoute],
+      overrides: [
+        citaRepositoryProvider.overrideWithValue(
+          FakeCitaRepository(citas: citas),
+        ),
+        teamRepositoryProvider.overrideWithValue(
+          FakeTeamRepository(miembrosFixture: equipo),
+        ),
+        authProfileProvider.overrideWith(
+          () => FakeAuthProfileNotifier(profile: vetProfile),
+        ),
+        clockProvider.overrideWithValue(() => deBogota(2026, 9, 30, 9, 35)),
+      ],
+    );
+
+void _pantallaGrande(WidgetTester tester) {
+  tester.view.physicalSize = const Size(800, 2400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
+  group('AgendaScreen equipo', () {
+    testWidgets('un solo vet: sin filtro ni marcas (D-00)', (tester) async {
+      _pantallaGrande(tester);
+      await tester.pumpWidget(
+        _agendaEquipo(citasEquipoFixture, equipo: [miembroAna]),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mías'), findsNothing);
+      expect(find.text('Todas'), findsNothing);
+      expect(find.byType(VetAvatar), findsNothing);
+    });
+
+    testWidgets('Mías por defecto oculta al colega y Todas lo muestra', (
+      tester,
+    ) async {
+      _pantallaGrande(tester);
+      await tester.pumpWidget(
+        _agendaEquipo(citasEquipoFixture, equipo: [miembroAna, miembroLuis]),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mías'), findsOneWidget);
+      expect(find.text('Juan Gómez · Control colega'), findsNothing);
+      expect(find.text('3 citas'), findsOneWidget);
+      expect(find.byType(VetAvatar), findsNothing);
+      expect(
+        find.bySemanticsLabel('Mostrando: Mías, seleccionado'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Todas'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Juan Gómez · Control colega'), findsOneWidget);
+      expect(find.text('Luis'), findsOneWidget);
+      expect(find.byType(VetAvatar), findsWidgets);
+      expect(find.text('Ana'), findsWidgets);
+      // El banner Próxima sigue siendo solo mío.
+      expect(
+        find.text('Próxima: Luna 10:30 a. m. · en 55 min'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('cruce solo entre citas del mismo vet', (tester) async {
+      _pantallaGrande(tester);
+      await tester.pumpWidget(
+        _agendaEquipo(
+          [citaLunaHoy, citaColegaFixture],
+          equipo: [miembroAna, miembroLuis],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Todas'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Se cruza con'), findsNothing);
+    });
+
+    testWidgets('cruce entre citas del mismo vet sí se avisa', (tester) async {
+      _pantallaGrande(tester);
+      await tester.pumpWidget(
+        _agendaEquipo(
+          [citaLunaHoy, citaColegaFixture.copyWith(veterinarioId: 'vet-1')],
+          equipo: [miembroAna, miembroLuis],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Se cruza con'), findsOneWidget);
+    });
+
+    testWidgets('vet retirado: marcador y Sin atender', (tester) async {
+      _pantallaGrande(tester);
+      final huerfana = citaColegaFixture.copyWith(
+        veterinarioId: 'vet-3',
+        veterinarioNombre: 'Marta Ruiz',
+      );
+      await tester.pumpWidget(
+        _agendaEquipo(
+          [citaLunaHoy, huerfana],
+          equipo: [miembroAna, miembroLuis, miembroRetirado],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Todas'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sin atender'), findsOneWidget);
+      expect(find.text('Marta'), findsOneWidget);
+    });
+
+    testWidgets('Todas en día vacío usa el texto de la clínica', (
+      tester,
+    ) async {
+      _pantallaGrande(tester);
+      await tester.pumpWidget(
+        _agendaEquipo([citaColegaFixture], equipo: [miembroAna, miembroLuis]),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Toca “Nueva cita” para agendar la primera.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Todas'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sin citas este día'), findsNothing);
+      expect(find.text('Juan Gómez · Control colega'), findsOneWidget);
+      await tester.tap(_celda(2026, 10, 1));
+      await tester.pumpAndSettle();
+      expect(find.text('La clínica no tiene citas este día.'), findsOneWidget);
+    });
+  });
+
   group('agendaSemanaProvider', () {
     test('consulta la semana Bogotá y ordena por fechaHora', () async {
       final repo = FakeCitaRepository(citas: citasSemanaFixture);
@@ -51,8 +196,12 @@ void main() {
   });
 
   group('AgendaScreen', () {
-    testWidgets('abre en hoy con conteos sin contar canceladas', (tester) async {
-      await tester.pumpWidget(_agenda(FakeCitaRepository(citas: citasSemanaFixture)));
+    testWidgets('abre en hoy con conteos sin contar canceladas', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _agenda(FakeCitaRepository(citas: citasSemanaFixture)),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Hoy, mié 30/09'), findsOneWidget);
@@ -73,7 +222,9 @@ void main() {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(_agenda(FakeCitaRepository(citas: citasSemanaFixture)));
+      await tester.pumpWidget(
+        _agenda(FakeCitaRepository(citas: citasSemanaFixture)),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('10:30 – 11:00 a. m.'), findsOneWidget);
@@ -88,7 +239,9 @@ void main() {
     });
 
     testWidgets('muestra el banner de próxima cita solo hoy', (tester) async {
-      await tester.pumpWidget(_agenda(FakeCitaRepository(citas: citasSemanaFixture)));
+      await tester.pumpWidget(
+        _agenda(FakeCitaRepository(citas: citasSemanaFixture)),
+      );
       await tester.pumpAndSettle();
 
       expect(
@@ -103,7 +256,9 @@ void main() {
     });
 
     testWidgets('navega de semana y vuelve con Hoy', (tester) async {
-      await tester.pumpWidget(_agenda(FakeCitaRepository(citas: citasSemanaFixture)));
+      await tester.pumpWidget(
+        _agenda(FakeCitaRepository(citas: citasSemanaFixture)),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Hoy'), findsNothing);
@@ -119,7 +274,9 @@ void main() {
     });
 
     testWidgets('día sin citas muestra el estado vacío', (tester) async {
-      await tester.pumpWidget(_agenda(FakeCitaRepository(citas: citasSemanaFixture)));
+      await tester.pumpWidget(
+        _agenda(FakeCitaRepository(citas: citasSemanaFixture)),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(_celda(2026, 10, 2));
@@ -135,9 +292,13 @@ void main() {
       expect(find.text('No hubo citas este día.'), findsOneWidget);
     });
 
-    testWidgets('error muestra mensaje y Reintentar re-consulta', (tester) async {
+    testWidgets('error muestra mensaje y Reintentar re-consulta', (
+      tester,
+    ) async {
       final repo = FakeCitaRepository(
-        error: const CitaFailure('No pudimos cargar la agenda. Intenta de nuevo.'),
+        error: const CitaFailure(
+          'No pudimos cargar la agenda. Intenta de nuevo.',
+        ),
       );
       await tester.pumpWidget(_agenda(repo));
       await tester.pumpAndSettle();
@@ -181,9 +342,7 @@ void main() {
             citaRepositoryProvider.overrideWithValue(
               FakeCitaRepository(citas: citasSemanaFixture),
             ),
-            clockProvider.overrideWithValue(
-              () => deBogota(2026, 9, 30, 9, 35),
-            ),
+            clockProvider.overrideWithValue(() => deBogota(2026, 9, 30, 9, 35)),
           ],
         ),
       );

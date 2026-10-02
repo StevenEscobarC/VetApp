@@ -8,19 +8,19 @@ enum EstadoCita {
 
   /// Valor guardado en la columna `estado`.
   String get valor => switch (this) {
-        EstadoCita.noAsistio => 'no_asistio',
-        _ => name,
-      };
+    EstadoCita.noAsistio => 'no_asistio',
+    _ => name,
+  };
 
   /// Defensivo (D-10): un valor desconocido o `solicitada` se trata como
   /// pendiente para que una fila inesperada nunca rompa la agenda.
   static EstadoCita desdeValor(String v) => switch (v) {
-        'confirmada' => EstadoCita.confirmada,
-        'completada' => EstadoCita.completada,
-        'cancelada' => EstadoCita.cancelada,
-        'no_asistio' => EstadoCita.noAsistio,
-        _ => EstadoCita.pendiente,
-      };
+    'confirmada' => EstadoCita.confirmada,
+    'completada' => EstadoCita.completada,
+    'cancelada' => EstadoCita.cancelada,
+    'no_asistio' => EstadoCita.noAsistio,
+    _ => EstadoCita.pendiente,
+  };
 
   /// Una cita terminal ya no admite cambios de estado.
   bool get esTerminal =>
@@ -75,12 +75,17 @@ class Cita {
     this.clienteTelefono,
     this.clienteDireccion,
     this.mascotasConConsulta = const {},
+    this.veterinarioNombre,
   });
 
   final String id;
   final String clinicaId;
   final String clienteId;
   final String veterinarioId;
+
+  /// Nombre del veterinario asignado (embed de `perfiles`); sirve para firmar
+  /// mensajes y marcar la cita en la agenda de equipo.
+  final String? veterinarioNombre;
   final DateTime fechaHora;
   final int duracionMin;
   final ModalidadCita modalidad;
@@ -116,6 +121,8 @@ class Cita {
   }
 
   Cita copyWith({
+    String? veterinarioId,
+    String? veterinarioNombre,
     DateTime? fechaHora,
     int? duracionMin,
     ModalidadCita? modalidad,
@@ -131,7 +138,8 @@ class Cita {
       id: id,
       clinicaId: clinicaId,
       clienteId: clienteId,
-      veterinarioId: veterinarioId,
+      veterinarioId: veterinarioId ?? this.veterinarioId,
+      veterinarioNombre: veterinarioNombre ?? this.veterinarioNombre,
       fechaHora: fechaHora ?? this.fechaHora,
       duracionMin: duracionMin ?? this.duracionMin,
       modalidad: modalidad ?? this.modalidad,

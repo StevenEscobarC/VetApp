@@ -34,9 +34,13 @@ class VetAvatar extends StatelessWidget {
     AppColors.primaryStrong,
   ];
 
+  /// Color de paleta para [indice]; lo reusan las marcas de color por
+  /// veterinario (p. ej. la franja de la tarjeta de cita).
+  static Color colorDe(int indice) => _paleta[indice % _paleta.length];
+
   @override
   Widget build(BuildContext context) {
-    final color = _paleta[indice % _paleta.length];
+    final color = colorDe(indice);
     final avatar = Container(
       width: size,
       height: size,

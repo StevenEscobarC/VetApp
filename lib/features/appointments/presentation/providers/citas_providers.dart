@@ -7,6 +7,7 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../clients/domain/entities/cliente.dart';
 import '../../../clients/presentation/providers/clientes_providers.dart';
 import '../../domain/entities/cita.dart';
+import '../../domain/filtro_agenda.dart';
 
 final citaRepositoryProvider = Provider<SupabaseCitaRepository>((ref) {
   return SupabaseCitaRepository(ref.watch(supabaseClientProvider));
@@ -17,18 +18,15 @@ final citaRepositoryProvider = Provider<SupabaseCitaRepository>((ref) {
 /// clínica — no hay filtro de clínica en el cliente.
 final agendaSemanaProvider = FutureProvider.autoDispose
     .family<List<Cita>, DateTime>((ref, lunes) async {
-  final rango = rangoSemanaUtc(lunes);
-  final citas = await ref
-      .watch(citaRepositoryProvider)
-      .entre(rango.inicio, rango.fin);
-  return [...citas]..sort((a, b) => a.fechaHora.compareTo(b.fechaHora));
-});
+      final rango = rangoSemanaUtc(lunes);
+      final citas = await ref
+          .watch(citaRepositoryProvider)
+          .entre(rango.inicio, rango.fin);
+      return [...citas]..sort((a, b) => a.fechaHora.compareTo(b.fechaHora));
+    });
 
 /// Una cita por id (detalle de cita).
-final citaProvider = FutureProvider.autoDispose.family<Cita, String>((
-  ref,
-  id,
-) {
+final citaProvider = FutureProvider.autoDispose.family<Cita, String>((ref, id) {
   return ref.watch(citaRepositoryProvider).obtener(id);
 });
 
@@ -45,6 +43,20 @@ class CitasRevision extends Notifier<int> {
 final citasRevisionProvider = NotifierProvider<CitasRevision, int>(
   CitasRevision.new,
 );
+
+/// Filtro de la agenda. `autoDispose` y sin persistencia: la agenda siempre
+/// reabre en "Mías" (D-08).
+class FiltroAgendaNotifier extends Notifier<FiltroAgenda> {
+  @override
+  FiltroAgenda build() => FiltroAgenda.mias;
+
+  void set(FiltroAgenda filtro) => state = filtro;
+}
+
+final filtroAgendaProvider =
+    NotifierProvider.autoDispose<FiltroAgendaNotifier, FiltroAgenda>(
+      FiltroAgendaNotifier.new,
+    );
 
 /// Escrituras de citas. Guarda el [Ref] (no `WidgetRef`) y por eso
 /// [citaActionsProvider] NO es `autoDispose` — mismo patrón que

@@ -9,7 +9,11 @@ import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/status/app_status_chip.dart';
+import '../../../../core/widgets/status/vet_avatar.dart';
+import '../../../team/presentation/providers/team_providers.dart';
 import '../../domain/entities/cita.dart';
+import '../../domain/filtro_agenda.dart';
+import '../providers/citas_providers.dart';
 import '../estado_cita_ui.dart';
 import 'cita_acciones.dart';
 
@@ -38,13 +42,53 @@ class CitaCard extends ConsumerWidget {
               : 'A domicilio')
         : 'En consultorio';
 
-    return AppCard(
+    final marcarVet =
+        ref.watch(esClinicaMultiVetProvider) &&
+        ref.watch(filtroAgendaProvider) == FiltroAgenda.todas;
+    final activos = ref.watch(miembrosActivosProvider);
+    final miembro = activos
+        .where((m) => m.id == cita.veterinarioId)
+        .firstOrNull;
+    final retirado = miembro == null;
+    final indices = ref.watch(indicesColorVetProvider);
+    final indice = indices[cita.veterinarioId] ?? 0;
+    final nombreVet = (cita.veterinarioNombre ?? miembro?.nombre ?? '').trim();
+    final nombrePila = nombreVet.isEmpty ? '' : nombreVet.split(' ').first;
+
+    final tarjeta = AppCard(
       onTap: onTap ?? () => context.push('/agenda/${cita.id}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              if (marcarVet) ...[
+                VetAvatar(
+                  nombre: nombreVet,
+                  indice: indice,
+                  size: 24,
+                  retirado: retirado,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Flexible(
+                  child: Text(
+                    nombrePila,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.labelLarge,
+                  ),
+                ),
+                if (retirado && !cita.estado.esTerminal) ...[
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    'Sin atender',
+                    style: textTheme.labelLarge?.copyWith(
+                      color: AppColors.warning,
+                    ),
+                  ),
+                ],
+                const SizedBox(width: AppSpacing.sm),
+              ],
               Expanded(
                 child: Text(
                   rangoHoras(aBogota(cita.fechaHora), aBogota(cita.fin)),
@@ -180,6 +224,28 @@ class CitaCard extends ConsumerWidget {
             ),
             ?avisoWhatsApp(context, cita),
           ],
+        ],
+      ),
+    );
+
+    if (!marcarVet) return tarjeta;
+    // Franja izquierda de 4px: AppCard no admite decoración lateral.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: Stack(
+        children: [
+          tarjeta,
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 4,
+            child: IgnorePointer(
+              child: ColoredBox(
+                color: retirado ? AppColors.border : VetAvatar.colorDe(indice),
+              ),
+            ),
+          ),
         ],
       ),
     );
