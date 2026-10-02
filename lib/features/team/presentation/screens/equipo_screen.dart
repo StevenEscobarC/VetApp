@@ -10,20 +10,79 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/miembro.dart';
 import '../../domain/team_failure.dart';
 import '../providers/team_providers.dart';
+import '../widgets/invitacion_card.dart';
 import '../widgets/miembro_tile.dart';
 
 /// Equipo de la clínica (TEAM-02/TEAM-03): lista de veterinarios con su rol.
 /// Cualquier veterinario la ve; las acciones de administración llegan en
 /// planes posteriores.
-class EquipoScreen extends ConsumerWidget {
+class EquipoScreen extends ConsumerStatefulWidget {
   const EquipoScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EquipoScreen> createState() => _EquipoScreenState();
+}
+
+class _EquipoScreenState extends ConsumerState<EquipoScreen> {
+  final _invitacionKey = GlobalKey();
+  bool _generando = false;
+
+  Future<bool> _confirmarReemplazo() async {
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Generar un código nuevo?'),
+        content: const Text('El código actual dejará de funcionar.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Volver'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Generar nuevo'),
+          ),
+        ],
+      ),
+    );
+    return r ?? false;
+  }
+
+  Future<void> _generar(bool hayVigente) async {
+    if (hayVigente && !await _confirmarReemplazo()) return;
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _generando = true);
+    try {
+      await ref.read(teamActionsProvider).generarInvitacion();
+      await ref.read(invitacionVigenteProvider.future);
+      messenger.showSnackBar(const SnackBar(content: Text('Código generado')));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _invitacionKey.currentContext;
+        if (ctx != null) Scrollable.ensureVisible(ctx);
+      });
+    } on TeamFailure catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No pudimos generar el código. Intenta de nuevo.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _generando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final team = ref.watch(teamProvider);
     final perfil = ref.watch(authProfileProvider).value;
     final indices = ref.watch(indicesColorVetProvider);
     final textTheme = Theme.of(context).textTheme;
+    final esAdmin = perfil?.esAdmin ?? false;
+    final invitacion = esAdmin ? ref.watch(invitacionVigenteProvider) : null;
+    final vigente = invitacion?.value;
 
     Widget body;
     if (team.hasError && !team.hasValue) {
@@ -60,7 +119,6 @@ class EquipoScreen extends ConsumerWidget {
       final todos = team.requireValue;
       final activos = todos.where((m) => m.activo).toList();
       final retirados = todos.where((m) => !m.activo).toList();
-      final esAdmin = perfil?.esAdmin ?? false;
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -82,7 +140,27 @@ class EquipoScreen extends ConsumerWidget {
               style: textTheme.bodyMedium,
             ),
           ],
-          // Slot de la sección admin 'Invitaciones' (plan 04.1-04).
+          if (esAdmin) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Text('Invitaciones', style: textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.sm),
+            if (vigente != null)
+              KeyedSubtree(
+                key: _invitacionKey,
+                child: InvitacionCard(
+                  invitacion: vigente,
+                  clinicaNombre: perfil?.clinicaNombre ?? 'tu clínica',
+                ),
+              )
+            else if (invitacion?.isLoading ?? false)
+              const _SkeletonTile()
+            else
+              Text(
+                'No hay códigos activos. Genera uno para invitar a un '
+                'colega.',
+                style: textTheme.bodyLarge,
+              ),
+          ],
           if (retirados.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             _RetiradosSection(retirados: retirados, indices: indices),
@@ -103,9 +181,30 @@ class EquipoScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: const AppTopBar(title: 'Equipo'),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: body,
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: body,
+            ),
+          ),
+          if (esAdmin && team.hasValue)
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: AppButton(
+                  label: vigente != null
+                      ? 'Generar código nuevo'
+                      : 'Invitar veterinario',
+                  icon: Icons.person_add_alt_outlined,
+                  isLoading: _generando,
+                  onPressed: () => _generar(vigente != null),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
