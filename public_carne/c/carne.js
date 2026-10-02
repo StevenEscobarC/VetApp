@@ -115,7 +115,27 @@ function render(modelo) {
 
   const cab = el('header', 'banda');
   const cl = [modelo.clinica.nombre, modelo.clinica.ciudad].filter(Boolean).join(' · ');
-  if (cl) cab.appendChild(el('p', 'etiqueta', cl));
+  const logoUrl = modelo.clinica.logoUrl;
+  const logoValido = !!(logoUrl && origenSupabase && logoUrl.startsWith(origenSupabase + '/'));
+  if (logoValido || cl) {
+    const banda = el('div', 'banda-clinica');
+    if (logoValido) {
+      const logo = el('img', 'logo-clinica');
+      logo.setAttribute('src', logoUrl);
+      logo.setAttribute(
+        'alt',
+        modelo.clinica.nombre ? 'Logo de ' + modelo.clinica.nombre : 'Logo de la clínica',
+      );
+      logo.setAttribute('referrerpolicy', 'no-referrer');
+      logo.setAttribute('width', '40');
+      logo.setAttribute('height', '40');
+      // Sin handlers inline (CSP): si el logo falla, queda solo el nombre.
+      logo.addEventListener('error', () => logo.remove());
+      banda.appendChild(logo);
+    }
+    if (cl) banda.appendChild(el('p', 'etiqueta', cl));
+    cab.appendChild(banda);
+  }
   cab.appendChild(el('h2', 'encabezado', 'Carné de vacunación'));
   raiz.appendChild(cab);
 

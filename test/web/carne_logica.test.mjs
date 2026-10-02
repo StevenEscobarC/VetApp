@@ -101,7 +101,33 @@ test('modeloVista no expone claves fuera del contrato', () => {
   assert.ok(!txt.includes('foto_path'));
   assert.ok(!txt.includes('secreto'));
   assert.ok(!txt.includes('"extra"'));
-  assert.deepEqual(Object.keys(m.clinica).sort(), ['ciudad', 'direccion', 'nombre', 'telefono']);
+  assert.deepEqual(Object.keys(m.clinica).sort(), [
+    'ciudad',
+    'direccion',
+    'logoUrl',
+    'nombre',
+    'telefono',
+  ]);
+});
+
+test('modeloVista expone clinica.logoUrl y nunca logo_path', () => {
+  const j = base();
+  j.clinica.logo_url = 'https://x.supabase.co/storage/v1/object/sign/clinica-logos/a?token=t';
+  j.clinica.logo_path = 'secreto/logo-1234567890.jpg';
+  const m = modeloVista(j);
+  assert.equal(m.clinica.logoUrl, j.clinica.logo_url);
+  const txt = JSON.stringify(m);
+  assert.ok(!txt.includes('logo_path'));
+  assert.ok(!txt.includes('logo-1234567890'));
+});
+
+test('modeloVista logoUrl vacio si falta o no es string', () => {
+  assert.equal(modeloVista(base()).clinica.logoUrl, '');
+  const j = base();
+  j.clinica.logo_url = 42;
+  assert.equal(modeloVista(j).clinica.logoUrl, '');
+  j.clinica.logo_url = null;
+  assert.equal(modeloVista(j).clinica.logoUrl, '');
 });
 
 test('modeloVista sin dosis marca vacio', () => {
