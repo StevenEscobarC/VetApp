@@ -259,7 +259,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 05-04-PLAN.md — Smoke Q1..Q48 (193 checks, incl. logo) + sondas + [BLOCKING] aplicar en vivo (MCP) y pegar smoke
+- [x] 05-04-PLAN.md — Smoke Q1..Q48 (193 checks, incl. logo) + sondas + [BLOCKING] aplicar en vivo (MCP) y pegar smoke
 - [x] 05-07-PLAN.md — Carné en la ficha (/pacientes/:id/carne), tarjetas por biológico, anular con motivo, badge
 - [x] 05-08-PLAN.md — Más > Protocolos (catálogo editable, solo admin en multi-vet)
 - [x] 05-09-PLAN.md — Vacunas pendientes (/vacunas): Recordar/Agendar/Registrar/Descartar-posponer
@@ -349,7 +349,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
 | 4. Agenda y Citas | 11/11 | Complete    | 2026-10-01 |
-| 5. Vacunación y Desparasitación | 11/17 | In Progress|  |
+| 5. Vacunación y Desparasitación | 12/17 | In Progress|  |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
 | 8. Dashboard y Diseño Visual | 0/TBD | Not started | - |
