@@ -5,6 +5,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
 import '../../../../core/widgets/cards/app_card.dart';
+import '../../../../core/widgets/status/vet_avatar.dart';
+import '../../../team/presentation/providers/team_providers.dart';
+import '../../domain/autor_consulta.dart';
 import '../../domain/entities/consulta.dart';
 import '../../domain/formato_consulta.dart';
 import '../providers/consultas_providers.dart';
@@ -26,6 +29,13 @@ class HistoriaClinicaTimeline extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final consultasAsync = ref.watch(consultasProvider(mascotaId));
     final textTheme = Theme.of(context).textTheme;
+    final multiVet = ref.watch(esClinicaMultiVetProvider);
+    final idsActivos = ref
+        .watch(teamProvider)
+        .whenOrNull(
+          data: (m) => m.where((x) => x.activo).map((x) => x.id).toSet(),
+        );
+    final indices = ref.watch(indicesColorVetProvider);
 
     return consultasAsync.when(
       data: (consultas) {
@@ -55,7 +65,18 @@ class HistoriaClinicaTimeline extends ConsumerWidget {
           children: [
             for (var i = 0; i < ordenadas.length; i++) ...[
               if (i > 0) const SizedBox(height: AppSpacing.sm),
-              _ConsultaCard(consulta: ordenadas[i]),
+              _ConsultaCard(
+                consulta: ordenadas[i],
+                mostrarAutor:
+                    ordenadas[i].veterinarioNombre != null &&
+                    debeMostrarAutor(
+                      ordenadas[i],
+                      multiVet: multiVet,
+                      idsActivos: idsActivos,
+                    ),
+                retirado: autorRetirado(ordenadas[i], idsActivos),
+                indiceColor: indices[ordenadas[i].veterinarioId] ?? 0,
+              ),
             ],
           ],
         );
@@ -74,9 +95,17 @@ class HistoriaClinicaTimeline extends ConsumerWidget {
 /// Estado puramente local (`_expandida`) — sin `IconButton`, sin ícono de
 /// editar/borrar, sin gesto de long-press ni swipe (HIST-04).
 class _ConsultaCard extends StatefulWidget {
-  const _ConsultaCard({required this.consulta});
+  const _ConsultaCard({
+    required this.consulta,
+    required this.mostrarAutor,
+    required this.retirado,
+    required this.indiceColor,
+  });
 
   final Consulta consulta;
+  final bool mostrarAutor;
+  final bool retirado;
+  final int indiceColor;
 
   @override
   State<_ConsultaCard> createState() => _ConsultaCardState();
@@ -119,6 +148,37 @@ class _ConsultaCardState extends State<_ConsultaCard> {
             overflow: TextOverflow.ellipsis,
           ),
           if (_expandida) ..._detalle(textTheme, consulta),
+          if (widget.mostrarAutor) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                VetAvatar(
+                  nombre: consulta.veterinarioNombre!,
+                  indice: widget.indiceColor,
+                  size: 24,
+                  retirado: widget.retirado,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Flexible(
+                  child: Text.rich(
+                    TextSpan(
+                      text: 'Atendió: Dr(a). ${consulta.veterinarioNombre}',
+                      children: [
+                        if (widget.retirado)
+                          const TextSpan(
+                            text: ' (retirado)',
+                            style: TextStyle(color: AppColors.textMuted),
+                          ),
+                      ],
+                    ),
+                    style: textTheme.labelLarge?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

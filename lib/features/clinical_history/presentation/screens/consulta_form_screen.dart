@@ -33,8 +33,7 @@ class ConsultaFormScreen extends ConsumerStatefulWidget {
   final String? citaId;
 
   @override
-  ConsumerState<ConsultaFormScreen> createState() =>
-      _ConsultaFormScreenState();
+  ConsumerState<ConsultaFormScreen> createState() => _ConsultaFormScreenState();
 }
 
 class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
@@ -169,9 +168,9 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
         citaId: widget.citaId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Consulta guardada')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Consulta guardada')));
       context.pop();
     } on ConsultaFailure catch (e) {
       if (mounted) setState(() => _error = e.message);

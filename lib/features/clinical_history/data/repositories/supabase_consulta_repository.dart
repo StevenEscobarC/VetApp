@@ -26,11 +26,13 @@ class SupabaseConsultaRepository {
     try {
       final rows = await _client
           .from('consultas')
-          .select()
+          .select(
+            '*, veterinario:perfiles!consultas_veterinario_perfil_fkey(nombre, activo)',
+          )
           .eq('mascota_id', mascotaId)
           .order('fecha', ascending: false);
       return (rows as List)
-          .map((row) => _fromRow(row as Map<String, dynamic>))
+          .map((row) => consultaDesdeFila(row as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
       throw ConsultaFailure(_messageFor(e));
@@ -61,19 +63,22 @@ class SupabaseConsultaRepository {
     String? citaId,
   }) async {
     try {
-      final id = await _client.rpc('registrar_consulta', params: {
-        'p_mascota_id': mascotaId,
-        'p_diagnostico': diagnostico.trim(),
-        'p_tratamiento': tratamiento.trim(),
-        'p_anamnesis': blancoANull(anamnesis),
-        'p_evolucion': blancoANull(evolucion),
-        'p_peso_kg': pesoKg,
-        'p_temperatura_c': temperaturaC,
-        'p_frecuencia_cardiaca': frecuenciaCardiaca,
-        'p_frecuencia_respiratoria': frecuenciaRespiratoria,
-        'p_mucosas': blancoANull(mucosas),
-        'p_cita_id': citaId,
-      });
+      final id = await _client.rpc(
+        'registrar_consulta',
+        params: {
+          'p_mascota_id': mascotaId,
+          'p_diagnostico': diagnostico.trim(),
+          'p_tratamiento': tratamiento.trim(),
+          'p_anamnesis': blancoANull(anamnesis),
+          'p_evolucion': blancoANull(evolucion),
+          'p_peso_kg': pesoKg,
+          'p_temperatura_c': temperaturaC,
+          'p_frecuencia_cardiaca': frecuenciaCardiaca,
+          'p_frecuencia_respiratoria': frecuenciaRespiratoria,
+          'p_mucosas': blancoANull(mucosas),
+          'p_cita_id': citaId,
+        },
+      );
       return id as String;
     } on PostgrestException catch (e) {
       throw ConsultaFailure(_messageFor(e));
@@ -83,24 +88,6 @@ class SupabaseConsultaRepository {
       );
     }
   }
-
-  Consulta _fromRow(Map<String, dynamic> row) => Consulta(
-    id: row['id'] as String,
-    mascotaId: row['mascota_id'] as String,
-    veterinarioId: row['veterinario_id'] as String,
-    fecha: DateTime.parse(row['fecha'] as String).toLocal(),
-    diagnostico: row['diagnostico'] as String,
-    tratamiento: row['tratamiento'] as String,
-    anamnesis: row['anamnesis'] as String?,
-    evolucion: row['evolucion'] as String?,
-    examenFisico: ExamenFisico(
-      pesoKg: (row['peso_kg'] as num?)?.toDouble(),
-      temperaturaC: (row['temperatura_c'] as num?)?.toDouble(),
-      frecuenciaCardiaca: row['frecuencia_cardiaca'] as int?,
-      frecuenciaRespiratoria: row['frecuencia_respiratoria'] as int?,
-      mucosas: row['mucosas'] as String?,
-    ),
-  );
 
   String _messageFor(PostgrestException e) => mensajeErrorConsulta(e);
 }
@@ -131,4 +118,29 @@ String mensajeErrorConsulta(PostgrestException e) {
     default:
       return 'No pudimos guardar la consulta. Intenta de nuevo.';
   }
+}
+
+/// Fila de `consultas` (con el autor embebido) a [Consulta].
+@visibleForTesting
+Consulta consultaDesdeFila(Map<String, dynamic> row) {
+  final autor = row['veterinario'] as Map<String, dynamic>?;
+  return Consulta(
+    id: row['id'] as String,
+    mascotaId: row['mascota_id'] as String,
+    veterinarioId: row['veterinario_id'] as String,
+    fecha: DateTime.parse(row['fecha'] as String).toLocal(),
+    diagnostico: row['diagnostico'] as String,
+    tratamiento: row['tratamiento'] as String,
+    anamnesis: row['anamnesis'] as String?,
+    evolucion: row['evolucion'] as String?,
+    veterinarioNombre: autor?['nombre'] as String?,
+    veterinarioActivo: autor?['activo'] as bool?,
+    examenFisico: ExamenFisico(
+      pesoKg: (row['peso_kg'] as num?)?.toDouble(),
+      temperaturaC: (row['temperatura_c'] as num?)?.toDouble(),
+      frecuenciaCardiaca: row['frecuencia_cardiaca'] as int?,
+      frecuenciaRespiratoria: row['frecuencia_respiratoria'] as int?,
+      mucosas: row['mucosas'] as String?,
+    ),
+  );
 }

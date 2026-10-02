@@ -7,21 +7,17 @@ import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../data/repositories/supabase_consulta_repository.dart';
 import '../../domain/entities/consulta.dart';
 
-final consultaRepositoryProvider = Provider<SupabaseConsultaRepository>((
-  ref,
-) {
+final consultaRepositoryProvider = Provider<SupabaseConsultaRepository>((ref) {
   return SupabaseConsultaRepository(ref.watch(supabaseClientProvider));
 });
 
 /// Historia clínica de una mascota (HIST-02), más reciente primero —
 /// consumido por `HistoriaClinicaTimeline`. `autoDispose.family` — solo
 /// vive mientras la ficha está montada.
-final consultasProvider = FutureProvider.autoDispose.family<List<Consulta>, String>((
-  ref,
-  mascotaId,
-) {
-  return ref.watch(consultaRepositoryProvider).porMascota(mascotaId);
-});
+final consultasProvider = FutureProvider.autoDispose
+    .family<List<Consulta>, String>((ref, mascotaId) {
+      return ref.watch(consultaRepositoryProvider).porMascota(mascotaId);
+    });
 
 /// Registra una consulta nueva (HIST-01) — una sola llamada al
 /// repositorio, seguida de la invalidación de todos los providers cuyo
@@ -56,19 +52,21 @@ class RegistrarConsulta {
     String? mucosas,
     String? citaId,
   }) async {
-    final id = await _ref.read(consultaRepositoryProvider).registrarConsulta(
-      mascotaId: mascotaId,
-      diagnostico: diagnostico.trim(),
-      tratamiento: tratamiento.trim(),
-      anamnesis: blancoANull(anamnesis),
-      evolucion: blancoANull(evolucion),
-      pesoKg: pesoKg,
-      temperaturaC: temperaturaC,
-      frecuenciaCardiaca: frecuenciaCardiaca,
-      frecuenciaRespiratoria: frecuenciaRespiratoria,
-      mucosas: blancoANull(mucosas),
-      citaId: citaId,
-    );
+    final id = await _ref
+        .read(consultaRepositoryProvider)
+        .registrarConsulta(
+          mascotaId: mascotaId,
+          diagnostico: diagnostico.trim(),
+          tratamiento: tratamiento.trim(),
+          anamnesis: blancoANull(anamnesis),
+          evolucion: blancoANull(evolucion),
+          pesoKg: pesoKg,
+          temperaturaC: temperaturaC,
+          frecuenciaCardiaca: frecuenciaCardiaca,
+          frecuenciaRespiratoria: frecuenciaRespiratoria,
+          mucosas: blancoANull(mucosas),
+          citaId: citaId,
+        );
     _ref.invalidate(consultasProvider(mascotaId));
     if (pesoKg != null) {
       _ref.invalidate(pesosProvider(mascotaId));
