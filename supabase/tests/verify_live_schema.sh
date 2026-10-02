@@ -51,6 +51,23 @@ for t in clinicas perfiles clientes mascotas mascota_pesos consultas citas cita_
   fi
 done
 
+# Fase 4.1: clinica_invitaciones no concede nada a anon (revoke all + RLS solo-admin).
+# Se acepta 401/403/404 (sin privilegio) o 200 con cuerpo [] -- nunca filas.
+inv_body=$(mktemp)
+inv_code=$(curl -s -o "$inv_body" -w '%{http_code}' \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  "$SUPABASE_URL/rest/v1/clinica_invitaciones?select=id&limit=1")
+if [ "$inv_code" = "401" ] || [ "$inv_code" = "403" ] || [ "$inv_code" = "404" ]; then
+  echo "OK clinica_invitaciones protegida $inv_code"
+elif [ "$inv_code" = "200" ] && [ "$(tr -d '[:space:]' < "$inv_body")" = "[]" ]; then
+  echo "OK clinica_invitaciones 200 sin filas"
+else
+  echo "FAIL clinica_invitaciones $inv_code"
+  any_fail=1
+fi
+rm -f "$inv_body"
+
 anon_code=$(curl -s -o /dev/null -w '%{http_code}' \
   -X POST \
   -H "apikey: $SUPABASE_ANON_KEY" \
@@ -67,9 +84,27 @@ else
   any_fail=1
 fi
 
-for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario; do
+for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario generar_invitacion_clinica revocar_invitacion retirar_miembro cambiar_rol_miembro crear_mi_clinica unirse_a_clinica es_admin_clinica es_miembro_activo es_autor_en_mi_clinica consumir_invitacion; do
   payload="{}"
   case "$rpc" in
+    revocar_invitacion|es_miembro_activo|es_autor_en_mi_clinica)
+      payload='{"p_id":"00000000-0000-0000-0000-000000000000"}'
+      ;;
+    retirar_miembro)
+      payload='{"p_miembro":"00000000-0000-0000-0000-000000000000"}'
+      ;;
+    cambiar_rol_miembro)
+      payload='{"p_miembro":"00000000-0000-0000-0000-000000000000","p_rol":"admin"}'
+      ;;
+    crear_mi_clinica)
+      payload='{"p_nombre":"probe"}'
+      ;;
+    unirse_a_clinica)
+      payload='{"p_codigo":"ZZZZZZZZ"}'
+      ;;
+    consumir_invitacion)
+      payload='{"p_codigo":"ZZZZZZZZ","p_usuario":"00000000-0000-0000-0000-000000000000"}'
+      ;;
     registrar_cliente_con_mascota)
       payload='{"cliente_nombre":"probe","cliente_telefono":"3000000000","mascota_nombre":"probe","mascota_especie":"perro","mascota_raza":"","mascota_fecha_nacimiento":null,"mascota_peso_kg":null}'
       ;;
@@ -100,7 +135,7 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
 
   if [ "$rpc_code" = "401" ] || [ "$rpc_code" = "403" ]; then
     echo "OK rpc $rpc protegido $rpc_code"
-  elif [ "$rpc_code" = "404" ] && [ "$rpc" = "crear_perfil_nuevo_usuario" ]; then
+  elif [ "$rpc_code" = "404" ] && { [ "$rpc" = "crear_perfil_nuevo_usuario" ] || [ "$rpc" = "consumir_invitacion" ]; }; then
     echo "OK rpc $rpc no expuesta 404 (función de trigger)"
   elif [ "$rpc_code" = "404" ]; then
     echo "FAIL rpc $rpc 404 (no aplicada)"
@@ -131,6 +166,30 @@ else
   exit 1
 fi
 rm -f "$embed_body"
+
+# Sonda de embeds de la Fase 4.1: nombre del veterinario asignado/autor vía las FK a perfiles.
+# Con anon, RLS oculta todo: se espera 200 con cuerpo [].
+probe_embed() {
+  local table="$1" select="$2" label="$3" body code
+  body=$(mktemp)
+  code=$(curl -s -G -o "$body" -w '%{http_code}' \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+    --data-urlencode "select=$select" \
+    --data-urlencode "limit=1" \
+    "$SUPABASE_URL/rest/v1/$table")
+  if [ "$code" = "200" ] && [ "$(tr -d '[:space:]' < "$body")" = "[]" ]; then
+    echo "OK $label"
+  else
+    echo "FAIL $label $code"
+    cat "$body"
+    echo
+    any_fail=1
+  fi
+  rm -f "$body"
+}
+probe_embed citas '*, veterinario:perfiles!citas_veterinario_perfil_fkey(nombre)' 'citas veterinario embed'
+probe_embed consultas '*, veterinario:perfiles!consultas_veterinario_perfil_fkey(nombre, activo)' 'consultas veterinario embed'
 
 if [ "$any_fail" -ne 0 ]; then
   exit 1
