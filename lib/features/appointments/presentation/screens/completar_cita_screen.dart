@@ -148,7 +148,7 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
               categoria: esVacunacion ? 'vacunacion' : 'desparasitacion',
             ),
           );
-          ref.invalidate(dosisDeCitaProvider(cita.id));
+          // RegistrarDosis ya refresca dosisDeCitaProvider (invalidarVacunas).
           if (r != null && mounted) mostrarDosisRegistrada(context, r);
         },
         child: ConstrainedBox(

@@ -8,6 +8,7 @@ import '../../../appointments/domain/whatsapp_recordatorio.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/carne.dart';
 import '../../domain/whatsapp_vacunas.dart';
+import 'invalidar_vacunas.dart';
 import 'vacuna_providers.dart';
 
 /// Alertas de vacunas de toda la clínica (VAC-03), ya ordenadas por el
@@ -33,10 +34,7 @@ class AlertasActions {
 
   final Ref _ref;
 
-  void _refrescar() {
-    _ref.invalidate(vacunasPendientesProvider);
-    _ref.invalidate(resumenVacunasProvider);
-  }
+  void _refrescar() => invalidarAlertasVacunas(_ref);
 
   /// Abre WhatsApp con el recordatorio formal. Solo si la app se abrió de
   /// verdad marca "recordatorio enviado" (VET-25); devuelve ese resultado.

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/formato.dart';
 import '../../domain/entities/carne.dart';
+import 'invalidar_vacunas.dart';
 import 'vacuna_providers.dart';
 
 /// Resultado de registrar una dosis: lo recibe quien abrió `/dosis/nueva`
@@ -64,8 +65,7 @@ class RegistrarDosis {
           citaId: citaId,
           guardarEnCatalogo: guardarEnCatalogo,
         );
-    _ref.invalidate(carneProvider(mascotaId));
-    _ref.invalidate(resumenVacunasMascotasProvider);
+    invalidarVacunas(_ref, mascotaId: mascotaId, citaId: citaId);
     DateTime? proxima;
     try {
       final carne = await _ref.read(carneProvider(mascotaId).future);

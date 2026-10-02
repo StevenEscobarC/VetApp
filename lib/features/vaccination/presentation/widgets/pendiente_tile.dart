@@ -79,8 +79,7 @@ class PendienteTile extends ConsumerWidget {
     final r = await context.push<DosisRegistrada>(
       rutaRegistrarDosis(mascotaId: _p.mascotaId, codigo: _p.codigoProtocolo),
     );
-    ref.invalidate(vacunasPendientesProvider);
-    ref.invalidate(resumenVacunasProvider);
+    // RegistrarDosis ya refresca Inicio y pendientes (invalidarVacunas).
     if (r == null || !context.mounted) return;
     mostrarDosisRegistrada(
       context,
