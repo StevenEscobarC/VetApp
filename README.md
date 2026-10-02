@@ -81,6 +81,14 @@ Agrega `citas` (una o varias mascotas del mismo cliente vía `cita_mascotas`), l
 2. En una consulta nueva, pega y ejecuta [`supabase/tests/rls_smoke_test.sql`](supabase/tests/rls_smoke_test.sql). Espera el mensaje `RLS SMOKE: PASS (115 checks)` (70 de las Fases 1-3 + 25 de la Fase 4 + 20 de los fixes de la revisión de la Fase 4); termina en error a propósito para revertir los datos de prueba.
 3. Corre `bash supabase/tests/verify_live_schema.sh` — debe imprimir `OK citas embed` y terminar con `LIVE_SCHEMA_OK`.
 
+## Fase 4.1 — Equipo de la clínica
+
+Agrega membresía y roles (`perfiles.rol_clinica`, `activo`, `matricula`), códigos de invitación de 8 caracteres (`clinica_invitaciones`, vigencia 72 h, un solo uso), las RPC de equipo (`generar_invitacion_clinica`, `revocar_invitacion`, `retirar_miembro`, `cambiar_rol_miembro`, `crear_mi_clinica`, `unirse_a_clinica`), citas asignables por veterinario (`crear_cita` / `actualizar_cita` con `p_veterinario_id`) y `consultas.veterinario_id` en `ON DELETE RESTRICT`.
+
+1. En **SQL Editor**, pega y ejecuta el archivo completo [`supabase/schema.sql`](supabase/schema.sql): ahora incluye las Fases 1-4.1 y debe pegarse entero (idempotente; espera "Success. No rows returned").
+2. En una consulta nueva, pega y ejecuta el archivo completo [`supabase/tests/rls_smoke_test.sql`](supabase/tests/rls_smoke_test.sql). Espera el mensaje `RLS SMOKE: PASS (145 checks)` (115 de las Fases 1-4 + 30 de la Fase 4.1); termina en error a propósito para revertir los datos de prueba.
+3. Corre `bash supabase/tests/verify_live_schema.sh` — debe imprimir `OK citas veterinario embed`, `OK consultas veterinario embed` y terminar con `LIVE_SCHEMA_OK`.
+
 ## Ejecutar Flutter
 
 No se guardan claves en el código fuente. Crea un archivo `dart_define.json` en la raíz del repo (ya está en `.gitignore`, nunca se sube) con este contenido:

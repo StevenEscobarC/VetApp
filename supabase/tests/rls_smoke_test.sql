@@ -28,6 +28,10 @@
 -- Fixes 04-REVIEW: HI-01 (writes directos: dueño en cita_mascotas, columnas inmutables
 -- y máquina de estados de citas incl. Reabrir/Deshacer, consultas.cita_id de la misma
 -- clínica y cita, bloque N + J6), ME-04 (consultas sobre citas canceladas, N9/N18/N19), HI-02 (borrar vet con citas -> restrict, bloque O).
+-- Fase 4.1 (bloque P, P1..P30): equipo de la clínica -- backfill admin, sin auto-escalación (privilegios por
+-- columna), invitaciones (uso único, vencida, revocada, inexistente, metadata falsificada), RPC solo-admin y
+-- aisladas por clínica, último admin, auto-retiro (D-14), reasignación de citas (D-15), acceso cortado al
+-- retirar (T6), autoría visible (D-13), citas por veterinario (D-07) y consultas FK restrict (D-06). Total esperado: 145.
 
 do $$
 declare
@@ -62,6 +66,23 @@ declare
   cita_vieja_id uuid;
   cita_cancelada_id uuid;
   n_total int;
+  -- Fase 4.1 (bloque P)
+  vet_a2_id uuid := gen_random_uuid();
+  vet_a3_id uuid := gen_random_uuid();
+  vet_a4_id uuid := gen_random_uuid();
+  vet_c_id uuid := gen_random_uuid();
+  cli_code_id uuid := gen_random_uuid();
+  v_cod_p text;
+  v_cod_b text;
+  v_inv_id uuid;
+  v_clinica_nueva uuid;
+  v_clinica_c uuid;
+  v_count int;
+  v_cita1 uuid;
+  v_cita2 uuid;
+  v_cita_done uuid;
+  v_cita_pasada uuid;
+  v_ok boolean;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -1324,11 +1345,628 @@ begin
   exception
     when foreign_key_violation then
       get stacked diagnostics v_texto = constraint_name;
-      if v_texto is distinct from 'citas_veterinario_id_fkey' then
-        failures := failures || format('O1 foreign_key_violation por %s, esperaba citas_veterinario_id_fkey', v_texto);
+      -- Fase 4.1: ya no es solo citas_veterinario_id_fkey. Borrar auth.users también dispara
+      -- (en orden no determinista) las FK restrict de consultas y las cascadas a perfiles
+      -- bloqueadas por las FK *_veterinario_perfil_fkey; cualquiera de las 4 prueba que no se borra nada.
+      if v_texto is distinct from 'citas_veterinario_id_fkey'
+         and v_texto is distinct from 'citas_veterinario_perfil_fkey'
+         and v_texto is distinct from 'consultas_veterinario_id_fkey'
+         and v_texto is distinct from 'consultas_veterinario_perfil_fkey' then
+        failures := failures || format('O1 foreign_key_violation por %s, esperaba una FK restrict de citas/consultas', v_texto);
       end if;
     when others then failures := failures || ('O1 error inesperado: ' || sqlerrm);
   end;
+
+  -------------------------------------------------------------------------
+  -- ===== P: Equipo de la clínica (Fase 4.1) =====
+  -- Setup (vet A es admin): vet_a2 y vet_a3 se registran con un código de invitación.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  select g.codigo into v_cod_p from public.generar_invitacion_clinica() g;
+  perform set_config('role', 'postgres', true);
+  insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values (vet_a2_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+      'smoke-vet-a2@vetapp.invalid',
+      jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke Vet A2', 'codigo_invitacion', v_cod_p),
+      now(), now());
+
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  select g.codigo into v_cod_p from public.generar_invitacion_clinica() g;
+  perform set_config('role', 'postgres', true);
+  insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values (vet_a3_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+      'smoke-vet-a3@vetapp.invalid',
+      jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke Vet A3', 'codigo_invitacion', v_cod_p),
+      now(), now());
+
+  -- P1: backfill D-04 -- ningún veterinario sin rol_clinica; vet A es admin y activo.
+  checks := checks + 1;
+  select count(*) into n from public.perfiles where rol = 'VETERINARIO' and rol_clinica is null;
+  if n <> 0 or not exists (
+    select 1 from public.perfiles where id = vet_a_id and rol_clinica = 'admin' and activo
+  ) then
+    failures := failures || format('P1 backfill: %s veterinarios sin rol_clinica o vet A no es admin activo', n);
+  end if;
+
+  -- P2..P5: vet_a2 (no admin) no puede auto-escalar ni moverse (privilegios por columna, T1).
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a2_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  checks := checks + 1;
+  begin
+    update public.perfiles set rol_clinica = 'admin' where id = vet_a2_id;
+    failures := failures || 'P2 vet no-admin pudo cambiar su rol_clinica';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('P2 error inesperado: ' || sqlerrm);
+  end;
+
+  checks := checks + 1;
+  begin
+    update public.perfiles set activo = true where id = vet_a2_id;
+    failures := failures || 'P3 vet pudo escribir su columna activo';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('P3 error inesperado: ' || sqlerrm);
+  end;
+
+  checks := checks + 1;
+  begin
+    update public.perfiles set clinica_id = clinica_b_id where id = vet_a2_id;
+    failures := failures || 'P4 vet pudo cambiar su clinica_id';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('P4 error inesperado: ' || sqlerrm);
+  end;
+
+  checks := checks + 1;
+  begin
+    update public.perfiles set rol = 'CLIENTE' where id = vet_a2_id;
+    failures := failures || 'P5 vet pudo cambiar su rol';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('P5 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P6: vet_a2 edita nombre/telefono/matricula propios (TEAM-05).
+  checks := checks + 1;
+  begin
+    update public.perfiles
+      set nombre = 'Smoke Vet A2 Editado', telefono = '3001112222', matricula = 'MP-12345'
+      where id = vet_a2_id;
+    get diagnostics n = row_count;
+    select matricula into v_texto from public.perfiles where id = vet_a2_id;
+    if n <> 1 or v_texto is distinct from 'MP-12345' then
+      failures := failures || format('P6 update propio afectó %s filas, matricula=%s', n, v_texto);
+    end if;
+  exception when others then
+    failures := failures || ('P6 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P7: signup de vet_a4 con código válido (minúsculas con guion) -> entra a la clínica A.
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  select g.codigo into v_cod_p from public.generar_invitacion_clinica() g;
+  perform set_config('role', 'postgres', true);
+
+  checks := checks + 1;
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+      values (vet_a4_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+        'smoke-vet-a4@vetapp.invalid',
+        jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke Vet A4',
+          'codigo_invitacion', lower(substr(v_cod_p, 1, 4) || '-' || substr(v_cod_p, 5))),
+        now(), now());
+    if not exists (
+      select 1 from public.perfiles
+      where id = vet_a4_id and clinica_id = clinica_a_id and rol_clinica = 'veterinario' and activo
+    ) or not exists (
+      select 1 from public.clinica_invitaciones where codigo = v_cod_p and usada_por = vet_a4_id
+    ) then
+      failures := failures || 'P7 el alta con código válido no dejó al vet en clínica A como veterinario activo con la invitación usada';
+    end if;
+  exception when others then
+    failures := failures || ('P7 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P8: reusar el mismo código -> el alta falla y no queda perfil.
+  checks := checks + 1;
+  v_uuid := gen_random_uuid();
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+      values (v_uuid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+        'smoke-p8@vetapp.invalid',
+        jsonb_build_object('rol', 'VETERINARIO', 'codigo_invitacion', v_cod_p), now(), now());
+    failures := failures || 'P8 reusar un código debía fallar';
+  exception when others then
+    if sqlerrm not like '%ya fue utilizado%' then
+      failures := failures || ('P8 error inesperado: ' || sqlerrm);
+    end if;
+  end;
+  if exists (select 1 from public.perfiles where id = v_uuid) then
+    failures := failures || 'P8 quedó un perfil pese al código reusado';
+  end if;
+
+  -- P9: código vencido.
+  insert into public.clinica_invitaciones (clinica_id, codigo, creada_por, expira_en)
+    values (clinica_a_id, 'SMKEXPAA', vet_a_id, now() - interval '1 hour');
+  checks := checks + 1;
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+      values (gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+        'smoke-p9@vetapp.invalid',
+        jsonb_build_object('rol', 'VETERINARIO', 'codigo_invitacion', 'SMKEXPAA'), now(), now());
+    failures := failures || 'P9 un código vencido debía fallar';
+  exception when others then
+    if sqlerrm not like '%venci%' then
+      failures := failures || ('P9 error inesperado: ' || sqlerrm);
+    end if;
+  end;
+
+  -- P10: código revocado.
+  insert into public.clinica_invitaciones (clinica_id, codigo, creada_por, expira_en, revocada)
+    values (clinica_a_id, 'SMKREVAA', vet_a_id, now() + interval '1 day', true);
+  checks := checks + 1;
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+      values (gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+        'smoke-p10@vetapp.invalid',
+        jsonb_build_object('rol', 'VETERINARIO', 'codigo_invitacion', 'SMKREVAA'), now(), now());
+    failures := failures || 'P10 un código revocado debía fallar';
+  exception when others then
+    if sqlerrm not like '%no es válido%' then
+      failures := failures || ('P10 error inesperado: ' || sqlerrm);
+    end if;
+  end;
+
+  -- P11: código inexistente.
+  checks := checks + 1;
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+      values (gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+        'smoke-p11@vetapp.invalid',
+        jsonb_build_object('rol', 'VETERINARIO', 'codigo_invitacion', 'ZZZZZZZZ'), now(), now());
+    failures := failures || 'P11 un código inexistente debía fallar';
+  exception when others then
+    if sqlerrm not like '%no es válido%' then
+      failures := failures || ('P11 error inesperado: ' || sqlerrm);
+    end if;
+  end;
+
+  -- P12: metadata falsificada (clinica_id = A, rol_clinica = admin) sin código -> clínica NUEVA propia (T2).
+  checks := checks + 1;
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+      values (vet_c_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+        'smoke-vet-c@vetapp.invalid',
+        jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke Vet C', 'clinica_nombre', 'Smoke Clinica C',
+          'clinica_id', clinica_a_id::text, 'rol_clinica', 'admin', 'activo', true),
+        now(), now());
+    select clinica_id into v_clinica_c from public.perfiles where id = vet_c_id;
+    if v_clinica_c is null or v_clinica_c = clinica_a_id or not exists (
+      select 1 from public.perfiles where id = vet_c_id and rol_clinica = 'admin' and activo
+    ) then
+      failures := failures || 'P12 la metadata falsificada afectó la clínica/rol del perfil nuevo';
+    end if;
+  exception when others then
+    failures := failures || ('P12 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P13: un CLIENTE que trae un código válido lo ignora; la invitación sigue sin usar.
+  insert into public.clinica_invitaciones (clinica_id, codigo, creada_por, expira_en)
+    values (clinica_a_id, 'SMKVAKBB', vet_a_id, now() + interval '1 day');
+  checks := checks + 1;
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+      values (cli_code_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+        'smoke-cliente-code@vetapp.invalid',
+        jsonb_build_object('rol', 'CLIENTE', 'nombre', 'Smoke Cliente Code', 'codigo_invitacion', 'SMKVAKBB'),
+        now(), now());
+    if not exists (select 1 from public.perfiles where id = cli_code_id and rol = 'CLIENTE' and clinica_id is null)
+       or exists (select 1 from public.clinica_invitaciones where codigo = 'SMKVAKBB' and usada_por is not null) then
+      failures := failures || 'P13 el CLIENTE con código quedó con clínica o consumió la invitación';
+    end if;
+  exception when others then
+    failures := failures || ('P13 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P14: un no-admin no puede generar invitaciones.
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a2_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  checks := checks + 1;
+  begin
+    perform public.generar_invitacion_clinica();
+    failures := failures || 'P14 un vet no-admin pudo generar una invitación';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('P14 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P15: el admin genera; el formato es de 8 caracteres del alfabeto de 31, 72 h, un solo código vigente.
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  checks := checks + 1;
+  begin
+    perform public.generar_invitacion_clinica();
+    select g.id, g.codigo, g.expira_en into v_inv_id, v_cod_p, v_expira from public.generar_invitacion_clinica() g;
+    select count(*) into v_count from public.clinica_invitaciones
+      where usada_por is null and not revocada and expira_en > now();
+    if v_cod_p !~ '^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$'
+       or v_expira < now() + interval '71 hours 59 minutes'
+       or v_expira > now() + interval '72 hours 1 minute'
+       or v_count <> 1 then
+      failures := failures || format('P15 código=%s expira=%s vigentes=%s fuera de lo esperado', v_cod_p, v_expira, v_count);
+    end if;
+  exception when others then
+    failures := failures || ('P15 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P16: ni el admin de B ni un no-admin de A ven las invitaciones de A.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  select count(*) into n from public.clinica_invitaciones where clinica_id = clinica_a_id;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a2_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  select count(*) into n_total from public.clinica_invitaciones where clinica_id = clinica_a_id;
+  if n <> 0 or n_total <> 0 then
+    failures := failures || format('P16 admin B ve %s y vet no-admin A ve %s invitaciones de A, esperaba 0 y 0', n, n_total);
+  end if;
+
+  -- P17: un no-admin y el admin de OTRA clínica no pueden revocar; la invitación no cambia.
+  checks := checks + 1;
+  v_ok := true;
+  begin
+    perform public.revocar_invitacion(v_inv_id);
+    v_ok := false;
+    failures := failures || 'P17 un vet no-admin pudo revocar una invitación';
+  exception when others then null;
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.revocar_invitacion(v_inv_id);
+    v_ok := false;
+    failures := failures || 'P17 el admin de B pudo revocar una invitación de A';
+  exception when others then null;
+  end;
+  perform set_config('role', 'postgres', true);
+  if v_ok and exists (select 1 from public.clinica_invitaciones where id = v_inv_id and revocada) then
+    failures := failures || 'P17 la invitación quedó revocada pese a los rechazos';
+  end if;
+
+  -- P18: el admin de B no puede retirar a un miembro de A.
+  checks := checks + 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.retirar_miembro(vet_a2_id);
+    failures := failures || 'P18 el admin de B pudo retirar a un miembro de A';
+  exception when others then null;
+  end;
+  perform set_config('role', 'postgres', true);
+  if not exists (select 1 from public.perfiles where id = vet_a2_id and activo) then
+    failures := failures || 'P18 vet_a2 quedó inactivo';
+  end if;
+
+  -- P19: el admin de B no puede cambiar el rol de un miembro de A.
+  checks := checks + 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.cambiar_rol_miembro(vet_a2_id, 'admin');
+    failures := failures || 'P19 el admin de B pudo cambiar el rol de un miembro de A';
+  exception when others then null;
+  end;
+  perform set_config('role', 'postgres', true);
+  if not exists (select 1 from public.perfiles where id = vet_a2_id and rol_clinica = 'veterinario') then
+    failures := failures || 'P19 el rol de vet_a2 cambió';
+  end if;
+
+  -- P20: un no-admin no puede retirar a nadie.
+  checks := checks + 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a2_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.retirar_miembro(vet_a_id);
+    failures := failures || 'P20 un vet no-admin pudo retirar a otro';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('P20 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P21: el único admin no puede quitarse el rol ni retirarse (la clínica no queda sin admin).
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.cambiar_rol_miembro(vet_a_id, 'veterinario');
+    failures := failures || 'P21 el único admin pudo degradarse';
+  exception when others then
+    if sqlerrm not like '%al menos un administrador%' then
+      failures := failures || ('P21 degradarse: error inesperado: ' || sqlerrm);
+    end if;
+  end;
+  begin
+    perform public.retirar_miembro(vet_a_id);
+    failures := failures || 'P21 el único admin pudo retirarse';
+  exception when others then
+    if sqlerrm not like '%al menos un administrador%' then
+      failures := failures || ('P21 retirarse: error inesperado: ' || sqlerrm);
+    end if;
+  end;
+
+  -- P22: crear_cita asigna al vet elegido o, sin elegir, al llamador; vet_a2 registra una consulta.
+  checks := checks + 1;
+  begin
+    v_cita1 := public.crear_cita(cliente_a_id, array[mascota_a_id], now() + interval '3 days',
+      30, 'consultorio', '', 'Smoke P22', '', vet_a2_id);
+    v_cita2 := public.crear_cita(cliente_a_id, array[mascota_a_id], now() + interval '4 days');
+    perform set_config('role', 'postgres', true);
+    if not exists (select 1 from public.citas where id = v_cita1 and veterinario_id = vet_a2_id)
+       or not exists (select 1 from public.citas where id = v_cita2 and veterinario_id = vet_a_id) then
+      failures := failures || 'P22 la cita no quedó asignada al veterinario esperado';
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a2_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_consulta(p_mascota_id => mascota_a_id, p_diagnostico => 'dx P22', p_tratamiento => 'tx P22');
+    perform set_config('role', 'postgres', true);
+    if not exists (select 1 from public.consultas where mascota_id = mascota_a_id and veterinario_id = vet_a2_id) then
+      failures := failures || 'P22 la consulta de vet_a2 no quedó registrada';
+    end if;
+  exception when others then
+    failures := failures || ('P22 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P23: asignar a un vet de otra clínica falla (RPC e insert directo).
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  checks := checks + 1;
+  begin
+    perform public.crear_cita(cliente_a_id, array[mascota_a_id], now() + interval '5 days',
+      30, 'consultorio', '', 'Smoke P23', '', vet_b_id);
+    failures := failures || 'P23 crear_cita con un vet de otra clínica debía fallar';
+  exception when others then null;
+  end;
+  begin
+    insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora)
+      values (clinica_a_id, cliente_a_id, vet_b_id, now() + interval '5 days');
+    failures := failures || 'P23 insert directo con un vet de otra clínica debía fallar';
+  exception
+    when insufficient_privilege then null;
+    when others then failures := failures || ('P23 insert directo: error inesperado: ' || sqlerrm);
+  end;
+
+  -- P24: una cita abierta se reasigna; una completada no.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora, estado)
+    values (clinica_a_id, cliente_a_id, vet_a_id, now() - interval '5 days', 'completada')
+    returning id into v_cita_done;
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.actualizar_cita(v_cita2, array[mascota_a_id], now() + interval '4 days',
+      30, 'consultorio', '', 'Consulta general', '', vet_a2_id);
+    perform set_config('role', 'postgres', true);
+    if not exists (select 1 from public.citas where id = v_cita2 and veterinario_id = vet_a2_id) then
+      failures := failures || 'P24 la cita abierta no se reasignó a vet_a2';
+    end if;
+  exception when others then
+    failures := failures || ('P24 reasignar cita abierta: error inesperado: ' || sqlerrm);
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    update public.citas set veterinario_id = vet_a2_id where id = v_cita_done;
+    failures := failures || 'P24 reasignar una cita completada debía fallar';
+  exception
+    when check_violation then null;
+    when others then failures := failures || ('P24 cita completada: error inesperado: ' || sqlerrm);
+  end;
+
+  -- P25: vet_a promueve a vet_a3; vet_a3 (admin) se auto-retira (D-14) porque queda otro admin.
+  checks := checks + 1;
+  begin
+    perform public.cambiar_rol_miembro(vet_a3_id, 'admin');
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a3_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.retirar_miembro(vet_a3_id);
+    perform set_config('role', 'postgres', true);
+    if exists (select 1 from public.perfiles where id = vet_a3_id and activo) then
+      failures := failures || 'P25 vet_a3 sigue activo tras auto-retirarse';
+    end if;
+  exception when others then
+    failures := failures || ('P25 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P26: retirar a vet_a2 mueve sus citas futuras abiertas al admin que retira; no toca las pasadas.
+  perform set_config('role', 'postgres', true);
+  insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora, estado)
+    values (clinica_a_id, cliente_a_id, vet_a2_id, now() - interval '2 days', 'pendiente')
+    returning id into v_cita_pasada;
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  checks := checks + 1;
+  begin
+    n := public.retirar_miembro(vet_a2_id);
+    perform set_config('role', 'postgres', true);
+    if n < 1
+       or not exists (select 1 from public.citas where id = v_cita1 and veterinario_id = vet_a_id)
+       or not exists (select 1 from public.perfiles where id = vet_a2_id and not activo and clinica_id = clinica_a_id)
+       or not exists (select 1 from public.citas where id = v_cita_pasada and veterinario_id = vet_a2_id) then
+      failures := failures || format('P26 retiro: movidas=%s o estado de perfil/citas inesperado', n);
+    end if;
+  exception when others then
+    failures := failures || ('P26 retiro: error inesperado: ' || sqlerrm);
+  end;
+  -- La cita pasada que sigue a nombre del vet retirado se edita reenviando el mismo vet o null.
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.actualizar_cita(v_cita_pasada, array[mascota_a_id], now() - interval '2 days',
+      30, 'consultorio', '', 'Editada con vet actual', '', vet_a2_id);
+    perform public.actualizar_cita(v_cita_pasada, array[mascota_a_id], now() - interval '2 days',
+      30, 'consultorio', '', 'Editada con null', '', null);
+    perform set_config('role', 'postgres', true);
+    if not exists (select 1 from public.citas where id = v_cita_pasada and veterinario_id = vet_a2_id and motivo = 'Editada con null') then
+      failures := failures || 'P26 editar la cita pasada de un vet retirado no la dejó intacta a su nombre';
+    end if;
+  exception when others then
+    failures := failures || ('P26 editar cita de vet retirado: error inesperado: ' || sqlerrm);
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.actualizar_cita(v_cita_pasada, array[mascota_a_id], now() - interval '2 days',
+      30, 'consultorio', '', 'Editada a vet retirado', '', vet_a3_id);
+    failures := failures || 'P26 reasignar a un vet retirado debía fallar';
+  exception when others then
+    if sqlerrm not like '%ya no está en tu clínica%' then
+      failures := failures || ('P26 reasignar a retirado: error inesperado: ' || sqlerrm);
+    end if;
+  end;
+
+  -- P27: vet_a2 retirado no ve nada de la clínica y no puede operar (T6).
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a2_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    select (select count(*) from public.clientes) + (select count(*) from public.mascotas)
+         + (select count(*) from public.citas) + (select count(*) from public.consultas) into n;
+    if n <> 0 or public.es_veterinario() or public.mi_clinica_id() is not null then
+      failures := failures || format('P27 vet retirado ve %s filas o conserva acceso (es_veterinario/mi_clinica_id)', n);
+    end if;
+    begin
+      perform public.crear_cita(cliente_a_id, array[mascota_a_id], now() + interval '6 days');
+      failures := failures || 'P27 vet retirado pudo crear una cita';
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('P27 crear_cita: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('P27 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P28: vet_a2 abre su propia clínica; vet A sigue leyendo su nombre por autoría (D-13).
+  checks := checks + 1;
+  begin
+    v_clinica_nueva := public.crear_mi_clinica('Clínica Nueva');
+    perform set_config('role', 'postgres', true);
+    if not exists (
+      select 1 from public.perfiles
+      where id = vet_a2_id and clinica_id = v_clinica_nueva and rol_clinica = 'admin' and activo
+    ) then
+      failures := failures || 'P28 vet_a2 no quedó admin activo de su clínica nueva';
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select nombre into v_texto from public.perfiles where id = vet_a2_id;
+    if v_texto is distinct from 'Smoke Vet A2 Editado' then
+      failures := failures || format('P28 vet A no lee el nombre del autor movido de clínica (leyó %s)', v_texto);
+    end if;
+    begin
+      perform public.crear_mi_clinica('Otra Clínica');
+      failures := failures || 'P28 un vet activo pudo crear otra clínica';
+    exception when others then
+      if sqlerrm not like '%Ya perteneces a una clínica activa%' then
+        failures := failures || ('P28 crear_mi_clinica activo: error inesperado: ' || sqlerrm);
+      end if;
+    end;
+  exception when others then
+    failures := failures || ('P28 error inesperado: ' || sqlerrm);
+  end;
+
+  -- P29: unirse_a_clinica. Admin A y no-admin vet_a4 (clínica con datos) no pueden fusionarse con B;
+  -- vet C (clínica propia vacía) sí, y su clínica vacía se elimina.
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  select g.codigo into v_cod_b from public.generar_invitacion_clinica() g;
+
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.unirse_a_clinica(v_cod_b);
+    failures := failures || 'P29 vet A (clínica con datos) pudo unirse a B';
+  exception when others then
+    if sqlerrm not like '%ya tiene datos%' then
+      failures := failures || ('P29 vet A: error inesperado: ' || sqlerrm);
+    end if;
+  end;
+
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_a4_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform public.unirse_a_clinica(v_cod_b);
+    failures := failures || 'P29 vet no-admin A4 pudo unirse a B';
+  exception when others then
+    if sqlerrm not like '%ya tiene datos%' then
+      failures := failures || ('P29 vet A4: error inesperado: ' || sqlerrm);
+    end if;
+  end;
+  perform set_config('role', 'postgres', true);
+  if not exists (
+       select 1 from public.perfiles
+       where id = vet_a4_id and clinica_id = clinica_a_id and rol_clinica = 'veterinario' and activo
+     ) or exists (select 1 from public.clinica_invitaciones where codigo = v_cod_b and usada_por is not null) then
+    failures := failures || 'P29 vet A4 cambió de clínica o el código de B se consumió';
+  end if;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', vet_c_id, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    v_uuid := public.unirse_a_clinica(v_cod_b);
+    perform set_config('role', 'postgres', true);
+    if v_uuid is distinct from clinica_b_id
+       or not exists (
+         select 1 from public.perfiles
+         where id = vet_c_id and clinica_id = clinica_b_id and rol_clinica = 'veterinario' and activo
+       )
+       or exists (select 1 from public.clinicas where id = v_clinica_c) then
+      failures := failures || 'P29 vet C no se unió a B como veterinario o su clínica vacía no se eliminó';
+    end if;
+  exception when others then
+    failures := failures || ('P29 vet C: error inesperado: ' || sqlerrm);
+  end;
+
+  -- P30: consultas/citas -> perfiles existen y ninguna FK de consultas.veterinario_id hace cascade (D-06).
+  checks := checks + 1;
+  perform set_config('role', 'postgres', true);
+  if (select count(*) from pg_constraint
+        where conname = 'consultas_veterinario_perfil_fkey' and conrelid = 'public.consultas'::regclass) <> 1
+     or (select count(*) from pg_constraint
+        where conname = 'citas_veterinario_perfil_fkey' and conrelid = 'public.citas'::regclass) <> 1
+     or exists (
+       select 1 from pg_constraint c
+       where c.conrelid = 'public.consultas'::regclass
+         and c.contype = 'f'
+         and c.confdeltype not in ('r', 'a')
+         and c.conkey = array[(
+           select a.attnum from pg_attribute a
+           where a.attrelid = 'public.consultas'::regclass and a.attname = 'veterinario_id'
+         )]
+     ) then
+    failures := failures || 'P30 faltan las FK *_veterinario_perfil_fkey o consultas.veterinario_id aún hace cascade';
+  end if;
 
   -------------------------------------------------------------------------
   -- Volver a postgres y reportar. SIEMPRE se lanza una excepción para
