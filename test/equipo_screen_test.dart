@@ -49,6 +49,35 @@ Widget _equipo(FakeTeamRepository repo, {AuthProfile perfil = vetAdminProfile}) 
     );
 
 void main() {
+  group('unirme a otra clínica', () {
+    testWidgets('sole admin sees the entry and the data error shows', (
+      tester,
+    ) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna])
+        ..errorUnirse = const TeamFailure(
+          'Tu clínica ya tiene datos; no se pueden fusionar clínicas. '
+          'Regístrate con otro correo para unirte.',
+        );
+      await tester.pumpWidget(_equipo(repo));
+      await tester.pumpAndSettle();
+      const entrada = '¿Te registraste sin código? Unirme a otra clínica';
+      await tester.ensureVisible(find.text(entrada));
+      await tester.tap(find.text(entrada));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'K7MQ4P2X');
+      await tester.tap(find.text('Unirme'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('ya tiene datos'), findsOneWidget);
+    });
+
+    testWidgets('entry absent with 2+ members', (tester) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna, miembroLuis]);
+      await tester.pumpWidget(_equipo(repo));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Unirme a otra clínica'), findsNothing);
+    });
+  });
+
   testWidgets('admin in single-vet clinic sees own tile and solo copy', (
     tester,
   ) async {

@@ -10,6 +10,7 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/miembro.dart';
 import '../../domain/team_failure.dart';
 import '../providers/team_providers.dart';
+import 'acceso_revocado_screen.dart';
 import '../widgets/invitacion_card.dart';
 import '../widgets/miembro_acciones_sheet.dart';
 import '../widgets/miembro_tile.dart';
@@ -27,6 +28,7 @@ class EquipoScreen extends ConsumerStatefulWidget {
 class _EquipoScreenState extends ConsumerState<EquipoScreen> {
   final _invitacionKey = GlobalKey();
   bool _generando = false;
+  bool _unirseAbierto = false;
 
   Future<bool> _confirmarReemplazo() async {
     final r = await showDialog<bool>(
@@ -151,6 +153,16 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
               'para compartir pacientes y agenda.',
               style: textTheme.bodyMedium,
             ),
+          ],
+          if (esAdmin && activos.length == 1) ...[
+            if (_unirseAbierto)
+              const UnirseConCodigoForm()
+            else
+              AppButton(
+                label: '¿Te registraste sin código? Unirme a otra clínica',
+                variant: AppButtonVariant.text,
+                onPressed: () => setState(() => _unirseAbierto = true),
+              ),
           ],
           if (esAdmin) ...[
             const SizedBox(height: AppSpacing.lg),
