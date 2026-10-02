@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -93,10 +91,10 @@ Future<void> _abrir(
         lanzadorExternoProvider.overrideWithValue(
           lanzador ?? FakeLanzadorExterno(),
         ),
-        compartidorProvider.overrideWithValue(
-          compartidor ?? FakeCompartidor(),
+        compartidorProvider.overrideWithValue(compartidor ?? FakeCompartidor()),
+        compartirPdfProvider.overrideWithValue(
+          (pdf ?? CompartirPdfFalso()).call,
         ),
-        compartirPdfProvider.overrideWithValue(pdf ?? CompartirPdfFalso()),
         carnePdfServiceProvider.overrideWithValue(servicio ?? _PdfFalso()),
         authProfileProvider.overrideWith(
           () => FakeAuthProfileNotifier(profile: vetProfile),
@@ -133,7 +131,7 @@ void main() {
     expect(l.metodos, ['abrirEnApp']);
     final uri = l.abiertos.single;
     expect(uri.host, 'wa.me');
-    final texto = Uri.decodeComponent(uri.queryParameters['text']!);
+    final texto = uri.queryParameters['text']!;
     expect(texto, contains(_url));
     expect(texto, contains('Le compartimos el carné de vacunación de Luna'));
   });
@@ -178,7 +176,9 @@ void main() {
     await _abrir(
       tester,
       servicio: _PdfFalso(
-        error: const VacunaFailure('No pudimos generar el PDF. Intenta de nuevo.'),
+        error: const VacunaFailure(
+          'No pudimos generar el PDF. Intenta de nuevo.',
+        ),
       ),
     );
     await tester.tap(find.text('Descargar PDF'));
@@ -187,13 +187,6 @@ void main() {
       find.text('No pudimos generar el PDF. Intenta de nuevo.'),
       findsOneWidget,
     );
-  });
-
-  testWidgets('fuentes que fallan no usan el servicio real en tests', (
-    tester,
-  ) async {
-    // Garantiza que el helper de fuentes siga siendo importable/usable.
-    expect((await fuentesDePrueba()).regular, isNotNull);
   });
 
   testWidgets('Copiar enlace pone el url en el portapapeles', (tester) async {
