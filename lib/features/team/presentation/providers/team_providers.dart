@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/data/supabase_client_provider.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/repositories/supabase_team_repository.dart';
+import '../../domain/invitacion.dart';
 import '../../domain/miembro.dart';
 
 final teamRepositoryProvider = Provider<SupabaseTeamRepository>((ref) {
@@ -36,3 +37,36 @@ final indicesColorVetProvider = Provider.autoDispose<Map<String, int>>((ref) {
     ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
   return {for (final m in todos) m.id: indiceColorVet(todos, m.id)};
 });
+
+/// Código de invitación vigente; `null` si no hay o si el usuario no es
+/// administrador (no consulta el repositorio en ese caso).
+final invitacionVigenteProvider = FutureProvider.autoDispose<Invitacion?>((
+  ref,
+) async {
+  final perfil = await ref.watch(authProfileProvider.future);
+  if (perfil == null || !perfil.esAdmin || perfil.clinicaId == null) {
+    return null;
+  }
+  return ref.watch(teamRepositoryProvider).invitacionVigente(perfil.clinicaId!);
+});
+
+/// Acciones de administración del equipo. Sostiene el [Ref] para sobrevivir
+/// al cierre de diálogos y hojas.
+class TeamActions {
+  TeamActions(this._ref);
+
+  final Ref _ref;
+
+  Future<Invitacion> generarInvitacion() async {
+    final inv = await _ref.read(teamRepositoryProvider).generarInvitacion();
+    _ref.invalidate(invitacionVigenteProvider);
+    return inv;
+  }
+
+  Future<void> revocarInvitacion(String id) async {
+    await _ref.read(teamRepositoryProvider).revocarInvitacion(id);
+    _ref.invalidate(invitacionVigenteProvider);
+  }
+}
+
+final teamActionsProvider = Provider<TeamActions>((ref) => TeamActions(ref));
