@@ -16,6 +16,7 @@ import '../../features/home/presentation/screens/mas_screen.dart';
 import '../../features/patients/presentation/pacientes_routes.dart';
 import '../../features/team/presentation/equipo_routes.dart';
 import '../../features/team/presentation/screens/acceso_revocado_screen.dart';
+import '../../features/vaccination/presentation/vacunacion_routes.dart';
 
 const _publicPaths = {'/login', '/register', '/reset-password'};
 
@@ -86,6 +87,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/acceso-revocado',
         builder: (_, _) => const AccesoRevocadoScreen(),
       ),
+      ...vacunacionRoutes,
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             AppShell(navigationShell: navigationShell),
