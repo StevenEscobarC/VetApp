@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 
+import '../../clinic/presentation/screens/datos_clinica_screen.dart';
 import 'screens/equipo_screen.dart';
 import 'screens/mi_perfil_screen.dart';
 
@@ -8,4 +9,5 @@ import 'screens/mi_perfil_screen.dart';
 final List<GoRoute> masTeamRoutes = [
   GoRoute(path: 'equipo', builder: (_, _) => const EquipoScreen()),
   GoRoute(path: 'perfil', builder: (_, _) => const MiPerfilScreen()),
+  GoRoute(path: 'clinica', builder: (_, _) => const DatosClinicaScreen()),
 ];
