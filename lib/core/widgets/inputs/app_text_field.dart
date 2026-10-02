@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Wraps [TextFormField] with a visible label above the field —
 /// per the design system's accessibility rule, labels are never
@@ -19,7 +20,16 @@ class AppTextField extends StatelessWidget {
     this.onChanged,
     this.maxLines = 1,
     this.hideLabel = false,
+    this.prefixIcon,
+    this.textCapitalization = TextCapitalization.none,
+    this.inputFormatters,
+    this.maxLength,
   });
+
+  final IconData? prefixIcon;
+  final TextCapitalization textCapitalization;
+  final List<TextInputFormatter>? inputFormatters;
+  final int? maxLength;
 
   final String label;
   final TextEditingController? controller;
@@ -51,7 +61,12 @@ class AppTextField extends StatelessWidget {
             validator: validator,
             onChanged: onChanged,
             maxLines: obscureText ? 1 : maxLines,
+            textCapitalization: textCapitalization,
+            inputFormatters: inputFormatters,
+            maxLength: maxLength,
             decoration: InputDecoration(
+              prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
+              counterText: maxLength == null ? null : '',
               hintText: hintText,
               errorText: errorText,
               helperText: helperText,

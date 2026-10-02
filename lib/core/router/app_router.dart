@@ -14,6 +14,7 @@ import '../../features/home/presentation/app_shell.dart';
 import '../../features/home/presentation/screens/inicio_screen.dart';
 import '../../features/home/presentation/screens/mas_screen.dart';
 import '../../features/patients/presentation/pacientes_routes.dart';
+import '../../features/team/presentation/equipo_routes.dart';
 
 const _publicPaths = {'/login', '/register', '/reset-password'};
 
@@ -97,6 +98,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'recordatorios',
                     builder: (_, _) => const RecordatoriosScreen(),
                   ),
+                  ...masTeamRoutes,
                 ],
               ),
             ],
