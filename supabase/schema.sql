@@ -75,6 +75,7 @@ create index if not exists clientes_clinica_id_idx on public.clientes(clinica_id
 create index if not exists mascotas_dueno_id_idx on public.mascotas(dueno_id);
 create index if not exists mascotas_clinica_id_idx on public.mascotas(clinica_id);
 
+-- Redefinido en el bloque Fase 4.1 al final (códigos de invitación, rol_clinica).
 create or replace function public.crear_perfil_nuevo_usuario()
 returns trigger
 language plpgsql
@@ -116,6 +117,7 @@ returns public.perfiles
 language sql stable security definer set search_path = public
 as $$ select * from public.perfiles where id = auth.uid() $$;
 
+-- es_veterinario y mi_clinica_id: redefinidos en el bloque Fase 4.1 al final (filtran por activo).
 create or replace function public.es_veterinario()
 returns boolean language sql stable security definer set search_path = public
 as $$ select exists (select 1 from public.perfiles where id = auth.uid() and rol = 'VETERINARIO') $$;
@@ -473,6 +475,7 @@ create table if not exists public.consultas (
   -- si en el futuro se construye borrado de cuenta de veterinario, revisar si
   -- cascade sigue siendo correcto para un registro clínico/legal (ver A2 en
   -- 03-RESEARCH.md); hoy no existe esa funcionalidad, así que el riesgo es teórico.
+  -- Redefinido en el bloque Fase 4.1 al final: la FK pasa a on delete restrict.
   veterinario_id uuid not null references auth.users(id) on delete cascade,
   fecha timestamptz not null default now(),
 
@@ -1043,3 +1046,487 @@ grant execute on function public.mi_perfil() to authenticated;
 grant execute on function public.es_veterinario() to authenticated;
 grant execute on function public.mi_clinica_id() to authenticated;
 revoke execute on function public.crear_perfil_nuevo_usuario() from public, anon, authenticated;
+
+-- ===== Fase 4.1: Equipo de la clínica (delta idempotente) =====
+-- Membresía (rol_clinica/activo/matricula), códigos de invitación, retiro de miembros,
+-- citas por veterinario y visibilidad de autoría. Se re-ejecuta completo sin error.
+-- Orden: columnas primero (las funciones `language sql` se validan al crearlas).
+
+-- 1. Columnas de membresía en perfiles.
+alter table public.perfiles add column if not exists rol_clinica text;
+alter table public.perfiles add column if not exists activo boolean not null default true;
+alter table public.perfiles add column if not exists matricula text;
+
+do $$ begin
+  alter table public.perfiles
+    add constraint perfiles_rol_clinica_valido
+    check (rol_clinica is null or rol_clinica in ('admin', 'veterinario'));
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter table public.perfiles
+    add constraint perfiles_matricula_longitud
+    check (matricula is null or char_length(matricula) <= 30);
+exception when duplicate_object then null;
+end $$;
+
+-- 2. D-04: todo veterinario existente pasa a ser admin de la clínica que ya tiene; no se mueven datos.
+update public.perfiles set rol_clinica = 'admin' where rol = 'VETERINARIO' and rol_clinica is null;
+
+do $$ begin
+  alter table public.perfiles
+    add constraint perfiles_vet_requiere_rol_clinica
+    check (rol = 'CLIENTE' or rol_clinica is not null);
+exception when duplicate_object then null;
+end $$;
+
+-- 3. Helpers: ahora filtran por `activo`, así que un veterinario retirado pierde acceso
+-- en la siguiente consulta aunque su JWT siga vigente (T6): todas las políticas existentes
+-- dependen de es_veterinario() / mi_clinica_id().
+create or replace function public.es_veterinario()
+returns boolean language sql stable security definer set search_path = public
+as $$ select exists (
+  select 1 from public.perfiles
+  where id = auth.uid() and rol = 'VETERINARIO' and activo
+) $$;
+
+create or replace function public.mi_clinica_id()
+returns uuid language sql stable security definer set search_path = public
+as $$ select clinica_id from public.perfiles where id = auth.uid() and activo $$;
+
+create or replace function public.es_admin_clinica()
+returns boolean language sql stable security definer set search_path = public
+as $$ select exists (
+  select 1 from public.perfiles
+  where id = auth.uid() and rol = 'VETERINARIO' and rol_clinica = 'admin' and activo
+) $$;
+
+-- p_id es veterinario activo de MI clínica (la del llamador).
+create or replace function public.es_miembro_activo(p_id uuid)
+returns boolean language sql stable security definer set search_path = public
+as $$ select exists (
+  select 1 from public.perfiles
+  where id = p_id and rol = 'VETERINARIO' and activo
+    and clinica_id is not null and clinica_id = public.mi_clinica_id()
+) $$;
+
+-- D-13: p_id es autor de citas/consultas en mi clínica (aunque ya no sea miembro).
+-- Fase 5: la tabla de vacunas debe sumarse (OR) aquí cuando exista.
+create or replace function public.es_autor_en_mi_clinica(p_id uuid)
+returns boolean language sql stable security definer set search_path = public
+as $$ select
+  exists (
+    select 1 from public.citas c
+    where c.clinica_id = public.mi_clinica_id() and c.veterinario_id = p_id
+  )
+  or exists (
+    select 1 from public.consultas co
+    join public.mascotas m on m.id = co.mascota_id
+    where co.veterinario_id = p_id and m.clinica_id = public.mi_clinica_id()
+  )
+$$;
+
+drop policy if exists perfiles_select on public.perfiles;
+create policy perfiles_select on public.perfiles for select to authenticated
+using (
+  id = auth.uid()
+  or (
+    public.es_veterinario()
+    and (clinica_id = public.mi_clinica_id() or public.es_autor_en_mi_clinica(id))
+  )
+);
+
+-- 4. Invitaciones: un código vigente por clínica; solo escriben las RPC definer.
+create table if not exists public.clinica_invitaciones (
+  id uuid primary key default gen_random_uuid(),
+  clinica_id uuid not null references public.clinicas(id) on delete cascade,
+  codigo text not null unique
+    check (codigo ~ '^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$'),
+  creada_por uuid references auth.users(id) on delete set null,
+  expira_en timestamptz not null,
+  usada_por uuid references auth.users(id) on delete set null,
+  usada_en timestamptz,
+  revocada boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists clinica_invitaciones_clinica_id_idx
+  on public.clinica_invitaciones(clinica_id);
+
+alter table public.clinica_invitaciones enable row level security;
+
+drop policy if exists clinica_invitaciones_select on public.clinica_invitaciones;
+create policy clinica_invitaciones_select on public.clinica_invitaciones for select to authenticated
+using (public.es_admin_clinica() and clinica_id = public.mi_clinica_id());
+
+-- Sin políticas de insert/update/delete: solo las RPC security definer escriben.
+revoke all on public.clinica_invitaciones from anon;
+
+-- 5. Consumo de un código (solo lo llaman el trigger de signup y unirse_a_clinica; T10).
+-- `for update` serializa el uso concurrente del mismo código (T3).
+create or replace function public.consumir_invitacion(p_codigo text, p_usuario uuid)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_codigo text := upper(regexp_replace(coalesce(p_codigo, ''), '[^A-Za-z0-9]', '', 'g'));
+  v_inv public.clinica_invitaciones;
+begin
+  select * into v_inv from public.clinica_invitaciones where codigo = v_codigo for update;
+
+  if not found or v_inv.revocada then
+    raise exception 'Ese código no es válido. Revísalo e inténtalo de nuevo.' using errcode = 'P0001';
+  end if;
+
+  if v_inv.usada_por is not null then
+    raise exception 'Ese código ya fue utilizado. Pídele al administrador uno nuevo.' using errcode = 'P0001';
+  end if;
+
+  if v_inv.expira_en <= now() then
+    raise exception 'Ese código ya venció. Pídele al administrador uno nuevo.' using errcode = 'P0001';
+  end if;
+
+  update public.clinica_invitaciones
+  set usada_por = p_usuario, usada_en = now()
+  where id = v_inv.id;
+
+  return v_inv.clinica_id;
+end;
+$$;
+
+revoke execute on function public.consumir_invitacion(text, uuid) from public, anon, authenticated;
+
+-- 6. Trigger de signup endurecido (T2): lee SOLO rol, nombre, telefono, clinica_* y
+-- codigo_invitacion de la metadata; jamás clinica_id, rol_clinica, activo ni matricula.
+-- Un error del código aborta el alta y Auth responde con su 500 genérico (Pitfall 3).
+create or replace function public.crear_perfil_nuevo_usuario()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  metadata jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  v_rol public.rol_perfil := coalesce(metadata->>'rol', 'CLIENTE')::public.rol_perfil;
+  v_codigo text := nullif(trim(coalesce(metadata->>'codigo_invitacion', '')), '');
+  v_clinica uuid;
+  v_rol_clinica text;
+begin
+  if v_rol = 'VETERINARIO' then
+    if v_codigo is not null then
+      v_clinica := public.consumir_invitacion(v_codigo, new.id);
+      v_rol_clinica := 'veterinario';
+    else
+      insert into public.clinicas(nombre, ciudad, direccion, telefono)
+      values (
+        coalesce(nullif(trim(metadata->>'clinica_nombre'), ''), 'Clínica sin nombre'),
+        coalesce(metadata->>'clinica_ciudad', ''),
+        coalesce(metadata->>'clinica_direccion', ''),
+        coalesce(metadata->>'clinica_telefono', '')
+      ) returning id into v_clinica;
+      v_rol_clinica := 'admin';
+    end if;
+  end if;
+
+  insert into public.perfiles(id, nombre, rol, clinica_id, telefono, rol_clinica, activo)
+  values (
+    new.id,
+    coalesce(metadata->>'nombre', ''),
+    v_rol,
+    v_clinica,
+    coalesce(metadata->>'telefono', ''),
+    v_rol_clinica,
+    true
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute procedure public.crear_perfil_nuevo_usuario();
+
+-- 7. RPC de gestión del equipo. Todas security definer con search_path fijo (T11); cada
+-- una verifica es_admin_clinica() y que el objetivo sea de mi_clinica_id() (T4).
+
+-- Un solo código vigente por clínica: genera uno nuevo y revoca el anterior.
+-- Código de 8 caracteres de un alfabeto de 31 símbolos (sin I, L, O, 0, 1) derivado de
+-- bytes de gen_random_uuid() (CSPRNG); se saltan los bytes 6 y 8 (bits fijos de versión/variante).
+create or replace function public.generar_invitacion_clinica()
+returns table (id uuid, codigo text, expira_en timestamptz)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_alfabeto constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  v_codigo text;
+  v_bytes bytea;
+  v_i integer;
+  v_expira timestamptz;
+  v_id uuid;
+  v_intento integer := 0;
+begin
+  if not public.es_admin_clinica() or v_clinica is null then
+    raise exception 'Solo un administrador puede hacer esto.' using errcode = '42501';
+  end if;
+
+  update public.clinica_invitaciones ci
+  set revocada = true
+  where ci.clinica_id = v_clinica
+    and ci.usada_por is null
+    and not ci.revocada
+    and ci.expira_en > now();
+
+  loop
+    v_intento := v_intento + 1;
+    v_bytes := decode(replace(gen_random_uuid()::text, '-', ''), 'hex');
+    v_codigo := '';
+    v_i := 0;
+    while length(v_codigo) < 8 loop
+      if v_i not in (6, 8) then
+        v_codigo := v_codigo || substr(v_alfabeto, (get_byte(v_bytes, v_i) % 31) + 1, 1);
+      end if;
+      v_i := v_i + 1;
+    end loop;
+    v_expira := now() + interval '72 hours';
+
+    begin
+      insert into public.clinica_invitaciones as ci (clinica_id, codigo, creada_por, expira_en)
+      values (v_clinica, v_codigo, auth.uid(), v_expira)
+      returning ci.id into v_id;
+      exit;
+    exception when unique_violation then
+      if v_intento >= 5 then
+        raise;
+      end if;
+    end;
+  end loop;
+
+  return query select v_id, v_codigo, v_expira;
+end;
+$$;
+
+create or replace function public.revocar_invitacion(p_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_inv public.clinica_invitaciones;
+begin
+  if not public.es_admin_clinica() then
+    raise exception 'Solo un administrador puede hacer esto.' using errcode = '42501';
+  end if;
+
+  select * into v_inv from public.clinica_invitaciones where id = p_id for update;
+
+  if not found or v_inv.clinica_id is distinct from public.mi_clinica_id() then
+    raise exception 'La invitación no existe en tu clínica.' using errcode = '23503';
+  end if;
+
+  if v_inv.usada_por is not null then
+    raise exception 'Esa invitación ya fue utilizada.' using errcode = 'check_violation';
+  end if;
+
+  update public.clinica_invitaciones set revocada = true where id = p_id;
+end;
+$$;
+
+-- D-05/D-14/D-15: retira (activo=false, nunca borra) a un miembro. Bloquea a todos los
+-- veterinarios activos de la clínica ANTES de contar admins (T5, orden por id para evitar
+-- deadlocks). Sus citas futuras abiertas pasan al destino elegido o, si no hay, al admin
+-- que retira (o al admin activo más antiguo si es auto-retiro).
+create or replace function public.retirar_miembro(p_miembro uuid, p_reasignar_a uuid default null)
+returns integer
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_target public.perfiles;
+  v_otros_admins integer;
+  v_dest uuid;
+  v_movidas integer;
+begin
+  if not public.es_admin_clinica() or v_clinica is null then
+    raise exception 'Solo un administrador puede hacer esto.' using errcode = '42501';
+  end if;
+
+  perform 1 from public.perfiles
+  where clinica_id = v_clinica and rol = 'VETERINARIO' and activo
+  order by id
+  for update;
+
+  select * into v_target from public.perfiles
+  where id = p_miembro and rol = 'VETERINARIO' and activo and clinica_id = v_clinica;
+
+  if not found then
+    raise exception 'Ese veterinario ya no está en tu clínica.' using errcode = '23503';
+  end if;
+
+  select count(*) into v_otros_admins from public.perfiles
+  where clinica_id = v_clinica and rol = 'VETERINARIO' and activo
+    and rol_clinica = 'admin' and id <> p_miembro;
+
+  if v_target.rol_clinica = 'admin' and v_otros_admins = 0 then
+    raise exception 'La clínica debe tener al menos un administrador.' using errcode = 'P0001';
+  end if;
+
+  v_dest := p_reasignar_a;
+  if v_dest is null then
+    if p_miembro = auth.uid() then
+      select p.id into v_dest from public.perfiles p
+      where p.clinica_id = v_clinica and p.rol = 'VETERINARIO' and p.activo
+        and p.rol_clinica = 'admin' and p.id <> p_miembro
+      order by p.created_at, p.id
+      limit 1;
+    else
+      v_dest := auth.uid();
+    end if;
+  end if;
+
+  if v_dest is null or v_dest = p_miembro or not public.es_miembro_activo(v_dest) then
+    raise exception 'Ese veterinario ya no está en tu clínica.' using errcode = '23503';
+  end if;
+
+  update public.citas
+  set veterinario_id = v_dest
+  where clinica_id = v_clinica
+    and veterinario_id = p_miembro
+    and estado in ('pendiente', 'confirmada')
+    and fecha_hora >= now();
+  get diagnostics v_movidas = row_count;
+
+  update public.perfiles set activo = false where id = p_miembro;
+
+  return v_movidas;
+end;
+$$;
+
+create or replace function public.cambiar_rol_miembro(p_miembro uuid, p_rol text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_target public.perfiles;
+  v_otros_admins integer;
+begin
+  if not public.es_admin_clinica() or v_clinica is null then
+    raise exception 'Solo un administrador puede hacer esto.' using errcode = '42501';
+  end if;
+
+  if p_rol is null or p_rol not in ('admin', 'veterinario') then
+    raise exception 'Rol no válido.' using errcode = 'check_violation';
+  end if;
+
+  perform 1 from public.perfiles
+  where clinica_id = v_clinica and rol = 'VETERINARIO' and activo
+  order by id
+  for update;
+
+  select * into v_target from public.perfiles
+  where id = p_miembro and rol = 'VETERINARIO' and activo and clinica_id = v_clinica;
+
+  if not found then
+    raise exception 'Ese veterinario ya no está en tu clínica.' using errcode = '23503';
+  end if;
+
+  select count(*) into v_otros_admins from public.perfiles
+  where clinica_id = v_clinica and rol = 'VETERINARIO' and activo
+    and rol_clinica = 'admin' and id <> p_miembro;
+
+  if v_target.rol_clinica = 'admin' and p_rol = 'veterinario' and v_otros_admins = 0 then
+    raise exception 'La clínica debe tener al menos un administrador.' using errcode = 'P0001';
+  end if;
+
+  update public.perfiles set rol_clinica = p_rol where id = p_miembro;
+end;
+$$;
+
+-- D-05: un veterinario retirado abre su propia clínica (queda como admin).
+-- Lee perfiles directamente: los helpers ya lo tratan como sin clínica.
+create or replace function public.crear_mi_clinica(p_nombre text)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_perfil public.perfiles;
+  v_nombre text := trim(coalesce(p_nombre, ''));
+  v_clinica uuid;
+begin
+  select * into v_perfil from public.perfiles where id = auth.uid() for update;
+
+  if not found or v_perfil.rol <> 'VETERINARIO' then
+    raise exception 'Solo un veterinario puede hacer esto.' using errcode = '42501';
+  end if;
+
+  if v_perfil.activo then
+    raise exception 'Ya perteneces a una clínica activa.' using errcode = 'P0001';
+  end if;
+
+  if char_length(v_nombre) < 1 or char_length(v_nombre) > 120 then
+    raise exception 'El nombre de la clínica debe tener entre 1 y 120 caracteres.'
+      using errcode = 'check_violation';
+  end if;
+
+  insert into public.clinicas(nombre) values (v_nombre) returning id into v_clinica;
+
+  update public.perfiles
+  set clinica_id = v_clinica, rol_clinica = 'admin', activo = true
+  where id = auth.uid();
+
+  return v_clinica;
+end;
+$$;
+
+-- D-12: una cuenta = una clínica (un solo perfiles.clinica_id). Un veterinario activo solo
+-- puede unirse a otra clínica si la suya está vacía (él es el único perfil y no tiene
+-- clientes; mascotas/citas/consultas cuelgan de clientes); entonces la clínica vacía se
+-- elimina. No existe validación anónima de códigos (D-17).
+create or replace function public.unirse_a_clinica(p_codigo text)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_perfil public.perfiles;
+  v_vieja uuid;
+  v_vacia boolean := false;
+  v_nueva uuid;
+begin
+  select * into v_perfil from public.perfiles where id = auth.uid() for update;
+
+  if not found or v_perfil.rol <> 'VETERINARIO' then
+    raise exception 'Solo un veterinario puede hacer esto.' using errcode = '42501';
+  end if;
+
+  v_vieja := v_perfil.clinica_id;
+
+  if v_perfil.activo then
+    if (select count(*) from public.perfiles where clinica_id = v_vieja) > 1
+       or exists (select 1 from public.clientes where clinica_id = v_vieja) then
+      raise exception 'Tu clínica ya tiene datos; no se pueden fusionar clínicas. Regístrate con otro correo para unirte.'
+        using errcode = 'P0001';
+    end if;
+    v_vacia := true;
+  end if;
+
+  v_nueva := public.consumir_invitacion(p_codigo, auth.uid());
+
+  update public.perfiles
+  set clinica_id = v_nueva, rol_clinica = 'veterinario', activo = true
+  where id = auth.uid();
+
+  if v_vacia and v_vieja is not null and v_vieja <> v_nueva then
+    delete from public.clinicas where id = v_vieja;
+  end if;
+
+  return v_nueva;
+end;
+$$;
