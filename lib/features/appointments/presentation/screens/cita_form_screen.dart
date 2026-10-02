@@ -43,6 +43,7 @@ class CitaFormScreen extends ConsumerStatefulWidget {
     this.mascotaIdInicial,
     this.fechaInicial,
     this.citaId,
+    this.motivoInicial,
   });
 
   final String? clienteIdInicial;
@@ -53,6 +54,10 @@ class CitaFormScreen extends ConsumerStatefulWidget {
 
   /// Si no es null, el formulario edita esa cita (cliente fijo).
   final String? citaId;
+
+  /// Motivo preseleccionado al crear (p. ej. 'Vacunación' desde las alertas);
+  /// se ignora si no coincide con un motivo conocido.
+  final String? motivoInicial;
 
   @override
   ConsumerState<CitaFormScreen> createState() => _CitaFormScreenState();
@@ -123,6 +128,11 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   void initState() {
     super.initState();
     _clienteId = widget.clienteIdInicial;
+    final mi = widget.motivoInicial;
+    if (!_editando && mi != null && motivosCita.any((m) => m.label == mi)) {
+      _motivo = mi;
+      _duracion = duracionPorDefecto(mi);
+    }
     _dia = widget.fechaInicial ?? diaBogota(ref.read(clockProvider)());
     for (final c in [_otroCtrl, _dirCtrl, _notasCtrl]) {
       c.addListener(() => setState(() {}));
