@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../clinical_history/presentation/screens/consulta_form_screen.dart';
 import '../../patients/presentation/screens/mascota_detail_screen.dart';
+import '../../vaccination/presentation/screens/carne_screen.dart';
 import '../../patients/presentation/screens/mascota_form_screen.dart';
 import 'screens/cliente_detail_screen.dart';
 import 'screens/clientes_list_screen.dart';
@@ -40,6 +41,13 @@ final GoRoute clientesRoute = GoRoute(
               path: 'editar',
               builder: (_, state) => MascotaFormScreen(
                 mascotaId: state.pathParameters['mascotaId']!,
+              ),
+            ),
+            GoRoute(
+              path: 'carne',
+              builder: (_, state) => CarneScreen(
+                mascotaId: state.pathParameters['mascotaId']!,
+                abrirCompartir: state.uri.queryParameters['compartir'] == '1',
               ),
             ),
             GoRoute(
