@@ -210,7 +210,7 @@ Plans:
   3. Al retirar a un veterinario pierde acceso de inmediato; sus consultas, citas y vacunas siguen visibles con "Atendió: Dr(a). X" (ya no hay `ON DELETE CASCADE` que borre historia clínica)
   4. La agenda muestra "Mías" por defecto con filtro "Todas" (solo visible con 2+ veterinarios); cruces y recordatorios locales son por veterinario asignado; el WhatsApp va firmado por el veterinario asignado
   5. Un veterinario que trabaja solo no ve ningún cambio en su flujo (sin selectores ni filtros nuevos)
-**Plans:** 9/11 plans executed
+**Plans:** 10/11 plans executed
 **UI hint**: yes
 
 Plans:
@@ -223,7 +223,7 @@ Plans:
 - [x] 04.1-07-PLAN.md — Roles y retiro (reasignar citas D-15, salir D-14)
 - [x] 04.1-08-PLAN.md — Asignar/reasignar cita a un colega
 - [x] 04.1-09-PLAN.md — Recordatorios por veterinario y WhatsApp firmado por el asignado
-- [ ] 04.1-10-PLAN.md — Acceso revocado (crear mi clínica / unirme con código)
+- [x] 04.1-10-PLAN.md — Acceso revocado (crear mi clínica / unirme con código)
 - [ ] 04.1-11-PLAN.md — Gate + probe en vivo + auditoría de marca + UAT vetapp-qa
 
 ### Phase 5: Vacunación y Desparasitación
