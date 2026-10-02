@@ -167,6 +167,7 @@ Opened from `DosisCard` overflow. Bottom sheet (non-full height): Heading "Anula
 
 ### 4. "Vacunar" quick action + mascota search
 - Inicio: existing quick-action row/grid gains **"Vacunar"** tile (`Icons.vaccines_outlined`, 48dp+ tile, same as other tiles). Tap opens full-height bottom sheet "¿A quién vacuna?": autofocus `AppTextField` search (hint "Buscar mascota o dueño", instant, same search as Phase 2), results 56dp rows (pet avatar 40 + Body nombre + Label `textSecondary` "{Especie} · {Dueño}"), each with trailing `DosisEstadoChip` of its worst state. Tapping a row opens `RegistrarDosisScreen` for that pet. Empty result: Body `textSecondary` "No encontramos esa mascota." + outline "Registrar paciente nuevo" (Phase 2 flow).
+- **Implementation note (05-13):** Inicio has no quick-action row/grid, so "Vacunar" ships as the full-width primary `AppButton` in `inicio_screen.dart`. This is the accepted v1 placement; the tile variant applies only if a quick-action row is added later.
 - Also exposed in Agenda via the same sheet if Agenda has a quick-action menu (reuse widget `MascotaSearchSheet`).
 
 ### 5. Completar cita -> registrar dosis (D-05b)
@@ -205,6 +206,7 @@ Bottom sheet from "Compartir carné", Heading "Compartir carné de {Mascota}", u
 4. **"Copiar enlace"** (`content_copy_outlined`, snackbar "Enlace copiado").
 5. Separator, then text row **"Regenerar enlace"** (`Icons.link_off_outlined`, `destructive` label) with Label `textSecondary` "El enlace anterior dejará de funcionar".
 Regenerar confirm dialog: Title "¿Regenerar el enlace del carné?" Body "El enlace anterior dejará de funcionar. Quien lo tenga verá un aviso de enlace no válido. Deberá compartir el nuevo." Actions "Volver" / **"Regenerar"** (destructive). Success snackbar "Enlace regenerado".
+- **Copy decisions (05-13):** privacy line under the link: "Quien tenga el enlace podrá ver el carné."; the registrar-dosis switch for finished series is labeled "Ya tenía la serie completa (registrar como refuerzo)". Disabled rows (no phone / link not ready) are not dimmed with opacity: they use `textMuted` text and icon plus `Semantics(enabled: false)`. Owner phone is shown formatted as "+57 3XX XXX XXXX".
 First open: link is created lazily; sheet shows 20px spinner in the link line "Creando enlace..." and rows are disabled until ready. Error: "No pudimos crear el enlace. Intenta de nuevo." + text "Reintentar".
 
 ### 11. PUBLIC carné web page (D-15, D-16, D-18, D-19)
@@ -225,6 +227,7 @@ States:
 - **Network error**: Heading "No pudimos cargar el carné", Body "Revise su conexión e intente de nuevo.", outline button "Reintentar" (48px, only interactive element on the page).
 - **Pet with no valid doses**: Body "Esta mascota aún no tiene vacunas registradas."
 - Accessibility: semantic `<h1>` pet name, `<h2>` per biológico, `<dl>` per dose, chips with text + icon, contrast >= 4.5:1, supports 200% zoom without horizontal scroll, `prefers-reduced-motion` respected (no animation anyway), print stylesheet hides nothing and keeps `surface` as white. Dark mode: not supported on the public page in v1 (single light palette), reconfirm in Phase 8.
+- **Decisions (05-13, 2026-10-02):** (a) **Sexo is omitted in v1** on the public page and the PDF: the public RPC does not expose it and adding it needs a live schema change; revisit post-v1. (b) Fonts are **self-hosted** (`public_carne/c/fonts/*.woff2`, CSP `'self'`, no third-party requests). (c) Page-title `Carné de vacunación` is `<p role="heading" aria-level="2">` so heading order stays valid under the pet-name `<h1>`. (d) Status label `completo` renders as "Al día" on web and PDF. (e) Foreground text is `#201E1D`; `#643312` is used only for the Próxima chip text; Vencida chip is solid `#DC2626` with white text.
 
 ### 12. PDF layout (D-17, D-19)
 A4 portrait, margins 36pt (printing package). Same hierarchy as the public page, print-safe:
@@ -234,6 +237,7 @@ A4 portrait, margins 36pt (printing package). Same hierarchy as the public page,
 - Signature block at the bottom per vet that appears in the doc: line + "Dr(a). {Nombre} · Mat. {n}" (ICA expects matrícula; blank line if matrícula missing, no "Sin registrar").
 - Footer on each page: "Generado el 01/10/2026 · {h:mm a. m.}" left, "Hecho con VetApp" right (D-19), page "1 de 2" center. Multi-page: header repeats.
 - Fonts embedded: Figtree + Caprasimo (as in Phase 3 PDF pattern). File name: `Carne_{Mascota}_{yyyy-mm-dd}.pdf`.
+- **Decisions (05-13, 2026-10-02):** Sexo is omitted from the pet block in v1 (same reason as §11: no schema change). Table text is 10pt; `completo` prints as "Al día".
 
 ---
 
