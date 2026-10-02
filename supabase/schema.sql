@@ -2751,7 +2751,7 @@ begin
     'dueno', jsonb_build_object('nombre', v_cliente.nombre, 'telefono', v_cliente.telefono),
     'clinica', (
       select jsonb_build_object(
-        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono
+        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono, 'logo_path', cl.logo_path
       )
       from public.clinicas cl where cl.id = v_clinica
     ),
@@ -3067,7 +3067,7 @@ begin
     'propietario', public._nombre_corto(v_cliente.nombre),
     'clinica', (
       select jsonb_build_object(
-        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono
+        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono, 'logo_path', cl.logo_path
       )
       from public.clinicas cl where cl.id = v_enlace.clinica_id
     ),
@@ -3159,5 +3159,126 @@ grant execute on function public.carne_publico(text) to service_role;
 -- Re-afirmar el helper de autoría (D-09) al cierre del bloque.
 revoke all on function public.es_autor_en_mi_clinica(uuid) from public, anon;
 grant execute on function public.es_autor_en_mi_clinica(uuid) to authenticated;
+
+-- 16. Logo de la clínica (D-26..D-28).
+-- Ruta del objeto: {clinica_id}/logo-{epoch_ms}.jpg en el bucket privado clinica-logos.
+-- Cada logo nuevo tiene ruta nueva (la caché del cliente se invalida sola).
+alter table public.clinicas add column if not exists logo_path text;
+
+alter table public.clinicas drop constraint if exists clinicas_logo_path_formato;
+alter table public.clinicas add constraint clinicas_logo_path_formato
+  check (logo_path is null or logo_path ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$');
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('clinica-logos', 'clinica-logos', false, 1048576, array['image/jpeg'])
+on conflict (id) do update
+  set public = false, file_size_limit = 1048576, allowed_mime_types = array['image/jpeg'];
+
+-- Lectura: cualquier veterinario activo de la clínica; escritura: solo el admin.
+drop policy if exists clinica_logos_select on storage.objects;
+create policy clinica_logos_select on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'clinica-logos'
+    and public.es_veterinario()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+  );
+
+drop policy if exists clinica_logos_insert on storage.objects;
+create policy clinica_logos_insert on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
+  );
+
+drop policy if exists clinica_logos_update on storage.objects;
+create policy clinica_logos_update on storage.objects
+  for update to authenticated
+  using (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
+  )
+  with check (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
+  );
+
+drop policy if exists clinica_logos_delete on storage.objects;
+create policy clinica_logos_delete on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+  );
+
+-- Única vía de escritura de los datos de la clínica (no hay policy UPDATE en clinicas).
+-- Reemplazo completo: el cliente manda la ruta actual para conservar el logo, null para quitarlo.
+create or replace function public.actualizar_clinica(p_nombre text, p_ciudad text, p_direccion text, p_telefono text, p_logo_path text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_nombre text := trim(coalesce(p_nombre, ''));
+  v_ciudad text := trim(coalesce(p_ciudad, ''));
+  v_direccion text := trim(coalesce(p_direccion, ''));
+  v_telefono text := trim(coalesce(p_telefono, ''));
+  v_row public.clinicas;
+begin
+  if not public.es_admin_clinica() or v_clinica is null then
+    raise exception 'Solo los administradores pueden cambiar los datos de la clínica.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if v_nombre = '' or length(v_nombre) > 120
+     or length(v_ciudad) > 80
+     or length(v_direccion) > 160
+     or length(v_telefono) > 30 then
+    raise exception 'Revisa los datos de la clínica.' using errcode = 'check_violation';
+  end if;
+
+  if p_logo_path is not null then
+    if p_logo_path !~ ('^' || v_clinica::text || '/logo-[0-9]{10,16}\.jpg$')
+       or not exists (
+         select 1 from storage.objects
+         where bucket_id = 'clinica-logos' and name = p_logo_path
+       ) then
+      raise exception 'El logo no es válido. Súbelo de nuevo.' using errcode = 'check_violation';
+    end if;
+  end if;
+
+  update public.clinicas
+     set nombre = v_nombre,
+         ciudad = v_ciudad,
+         direccion = v_direccion,
+         telefono = v_telefono,
+         logo_path = p_logo_path
+   where id = v_clinica
+   returning * into v_row;
+
+  return jsonb_build_object(
+    'id', v_row.id,
+    'nombre', v_row.nombre,
+    'ciudad', v_row.ciudad,
+    'direccion', v_row.direccion,
+    'telefono', v_row.telefono,
+    'logo_path', v_row.logo_path
+  );
+end;
+$$;
+
+revoke all on function public.actualizar_clinica(text, text, text, text, text) from public, anon;
+grant execute on function public.actualizar_clinica(text, text, text, text, text) to authenticated;
 
 notify pgrst, 'reload schema';
