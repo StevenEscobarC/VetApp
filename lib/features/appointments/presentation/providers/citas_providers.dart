@@ -75,6 +75,7 @@ class CitaActions {
     required String direccion,
     required String motivo,
     required String notas,
+    String? veterinarioId,
   }) async {
     final id = await _ref
         .read(citaRepositoryProvider)
@@ -87,6 +88,7 @@ class CitaActions {
           direccion: direccion,
           motivo: motivo,
           notas: notas,
+          veterinarioId: veterinarioId,
         );
     _ref.invalidate(agendaSemanaProvider);
     _ref.read(citasRevisionProvider.notifier).incrementar();
@@ -102,6 +104,7 @@ class CitaActions {
     required String direccion,
     required String motivo,
     required String notas,
+    String? veterinarioId,
   }) async {
     await _ref
         .read(citaRepositoryProvider)
@@ -114,7 +117,14 @@ class CitaActions {
           direccion: direccion,
           motivo: motivo,
           notas: notas,
+          veterinarioId: veterinarioId,
         );
+    _refrescar(citaId);
+    _ref.read(citasRevisionProvider.notifier).incrementar();
+  }
+
+  Future<void> reasignar(String citaId, String veterinarioId) async {
+    await _ref.read(citaRepositoryProvider).reasignar(citaId, veterinarioId);
     _refrescar(citaId);
     _ref.read(citasRevisionProvider.notifier).incrementar();
   }

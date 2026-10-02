@@ -218,6 +218,62 @@ void main() {
     });
   });
 
+  group('por veterinario (D-09)', () {
+    Cita deVet(String id, String vet, int h, int min) =>
+        _cita(id, h, min, 30).copyWith(veterinarioId: vet);
+
+    test('solapesCon ignora la agenda de otros veterinarios', () {
+      final citas = [deVet('a', 'vet-1', 10, 0), deVet('b', 'vet-2', 11, 0)];
+      expect(
+        solapesCon(
+          inicio: _t(10, 0),
+          duracionMin: 30,
+          citas: citas,
+          veterinarioId: 'vet-2',
+        ),
+        isEmpty,
+      );
+      expect(
+        solapesCon(
+          inicio: _t(10, 0),
+          duracionMin: 30,
+          citas: citas,
+          veterinarioId: 'vet-1',
+        ).map((c) => c.id),
+        ['a'],
+      );
+      expect(
+        solapesCon(inicio: _t(10, 0), duracionMin: 30, citas: citas)
+            .map((c) => c.id),
+        ['a'],
+      );
+    });
+
+    test('primerHuecoLibre puede devolver un hueco ocupado solo por otro vet', () {
+      final citas = [deVet('a', 'vet-1', 8, 0)];
+      final ahora = _t(0, 10, dia: 29);
+      expect(
+        primerHuecoLibre(
+          citas: citas,
+          dia: DateTime.utc(2026, 9, 30),
+          ahora: ahora,
+          duracionMin: 30,
+        ),
+        _t(8, 30),
+      );
+      expect(
+        primerHuecoLibre(
+          citas: citas,
+          dia: DateTime.utc(2026, 9, 30),
+          ahora: ahora,
+          duracionMin: 30,
+          veterinarioId: 'vet-2',
+        ),
+        _t(8, 0),
+      );
+    });
+  });
+
   group('motivos', () {
     test('tabla y duraciones', () {
       expect(motivosCita, hasLength(7));

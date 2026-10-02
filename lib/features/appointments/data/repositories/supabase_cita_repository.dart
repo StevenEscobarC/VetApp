@@ -68,6 +68,7 @@ class SupabaseCitaRepository {
     required String direccion,
     required String motivo,
     required String notas,
+    String? veterinarioId,
   }) async {
     try {
       final id = await _client.rpc(
@@ -83,6 +84,7 @@ class SupabaseCitaRepository {
               : '',
           'p_motivo': motivo.trim(),
           'p_notas': notas.trim(),
+          'p_veterinario_id': veterinarioId,
         },
       );
       return id as String;
@@ -104,6 +106,7 @@ class SupabaseCitaRepository {
     required String direccion,
     required String motivo,
     required String notas,
+    String? veterinarioId,
   }) async {
     try {
       await _client.rpc(
@@ -119,6 +122,7 @@ class SupabaseCitaRepository {
               : '',
           'p_motivo': motivo.trim(),
           'p_notas': notas.trim(),
+          'p_veterinario_id': veterinarioId,
         },
       );
     } on PostgrestException catch (e) {
@@ -132,6 +136,11 @@ class SupabaseCitaRepository {
   /// silencio las filas ajenas y un update de 0 filas no lanza error.
   Future<void> cambiarEstado(String citaId, EstadoCita estado) =>
       _actualizarFila(citaId, {'estado': estado.valor});
+
+  /// Reasigna una cita abierta a otro miembro activo (el trigger del servidor
+  /// valida estado y pertenencia a la clínica).
+  Future<void> reasignar(String citaId, String veterinarioId) =>
+      _actualizarFila(citaId, {'veterinario_id': veterinarioId});
 
   /// Marca (o con `null` deshace) el recordatorio enviado por WhatsApp.
   Future<void> marcarRecordatorioEnviado(String citaId, DateTime? enviadoAt) =>
@@ -227,9 +236,15 @@ String mensajeErrorCita(PostgrestException e, {bool estado = false}) {
     case '42501':
       return 'No tienes permiso para gestionar citas.';
     case '23503':
+      if (e.message.toLowerCase().contains('ese veterinario ya no está')) {
+        return 'Ese veterinario ya no está en tu clínica.';
+      }
       return 'El cliente o la mascota no existe en tu clínica.';
     case '23514':
       final m = e.message.toLowerCase();
+      if (m.contains('solo se pueden reasignar')) {
+        return 'Solo se pueden reasignar citas pendientes o confirmadas.';
+      }
       if (m.contains('estado no permitido')) {
         return 'Esta cita ya no puede cambiar a ese estado.';
       }
