@@ -85,6 +85,55 @@ class SupabaseTeamRepository {
     }
   }
 
+  /// Citas abiertas (pendiente/confirmada) de [veterinarioId] desde [desde].
+  /// RLS deja leer las citas de toda la clínica.
+  Future<int> contarCitasAbiertas(String veterinarioId, DateTime desde) async {
+    try {
+      final rows = await _client
+          .from('citas')
+          .select('id')
+          .eq('veterinario_id', veterinarioId)
+          .inFilter('estado', ['pendiente', 'confirmada'])
+          .gte('fecha_hora', desde.toUtc().toIso8601String());
+      return (rows as List).length;
+    } on PostgrestException catch (e) {
+      throw TeamFailure(_messageFor(e, fallback: _fallbackCambio));
+    } catch (_) {
+      throw const TeamFailure(_fallbackCambio);
+    }
+  }
+
+  /// Retira (desactiva) a [miembroId]; devuelve cuántas citas se reasignaron.
+  Future<int> retirarMiembro(String miembroId, {String? reasignarA}) async {
+    try {
+      final res = await _client.rpc(
+        'retirar_miembro',
+        params: {'p_miembro': miembroId, 'p_reasignar_a': reasignarA},
+      );
+      return (res as num).toInt();
+    } on PostgrestException catch (e) {
+      throw TeamFailure(_messageFor(e, fallback: _fallbackCambio));
+    } catch (_) {
+      throw const TeamFailure(_fallbackCambio);
+    }
+  }
+
+  /// [rol]: `admin` o `veterinario`.
+  Future<void> cambiarRol(String miembroId, String rol) async {
+    try {
+      await _client.rpc(
+        'cambiar_rol_miembro',
+        params: {'p_miembro': miembroId, 'p_rol': rol},
+      );
+    } on PostgrestException catch (e) {
+      throw TeamFailure(_messageFor(e, fallback: _fallbackCambio));
+    } catch (_) {
+      throw const TeamFailure(_fallbackCambio);
+    }
+  }
+
+  static const _fallbackCambio =
+      'No pudimos completar el cambio. Intenta de nuevo.';
   static const _fallbackGenerar =
       'No pudimos generar el código. Intenta de nuevo.';
   static const _fallbackRevocar =
@@ -100,6 +149,13 @@ class SupabaseTeamRepository {
     PostgrestException error, {
     String fallback = 'No pudimos cargar el equipo. Intenta de nuevo.',
   }) {
+    final msg = error.message.toLowerCase();
+    if (msg.contains('al menos un administrador')) {
+      return 'La clínica debe tener al menos un administrador.';
+    }
+    if (msg.contains('ya no está en tu clínica')) {
+      return 'Ese veterinario ya no está en tu clínica.';
+    }
     if (error.code == '42501') return 'Solo un administrador puede hacer esto.';
     return fallback;
   }
