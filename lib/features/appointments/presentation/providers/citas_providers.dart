@@ -18,18 +18,15 @@ final citaRepositoryProvider = Provider<SupabaseCitaRepository>((ref) {
 /// clínica — no hay filtro de clínica en el cliente.
 final agendaSemanaProvider = FutureProvider.autoDispose
     .family<List<Cita>, DateTime>((ref, lunes) async {
-  final rango = rangoSemanaUtc(lunes);
-  final citas = await ref
-      .watch(citaRepositoryProvider)
-      .entre(rango.inicio, rango.fin);
-  return [...citas]..sort((a, b) => a.fechaHora.compareTo(b.fechaHora));
-});
+      final rango = rangoSemanaUtc(lunes);
+      final citas = await ref
+          .watch(citaRepositoryProvider)
+          .entre(rango.inicio, rango.fin);
+      return [...citas]..sort((a, b) => a.fechaHora.compareTo(b.fechaHora));
+    });
 
 /// Una cita por id (detalle de cita).
-final citaProvider = FutureProvider.autoDispose.family<Cita, String>((
-  ref,
-  id,
-) {
+final citaProvider = FutureProvider.autoDispose.family<Cita, String>((ref, id) {
   return ref.watch(citaRepositoryProvider).obtener(id);
 });
 

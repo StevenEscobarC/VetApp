@@ -170,7 +170,8 @@ class FakeCitaRepository implements SupabaseCitaRepository {
     if (error != null) throw error!;
     return citas
         .where(
-          (c) => !c.fechaHora.isBefore(inicioUtc) && c.fechaHora.isBefore(finUtc),
+          (c) =>
+              !c.fechaHora.isBefore(inicioUtc) && c.fechaHora.isBefore(finUtc),
         )
         .toList();
   }

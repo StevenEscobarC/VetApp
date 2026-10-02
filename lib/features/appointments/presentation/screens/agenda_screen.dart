@@ -11,10 +11,15 @@ import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
+import '../../../../core/widgets/chips/app_filter_chip.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../team/presentation/providers/team_providers.dart';
 
 import '../../domain/cita_solapes.dart';
 import '../../domain/entities/cita.dart';
+import '../../domain/filtro_agenda.dart';
 import '../../domain/whatsapp_recordatorio.dart';
 import '../providers/citas_providers.dart';
 import '../widgets/cita_card.dart';
@@ -97,11 +102,29 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final hoy = diaBogota(ahora);
     final citasAsync = ref.watch(agendaSemanaProvider(_lunes));
 
-    final citas = citasAsync.asData?.value;
+    final multiVet = ref.watch(esClinicaMultiVetProvider);
+    final filtro = ref.watch(filtroAgendaProvider);
+    final yoId =
+        ref.watch(authProfileProvider.select((a) => a.value?.id)) ?? '';
+
+    final todas = citasAsync.asData?.value;
+    final citas = todas == null
+        ? null
+        : citasVisibles(todas, filtro: filtro, yoId: yoId, multiVet: multiVet);
     final conteos = citas == null ? null : _conteos(citas);
     final delDia = citas == null
         ? const <Cita>[]
         : citas.where((c) => mismoDia(diaBogota(c.fechaHora), _dia)).toList();
+    // La banda "Próxima" siempre usa solo mis citas.
+    final misDelDia = todas == null
+        ? const <Cita>[]
+        : todas
+              .where(
+                (c) =>
+                    mismoDia(diaBogota(c.fechaHora), _dia) &&
+                    (!multiVet || c.veterinarioId == yoId),
+              )
+              .toList();
 
     return Scaffold(
       appBar: const AppTopBar(title: 'Agenda'),
@@ -115,6 +138,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
             onSiguiente: () => _cambiarSemana(1),
             onHoy: _irAHoy,
           ),
+          if (multiVet) const _FiltroVet(),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onHorizontalDragEnd: (d) {
@@ -162,7 +186,14 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                ..._cuerpo(citasAsync, delDia, hoy, ahora),
+                ..._cuerpo(
+                  citasAsync,
+                  delDia,
+                  misDelDia,
+                  hoy,
+                  ahora,
+                  multiVet && filtro == FiltroAgenda.todas,
+                ),
               ],
             ),
           ),
@@ -190,8 +221,10 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   List<Widget> _cuerpo(
     AsyncValue<List<Cita>> citasAsync,
     List<Cita> delDia,
+    List<Cita> misDelDia,
     DateTime hoy,
     DateTime ahora,
+    bool verTodas,
   ) {
     return citasAsync.when(
       loading: () => [
@@ -223,7 +256,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       data: (_) {
         final widgets = <Widget>[];
         if (mismoDia(_dia, hoy)) {
-          final proxima = delDia
+          final proxima = misDelDia
               .where((c) => !c.estado.esTerminal && c.fechaHora.isAfter(ahora))
               .firstOrNull;
           if (proxima != null) {
@@ -295,7 +328,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
           }
         }
         if (delDia.isEmpty) {
-          widgets.add(_Vacio(pasado: _dia.isBefore(hoy)));
+          widgets.add(_Vacio(pasado: _dia.isBefore(hoy), todas: verTodas));
           return widgets;
         }
         widgets.addAll(_porHora(delDia));
@@ -324,6 +357,8 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     if (!ocupaHorario(c.estado)) return null;
     for (final o in delDia) {
       if (o.id == c.id || !ocupaHorario(o.estado)) continue;
+      // Solo se comparan citas del mismo veterinario asignado (D-09).
+      if (o.veterinarioId != c.veterinarioId) continue;
       if (o.fechaHora.isBefore(c.fechaHora) &&
           solapa(c.fechaHora, c.duracionMin, o.fechaHora, o.duracionMin)) {
         return o.nombresMascotasCorto;
@@ -432,10 +467,54 @@ class _EncabezadoSemana extends StatelessWidget {
   }
 }
 
+/// Fila "Mías | Todas" (solo clínicas con 2+ veterinarios activos).
+class _FiltroVet extends ConsumerWidget {
+  const _FiltroVet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filtro = ref.watch(filtroAgendaProvider);
+    final notifier = ref.read(filtroAgendaProvider.notifier);
+    final mias = filtro == FiltroAgenda.mias;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+        AppSpacing.xs,
+      ),
+      child: Semantics(
+        container: true,
+        label: 'Mostrando: ${mias ? 'Mías' : 'Todas'}, seleccionado',
+        child: Row(
+          children: [
+            Expanded(
+              child: AppFilterChip(
+                label: 'Mías',
+                selected: mias,
+                onTap: () => notifier.set(FiltroAgenda.mias),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: AppFilterChip(
+                label: 'Todas',
+                selected: !mias,
+                onTap: () => notifier.set(FiltroAgenda.todas),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Vacio extends StatelessWidget {
-  const _Vacio({required this.pasado});
+  const _Vacio({required this.pasado, this.todas = false});
 
   final bool pasado;
+  final bool todas;
 
   @override
   Widget build(BuildContext context) {
@@ -453,7 +532,9 @@ class _Vacio extends StatelessWidget {
           Text('Sin citas este día', style: textTheme.headlineSmall),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            pasado
+            todas
+                ? 'La clínica no tiene citas este día.'
+                : pasado
                 ? 'No hubo citas este día.'
                 : 'Toca “Nueva cita” para agendar la primera.',
             style: textTheme.bodyMedium,

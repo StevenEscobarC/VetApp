@@ -78,8 +78,9 @@ class SupabaseCitaRepository {
           'p_fecha_hora': fechaHora.toUtc().toIso8601String(),
           'p_duracion_min': duracionMin,
           'p_modalidad': modalidad.valor,
-          'p_direccion':
-              modalidad == ModalidadCita.domicilio ? direccion.trim() : '',
+          'p_direccion': modalidad == ModalidadCita.domicilio
+              ? direccion.trim()
+              : '',
           'p_motivo': motivo.trim(),
           'p_notas': notas.trim(),
         },
@@ -113,8 +114,9 @@ class SupabaseCitaRepository {
           'p_fecha_hora': fechaHora.toUtc().toIso8601String(),
           'p_duracion_min': duracionMin,
           'p_modalidad': modalidad.valor,
-          'p_direccion':
-              modalidad == ModalidadCita.domicilio ? direccion.trim() : '',
+          'p_direccion': modalidad == ModalidadCita.domicilio
+              ? direccion.trim()
+              : '',
           'p_motivo': motivo.trim(),
           'p_notas': notas.trim(),
         },

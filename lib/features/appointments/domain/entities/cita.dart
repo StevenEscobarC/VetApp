@@ -8,19 +8,19 @@ enum EstadoCita {
 
   /// Valor guardado en la columna `estado`.
   String get valor => switch (this) {
-        EstadoCita.noAsistio => 'no_asistio',
-        _ => name,
-      };
+    EstadoCita.noAsistio => 'no_asistio',
+    _ => name,
+  };
 
   /// Defensivo (D-10): un valor desconocido o `solicitada` se trata como
   /// pendiente para que una fila inesperada nunca rompa la agenda.
   static EstadoCita desdeValor(String v) => switch (v) {
-        'confirmada' => EstadoCita.confirmada,
-        'completada' => EstadoCita.completada,
-        'cancelada' => EstadoCita.cancelada,
-        'no_asistio' => EstadoCita.noAsistio,
-        _ => EstadoCita.pendiente,
-      };
+    'confirmada' => EstadoCita.confirmada,
+    'completada' => EstadoCita.completada,
+    'cancelada' => EstadoCita.cancelada,
+    'no_asistio' => EstadoCita.noAsistio,
+    _ => EstadoCita.pendiente,
+  };
 
   /// Una cita terminal ya no admite cambios de estado.
   bool get esTerminal =>
