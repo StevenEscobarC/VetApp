@@ -242,7 +242,7 @@ Plans:
   4. El veterinario puede generar un link público de solo lectura con el carné de vacunación de una mascota, sin exponer la historia clínica completa
   5. El dueño puede ver el carné de vacunación compartido sin necesidad de cuenta
 
-**Plans**: 16 plans
+**Plans**: 17 plans
 
 Plans:
 **Wave 1**
@@ -269,7 +269,8 @@ Plans:
 
 - [ ] 05-12-PLAN.md — Tarjeta Inicio, acceso rápido "Vacunar" (Inicio/Agenda) y badges en lista de pacientes
 - [ ] 05-15-PLAN.md — Más > Datos de la clínica: el admin edita nombre/ciudad/dirección/teléfono y el logo (cámara/galería, recorte cuadrado, comprimido)
-- [ ] 05-16-PLAN.md — Logo de la clínica en el carné: app, PDF y página pública (URL firmada 300 s desde la Edge Function, respaldo solo nombre)
+- [ ] 05-16-PLAN.md — Logo de la clínica en el carné de la app y en el PDF (+ Caprasimo en el PDF, respaldo Figtree)
+- [ ] 05-17-PLAN.md — Logo en la página pública: la Edge Function firma el logo (300 s) y la página lo muestra con respaldo solo nombre
 
 **Wave 5** *(blocked on Wave 4 completion)*
 

@@ -78,13 +78,14 @@ To be filled by planner/executor per task. Requirement → test map:
 | 05-09-T1/T2 | 3 | VAC-03 | `flutter test test/vacunas_pendientes_screen_test.dart test/cita_form_screen_test.dart` | ❌ W0 (T1) | ⬜ |
 | 05-10-T1/T2 | 3 | VAC-01 | `flutter test test/completar_cita_screen_test.dart` | ✅ extend | ⬜ |
 | 05-11-T1 | 5 | VAC-04/05 | manual authorization | — | ⬜ |
-| 05-11-T2 | 5 | VAC-04/05 | `REQUIRE_CARNE_FN=1 bash supabase/tests/verify_live_schema.sh` + curl Pages 200 (CARNE_LIVE_OK) | ✅ | ⬜ |
+| 05-11-T2 | 5 | VAC-04/05 | `REQUIRE_CARNE_FN=1 bash supabase/tests/verify_live_schema.sh` + curl Pages 200 (CARNE_LIVE_OK) + token real: `clinica.logo_url` firmado, sin `logo_path`/`foto_path` (REAL_TOKEN_OK) | ✅ | ⬜ |
 | 05-12-T1..T3 | 4 | VAC-01/03 | `flutter test test/inicio_screen_test.dart test/mascota_search_sheet_test.dart test/pacientes_list_screen_test.dart test/agenda_screen_test.dart` | ❌ W0 (T1) | ⬜ |
 | 05-15-T1 | 4 | VAC-04 | `flutter test test/recorte_cuadrado_test.dart test/guardar_datos_clinica_test.dart` | ❌ W0 (this task) | ⬜ |
 | 05-15-T2 | 4 | VAC-04 | `flutter test test/datos_clinica_screen_test.dart test/equipo_screen_test.dart test/router_equipo_test.dart` | ❌ W0 (this task) | ⬜ |
 | 05-16-T1 | 4 | VAC-04 | `flutter test test/vacuna_mapeo_test.dart test/carne_screen_test.dart` | ✅ extend | ⬜ |
-| 05-16-T2 | 4 | VAC-04 | `flutter test test/carne_pdf_service_test.dart test/compartir_carne_sheet_test.dart` | ✅ extend | ⬜ |
-| 05-16-T3 | 4 | VAC-04/05 | `node --test test/web/carne_logica.test.mjs` + LOGO_WEB_OK grep gates | ✅ extend | ⬜ |
+| 05-16-T2 | 4 | VAC-04 | `flutter test test/carne_pdf_service_test.dart test/compartir_carne_sheet_test.dart test/historia_clinica_pdf_service_test.dart` + PDF_LOGO_FONT_OK (logo decodificado, Caprasimo con respaldo Figtree) | ✅ extend | ⬜ |
+| 05-17-T1 | 4 | VAC-04/05 | `node --test test/web/carne_logica.test.mjs` + LOGO_PAGE_OK | ✅ extend | ⬜ |
+| 05-17-T2 | 4 | VAC-04/05 | LOGO_EDGE_OK grep gates (firmar(), LOGO_RE, sin logo_path/foto_path) | ✅ extend | ⬜ |
 | 05-13-T1 | 6 | all | PHASE5_GATE_OK (`flutter analyze && flutter test` + node test + live probe) | ✅ | ⬜ |
 | 05-13-T2 | 6 | all | 05-QA-REPORT.md F1..F13 (F13 = logo de la clínica) | — | ⬜ |
 | 05-13-T3 | 6 | VAC-04/05 | manual real phone | — | ⬜ |
