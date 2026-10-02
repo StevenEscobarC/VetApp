@@ -412,3 +412,8 @@ enabled = true
 # declarative_schema_path = "./schemas"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# Carne publico (Fase 5): el dueno no tiene cuenta (D-18), por eso no se exige JWT.
+# La funcion valida el token por si misma y usa la service role solo como secreto de runtime.
+[functions.carne]
+verify_jwt = false
