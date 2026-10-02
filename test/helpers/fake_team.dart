@@ -1,4 +1,5 @@
 import 'package:vetapp/features/team/data/repositories/supabase_team_repository.dart';
+import 'package:vetapp/features/team/domain/codigo_invitacion.dart';
 import 'package:vetapp/features/team/domain/invitacion.dart';
 import 'package:vetapp/features/team/domain/miembro.dart';
 
@@ -72,6 +73,23 @@ class FakeTeamRepository implements SupabaseTeamRepository {
   Future<void> cambiarRol(String miembroId, String rol) async {
     if (errorCambio != null) throw errorCambio!;
     rolesCambiados.add((miembroId, rol));
+  }
+
+  /// Error para [crearMiClinica] / [unirseAClinica].
+  Object? errorUnirse;
+  final List<String> clinicasCreadas = [];
+  final List<String> codigosUsados = [];
+
+  @override
+  Future<void> crearMiClinica(String nombre) async {
+    if (errorUnirse != null) throw errorUnirse!;
+    clinicasCreadas.add(nombre.trim());
+  }
+
+  @override
+  Future<void> unirseAClinica(String codigo) async {
+    if (errorUnirse != null) throw errorUnirse!;
+    codigosUsados.add(normalizarCodigoInvitacion(codigo));
   }
 
   @override

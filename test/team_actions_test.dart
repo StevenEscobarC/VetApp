@@ -89,6 +89,30 @@ void main() {
     expect(cambios, greaterThan(0));
   });
 
+  test('unirseAClinica normalizes the code and refreshes the profile', () async {
+    final (c, repo) = _setup();
+    var cambios = 0;
+    final sub = c.listen(authProfileProvider, (_, _) => cambios++);
+    addTearDown(sub.close);
+    await c.read(authProfileProvider.future);
+    cambios = 0;
+    await c.read(teamActionsProvider).unirseAClinica('k7mq-4p2x');
+    await c.read(authProfileProvider.future);
+    expect(repo.codigosUsados, ['K7MQ4P2X']);
+    expect(cambios, greaterThan(0));
+  });
+
+  test('crearMiClinica trims name and surfaces failures', () async {
+    final (c, repo) = _setup();
+    await c.read(teamActionsProvider).crearMiClinica('  Patitas  ');
+    expect(repo.clinicasCreadas, ['Patitas']);
+    repo.errorUnirse = const TeamFailure('x');
+    expect(
+      c.read(teamActionsProvider).crearMiClinica('Otra'),
+      throwsA(isA<TeamFailure>()),
+    );
+  });
+
   test('contarCitasAbiertas delegates to the repository', () async {
     final (c, repo) = _setup();
     repo.citasAbiertas = 2;

@@ -15,6 +15,7 @@ import '../../features/home/presentation/screens/inicio_screen.dart';
 import '../../features/home/presentation/screens/mas_screen.dart';
 import '../../features/patients/presentation/pacientes_routes.dart';
 import '../../features/team/presentation/equipo_routes.dart';
+import '../../features/team/presentation/screens/acceso_revocado_screen.dart';
 
 const _publicPaths = {'/login', '/register', '/reset-password'};
 
@@ -52,6 +53,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         return location == '/cliente' ? null : '/cliente';
       }
 
+      if (!profile.activo) {
+        return location == '/acceso-revocado' ? null : '/acceso-revocado';
+      }
+      if (location == '/acceso-revocado') return '/inicio';
+
       const vetExitPaths = {
         '/splash',
         '/login',
@@ -76,6 +82,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const ResetPasswordScreen(),
       ),
       GoRoute(path: '/cliente', builder: (_, _) => const ClientHomeScreen()),
+      GoRoute(
+        path: '/acceso-revocado',
+        builder: (_, _) => const AccesoRevocadoScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             AppShell(navigationShell: navigationShell),

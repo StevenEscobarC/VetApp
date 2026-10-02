@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../domain/codigo_invitacion.dart';
 import '../../domain/invitacion.dart';
 import '../../domain/miembro.dart';
 import '../../domain/team_failure.dart';
@@ -132,6 +133,35 @@ class SupabaseTeamRepository {
     }
   }
 
+  /// Crea una clínica vacía para un veterinario sin clínica activa (D-05).
+  Future<void> crearMiClinica(String nombre) async {
+    try {
+      await _client.rpc('crear_mi_clinica', params: {'p_nombre': nombre.trim()});
+    } on PostgrestException catch (e) {
+      throw TeamFailure(_messageFor(e, fallback: _fallbackCrear));
+    } catch (_) {
+      throw const TeamFailure(_fallbackCrear);
+    }
+  }
+
+  /// Une al veterinario a otra clínica con un código de invitación.
+  Future<void> unirseAClinica(String codigo) async {
+    try {
+      await _client.rpc(
+        'unirse_a_clinica',
+        params: {'p_codigo': normalizarCodigoInvitacion(codigo)},
+      );
+    } on PostgrestException catch (e) {
+      throw TeamFailure(_messageFor(e, fallback: _fallbackUnirse));
+    } catch (_) {
+      throw const TeamFailure(_fallbackUnirse);
+    }
+  }
+
+  static const _fallbackCrear =
+      'No pudimos crear la clínica. Intenta de nuevo.';
+  static const _fallbackUnirse =
+      'No pudimos unirte a la clínica. Intenta de nuevo.';
   static const _fallbackCambio =
       'No pudimos completar el cambio. Intenta de nuevo.';
   static const _fallbackGenerar =
@@ -155,6 +185,22 @@ class SupabaseTeamRepository {
     }
     if (msg.contains('ya no está en tu clínica')) {
       return 'Ese veterinario ya no está en tu clínica.';
+    }
+    if (msg.contains('ya venció')) {
+      return 'Ese código ya venció. Pídele al administrador uno nuevo.';
+    }
+    if (msg.contains('ya fue utilizado')) {
+      return 'Ese código ya fue utilizado. Pídele al administrador uno nuevo.';
+    }
+    if (msg.contains('no es válido')) {
+      return 'Ese código no es válido. Revísalo e inténtalo de nuevo.';
+    }
+    if (msg.contains('ya tiene datos')) {
+      return 'Tu clínica ya tiene datos; no se pueden fusionar clínicas. '
+          'Regístrate con otro correo para unirte.';
+    }
+    if (msg.contains('ya perteneces')) {
+      return 'Ya perteneces a una clínica activa.';
     }
     if (error.code == '42501') return 'Solo un administrador puede hacer esto.';
     return fallback;
