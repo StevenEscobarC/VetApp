@@ -197,19 +197,20 @@ void main() {
     expect(guardar.onPressed, isNull);
   });
 
-  testWidgets('el selector lista solo protocolos de perro con pistas y Otro...', (
-    tester,
-  ) async {
-    await _abrir(tester, _app(_repo()));
-    await tester.tap(find.text('Elige un biológico'));
-    await tester.pumpAndSettle();
-    expect(find.text('Polivalente'), findsOneWidget);
-    expect(find.text('Dosis 2 de 3'), findsOneWidget);
-    expect(find.text('Antirrábica'), findsOneWidget);
-    expect(find.text('Primera dosis'), findsWidgets);
-    expect(find.text('Triple felina'), findsNothing);
-    expect(find.text('Otro...'), findsOneWidget);
-  });
+  testWidgets(
+    'el selector lista solo protocolos de perro con pistas y Otro...',
+    (tester) async {
+      await _abrir(tester, _app(_repo()));
+      await tester.tap(find.text('Elige un biológico'));
+      await tester.pumpAndSettle();
+      expect(find.text('Polivalente'), findsOneWidget);
+      expect(find.text('Dosis 2 de 3'), findsOneWidget);
+      expect(find.text('Antirrábica'), findsOneWidget);
+      expect(find.text('Primera dosis'), findsWidgets);
+      expect(find.text('Triple felina'), findsNothing);
+      expect(find.text('Otro...'), findsOneWidget);
+    },
+  );
 
   testWidgets('Antirrábica muestra chips de duración; Polivalente no', (
     tester,
@@ -227,59 +228,64 @@ void main() {
     expect(find.text('3 años'), findsNothing);
   });
 
-  testWidgets('ProximaPreview usa la respuesta del servidor y envía los datos', (
-    tester,
-  ) async {
-    final repo = _repo();
-    await _abrir(tester, _app(repo));
-    await _elegir(tester, 'Antirrábica');
-    expect(find.text('Próxima: 01/10/2027'), findsOneWidget);
-    final llamada = repo.llamadas.lastWhere((l) => l.metodo == 'previsualizar');
-    expect(llamada.args['codigo'], 'antirrabica');
-    expect(llamada.args['fecha'], DateTime.utc(2026, 10, 1));
-    expect(llamada.args['duracionDias'], 365);
-  });
+  testWidgets(
+    'ProximaPreview usa la respuesta del servidor y envía los datos',
+    (tester) async {
+      final repo = _repo();
+      await _abrir(tester, _app(repo));
+      await _elegir(tester, 'Antirrábica');
+      expect(find.text('Próxima: 01/10/2027'), findsOneWidget);
+      final llamada = repo.llamadas.lastWhere(
+        (l) => l.metodo == 'previsualizar',
+      );
+      expect(llamada.args['codigo'], 'antirrabica');
+      expect(llamada.args['fecha'], DateTime.utc(2026, 10, 1));
+      expect(llamada.args['duracionDias'], 365);
+    },
+  );
 
-  testWidgets('Guardar dosis llama registrarDosis una vez y devuelve el resultado', (
-    tester,
-  ) async {
-    final repo = _repo();
-    await _abrir(tester, _app(repo));
-    await _elegir(tester, 'Antirrábica');
-    await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
-    await tester.pumpAndSettle();
-    final llamadas = repo.llamadas.where((l) => l.metodo == 'registrarDosis');
-    expect(llamadas.length, 1);
-    final args = llamadas.single.args;
-    expect(args['codigo'], 'antirrabica');
-    expect(args['fecha'], DateTime.utc(2026, 10, 1));
-    expect(args['duracionDias'], 365);
-    expect(args['externa'], false);
-    expect(_resultado, isNotNull);
-    expect(_resultado!.biologicoNombre, 'Antirrábica');
-    expect(find.text('Abrir'), findsOneWidget);
-  });
+  testWidgets(
+    'Guardar dosis llama registrarDosis una vez y devuelve el resultado',
+    (tester) async {
+      final repo = _repo();
+      await _abrir(tester, _app(repo));
+      await _elegir(tester, 'Antirrábica');
+      await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
+      await tester.pumpAndSettle();
+      final llamadas = repo.llamadas.where((l) => l.metodo == 'registrarDosis');
+      expect(llamadas.length, 1);
+      final args = llamadas.single.args;
+      expect(args['codigo'], 'antirrabica');
+      expect(args['fecha'], DateTime.utc(2026, 10, 1));
+      expect(args['duracionDias'], 365);
+      expect(args['externa'], false);
+      expect(_resultado, isNotNull);
+      expect(_resultado!.biologicoNombre, 'Antirrábica');
+      expect(find.text('Abrir'), findsOneWidget);
+    },
+  );
 
-  testWidgets('un error al guardar muestra el mensaje y conserva el formulario', (
-    tester,
-  ) async {
-    final repo = _repo(
-      errorRegistrar: const VacunaFailure(
-        'No pudimos guardar la dosis. Intenta de nuevo.',
-      ),
-    );
-    await _abrir(tester, _app(repo));
-    await _elegir(tester, 'Antirrábica');
-    await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('No pudimos guardar la dosis. Intenta de nuevo.'),
-      findsOneWidget,
-    );
-    expect(find.text('Registrar dosis'), findsOneWidget);
-    expect(find.text('Antirrábica'), findsOneWidget);
-    expect(_resultado, isNull);
-  });
+  testWidgets(
+    'un error al guardar muestra el mensaje y conserva el formulario',
+    (tester) async {
+      final repo = _repo(
+        errorRegistrar: const VacunaFailure(
+          'No pudimos guardar la dosis. Intenta de nuevo.',
+        ),
+      );
+      await _abrir(tester, _app(repo));
+      await _elegir(tester, 'Antirrábica');
+      await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No pudimos guardar la dosis. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+      expect(find.text('Registrar dosis'), findsOneWidget);
+      expect(find.text('Antirrábica'), findsOneWidget);
+      expect(_resultado, isNull);
+    },
+  );
 
   testWidgets('codigo en la ruta preselecciona; citaId viaja en la llamada', (
     tester,
@@ -307,37 +313,38 @@ void main() {
     expect(args['codigo'], 'desp_interna');
   });
 
-  testWidgets('Otro...: nombre, chips de intervalo y catálogo solo para admin', (
-    tester,
-  ) async {
-    final repo = _repo();
-    await _abrir(tester, _app(repo));
-    await _elegir(tester, 'Otro...');
-    expect(find.text('Nombre del biológico'), findsOneWidget);
-    for (final l in [
-      '21 días',
-      '1 mes',
-      '3 meses',
-      '6 meses',
-      '1 año',
-      'Sin refuerzo',
-    ]) {
-      expect(find.text(l), findsOneWidget, reason: l);
-    }
-    expect(find.text('Guardar en mi catálogo'), findsOneWidget);
+  testWidgets(
+    'Otro...: nombre, chips de intervalo y catálogo solo para admin',
+    (tester) async {
+      final repo = _repo();
+      await _abrir(tester, _app(repo));
+      await _elegir(tester, 'Otro...');
+      expect(find.text('Nombre del biológico'), findsOneWidget);
+      for (final l in [
+        '21 días',
+        '1 mes',
+        '3 meses',
+        '6 meses',
+        '1 año',
+        'Sin refuerzo',
+      ]) {
+        expect(find.text(l), findsOneWidget, reason: l);
+      }
+      expect(find.text('Guardar en mi catálogo'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextFormField).first, 'Giardia');
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
-    await tester.pumpAndSettle();
-    final args = repo.llamadas
-        .lastWhere((l) => l.metodo == 'registrarDosis')
-        .args;
-    expect(args['codigo'], 'otro:giardia');
-    expect(args['biologicoNombre'], 'Giardia');
-    expect(args['duracionDias'], 365);
-    expect(args['guardarEnCatalogo'], true);
-  });
+      await tester.enterText(find.byType(TextFormField).first, 'Giardia');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
+      await tester.pumpAndSettle();
+      final args = repo.llamadas
+          .lastWhere((l) => l.metodo == 'registrarDosis')
+          .args;
+      expect(args['codigo'], 'otro:giardia');
+      expect(args['biologicoNombre'], 'Giardia');
+      expect(args['duracionDias'], 365);
+      expect(args['guardarEnCatalogo'], true);
+    },
+  );
 
   testWidgets('Otro...: un veterinario no admin no ve Guardar en mi catálogo', (
     tester,
@@ -348,24 +355,25 @@ void main() {
     expect(find.text('Guardar en mi catálogo'), findsNothing);
   });
 
-  testWidgets('Aplicada en otra clínica pide la clínica, oculta Aplicó y marca externa', (
-    tester,
-  ) async {
-    final repo = _repo();
-    await _abrir(tester, _app(repo));
-    await _elegir(tester, 'Antirrábica');
-    expect(find.text('Aplicó: Dr(a). Ana Ramírez'), findsOneWidget);
-    await tester.ensureVisible(find.text('Aplicada en otra clínica'));
-    await tester.tap(find.text('Aplicada en otra clínica'));
-    await tester.pumpAndSettle();
-    expect(find.text('Nombre de la clínica (opcional)'), findsOneWidget);
-    expect(find.text('Aplicó: Dr(a). Ana Ramírez'), findsNothing);
-    await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
-    await tester.pumpAndSettle();
-    final args = repo.llamadas
-        .lastWhere((l) => l.metodo == 'registrarDosis')
-        .args;
-    expect(args['externa'], true);
-    expect(args['clinicaExterna'], isNull);
-  });
+  testWidgets(
+    'Aplicada en otra clínica pide la clínica, oculta Aplicó y marca externa',
+    (tester) async {
+      final repo = _repo();
+      await _abrir(tester, _app(repo));
+      await _elegir(tester, 'Antirrábica');
+      expect(find.text('Aplicó: Dr(a). Ana Ramírez'), findsOneWidget);
+      await tester.ensureVisible(find.text('Aplicada en otra clínica'));
+      await tester.tap(find.text('Aplicada en otra clínica'));
+      await tester.pumpAndSettle();
+      expect(find.text('Nombre de la clínica (opcional)'), findsOneWidget);
+      expect(find.text('Aplicó: Dr(a). Ana Ramírez'), findsNothing);
+      await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
+      await tester.pumpAndSettle();
+      final args = repo.llamadas
+          .lastWhere((l) => l.metodo == 'registrarDosis')
+          .args;
+      expect(args['externa'], true);
+      expect(args['clinicaExterna'], isNull);
+    },
+  );
 }

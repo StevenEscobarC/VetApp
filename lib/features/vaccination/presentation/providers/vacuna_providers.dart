@@ -20,9 +20,7 @@ final carneProvider = FutureProvider.autoDispose.family<Carne, String>((
 /// Catálogo efectivo filtrado por especie (null = todas).
 final protocolosProvider = FutureProvider.autoDispose
     .family<List<Protocolo>, String?>((ref, especie) {
-      return ref
-          .watch(vacunaRepositoryProvider)
-          .protocolos(especie: especie);
+      return ref.watch(vacunaRepositoryProvider).protocolos(especie: especie);
     });
 
 /// Conteos de vencidas/próximas por mascota (insignias de la lista).
