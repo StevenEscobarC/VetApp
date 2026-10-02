@@ -16,6 +16,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../team/presentation/providers/team_providers.dart';
+import '../../../vaccination/presentation/widgets/mascota_search_sheet.dart';
 
 import '../../domain/cita_solapes.dart';
 import '../../domain/entities/cita.dart';
@@ -127,7 +128,16 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
               .toList();
 
     return Scaffold(
-      appBar: const AppTopBar(title: 'Agenda'),
+      appBar: AppTopBar(
+        title: 'Agenda',
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.vaccines_outlined),
+            tooltip: 'Vacunar',
+            onPressed: () => showMascotaSearchSheet(context),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           const NotificacionesBanner(),

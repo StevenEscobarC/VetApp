@@ -8,13 +8,19 @@ import 'package:vetapp/features/patients/domain/mascota_failure.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/features/patients/presentation/screens/pacientes_list_screen.dart';
+import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
+import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
-Widget _appUnderTest({required FakeMascotaRepository repo}) {
+Widget _appUnderTest({
+  required FakeMascotaRepository repo,
+  FakeVacunaRepository? vacunas,
+}) {
   return routerHarness(
     initialLocation: '/pacientes',
     routes: [
@@ -35,6 +41,9 @@ Widget _appUnderTest({required FakeMascotaRepository repo}) {
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
       mascotaRepositoryProvider.overrideWithValue(repo),
+      vacunaRepositoryProvider.overrideWithValue(
+        vacunas ?? FakeVacunaRepository(),
+      ),
       mascotaFotoDatasourceProvider.overrideWithValue(
         FakeMascotaFotoDatasource(),
       ),
@@ -55,10 +64,7 @@ void main() {
       expect(find.text('Rocky'), findsOneWidget);
       expect(find.textContaining('Labrador'), findsOneWidget);
       expect(find.text('Rita Gómez'), findsNWidgets(2));
-      expect(
-        find.text('Buscar por nombre, dueño o especie'),
-        findsOneWidget,
-      );
+      expect(find.text('Buscar por nombre, dueño o especie'), findsOneWidget);
       expect(find.widgetWithText(AppFilterChip, 'Todos'), findsOneWidget);
       expect(find.widgetWithText(AppFilterChip, 'Perros'), findsOneWidget);
       expect(find.widgetWithText(AppFilterChip, 'Gatos'), findsOneWidget);
@@ -96,17 +102,12 @@ void main() {
     },
   );
 
-  testWidgets('sin pacientes muestra el estado vacío inicial', (
-    tester,
-  ) async {
+  testWidgets('sin pacientes muestra el estado vacío inicial', (tester) async {
     final repo = FakeMascotaRepository();
     await tester.pumpWidget(_appUnderTest(repo: repo));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Aún no tienes pacientes registrados'),
-      findsOneWidget,
-    );
+    expect(find.text('Aún no tienes pacientes registrados'), findsOneWidget);
     expect(
       find.text('Crea tu primer paciente desde la ficha de un cliente.'),
       findsOneWidget,
@@ -161,5 +162,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('FICHA MASCOTA m-1'), findsOneWidget);
+  });
+
+  testWidgets(
+    'chips Vencida/Próxima solo para mascotas con dosis pendientes y una '
+    'sola llamada al resumen',
+    (tester) async {
+      final repo = FakeMascotaRepository(
+        mascotas: [mascotaRocky, mascotaLuna, mascotaMichi],
+      );
+      final vacunas = FakeVacunaRepository(
+        resumenPorMascotaData: {
+          'm-1': const ResumenVacunasMascota(vencidas: 2, proximas: 1),
+          'm-2': const ResumenVacunasMascota(vencidas: 0, proximas: 1),
+        },
+      );
+      await tester.pumpWidget(_appUnderTest(repo: repo, vacunas: vacunas));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Vencida'), findsOneWidget);
+      expect(find.text('Próxima'), findsOneWidget);
+      expect(
+        vacunas.llamadas.where((l) => l.metodo == 'resumenPorMascota').length,
+        1,
+      );
+    },
+  );
+
+  testWidgets('sin dosis pendientes no hay chips de vacunación', (
+    tester,
+  ) async {
+    final repo = FakeMascotaRepository(mascotas: [mascotaRocky, mascotaLuna]);
+    final vacunas = FakeVacunaRepository(
+      resumenPorMascotaData: {
+        'm-1': const ResumenVacunasMascota(vencidas: 0, proximas: 0),
+      },
+    );
+    await tester.pumpWidget(_appUnderTest(repo: repo, vacunas: vacunas));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vencida'), findsNothing);
+    expect(find.text('Próxima'), findsNothing);
   });
 }
