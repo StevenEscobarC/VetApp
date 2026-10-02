@@ -1,7 +1,8 @@
 ---
 phase: 5
 slug: vacunacion-y-desparasitacion
-status: draft
+status: approved
+reviewed_at: 2026-10-02
 shadcn_initialized: false
 preset: none
 created: 2026-10-01
@@ -172,15 +173,15 @@ Opened from `DosisCard` overflow. Bottom sheet (non-full height): Heading "Anula
 In `CompletarCitaScreen`, when the cita motivo is "Vacunación" or "Desparasitación": after the existing "Registrar consulta" offer, a second `AppCard` row (48dp+, `Icons.vaccines_outlined`) "Registrar dosis aplicada" with Label `textSecondary` "{Mascota}". Tap opens `RegistrarDosisScreen` preselecting biológico category (Vacunación -> picker opened; Desparasitación -> "Desparasitación interna" preselected, switchable). Completing the cita without registering is never blocked and no reminder snackbar is shown. Not shown for other motivos.
 
 ### 6. Inicio card "Vacunas pendientes" (D-10)
-`AppCard` (same family as other Inicio summary cards), full width, tappable (48dp+), `Icons.vaccines_outlined` + Heading "Vacunas pendientes"; body Label rows: `DosisEstadoChip(vencida)` "{n} vencidas" and `DosisEstadoChip(proxima)` "{n} esta semana"; chevron trailing. When 0/0: Body `textSecondary` "Todo al día" with `check_circle_outline` in `success`; card remains visible. Counts are clinic-wide (D-14). Loading: skeleton `surfaceMuted` card. Error: Label "No pudimos cargar las vacunas." inline + text "Reintentar".
+`AppCard` (same family as other Inicio summary cards), full width, tappable (48dp+), `Icons.vaccines_outlined` + Heading "Vacunas pendientes"; body Label rows: `DosisEstadoChip(vencida)` "{n} vencidas" and `DosisEstadoChip(proxima)` "{n} próximas"; chevron trailing. When 0/0: Body `textSecondary` "Todo al día" with `check_circle_outline` in `success`; card remains visible. Counts are clinic-wide (D-14). Loading: skeleton `surfaceMuted` card. Error: Label "No pudimos cargar las vacunas." inline + text "Reintentar".
 
 ### 7. VacunasPendientesScreen (D-10..D-14)
 `AppTopBar(title: 'Vacunas pendientes')`. Under it: filter row (48dp `AppFilterChip`s): "Todas" (default) | "Perros" | "Gatos" (optional species filter; if cut, nothing else changes). Body scroll:
 - **Group "Vencidas ({n})"** (Heading) then `PendienteTile`s sorted by days overdue desc.
 - **Group "Próximas ({n})"** (Heading) sorted by due date asc.
-- **`PendienteTile`** (`AppCard`, 16px padding): Row 1: pet avatar 40 + Body nombre + Label `textSecondary` "{Dueño}"; trailing `DosisEstadoChip`. Row 2: Body "{Biológico} · {Dosis 2 de 3 | Refuerzo}". Row 3: Label: Vencida -> `destructive` "Venció el 12/09/2026 · hace 19 días"; Próxima -> "Vence el 05/10/2026 · en 4 días". Row 4 (if sent): Label `textMuted` with `Icons.history` "Recordatorio enviado el 28/09/2026". Row 5 **actions**: a wrap of four 48dp controls: **"Recordar"** (outline, WhatsApp icon; opens WhatsApp with the message below, then sets "recordatorio enviado" on return/confirm), **"Agendar"** (outline, `Icons.event_outlined`; opens `CitaFormScreen` with cliente, mascota and motivo prefilled), **"Registrar"** (outline, `Icons.vaccines_outlined`; opens form with biológico preselected), **"Descartar"** (text, `Icons.snooze`; opens sheet). No accent button on this screen (4 outline actions per tile would be noisy: the tile itself is tappable and opens the ficha Carné).
+- **`PendienteTile`** (`AppCard`, 16px padding): Row 1: pet avatar 40 + Body nombre + Label `textSecondary` "{Dueño}"; trailing `DosisEstadoChip`. Row 2: Body "{Biológico} · {Dosis 2 de 3 | Refuerzo}". Row 3: Label: Vencida -> `destructive` "Venció el 12/09/2026 · hace 19 días"; Próxima -> "Vence el 05/10/2026 · en 4 días". Row 4 (if sent): Label `textMuted` with `Icons.history` "Recordatorio enviado el 28/09/2026". Row 5 **actions**: a wrap of four 48dp controls: **"Recordar"** (outline, WhatsApp icon; opens WhatsApp with the message below, then sets "recordatorio enviado" on return/confirm), **"Agendar"** (outline, `Icons.event_outlined`; opens `CitaFormScreen` with cliente, mascota and motivo prefilled), **"Registrar"** (outline, `Icons.vaccines_outlined`; opens form with biológico preselected), **"Descartar o posponer"** (text, `Icons.snooze`; opens sheet). No accent button on this screen (4 outline actions per tile would be noisy: the tile itself is tappable and opens the ficha Carné).
 - Layout of actions: icon+label 14px; if the owner has no phone: "Recordar" disabled with Label `textMuted` "Sin teléfono" under it (same pattern as Phase 4 `Sin registrar`).
-- **Descartar/posponer sheet (D-12)**: Heading "¿Qué hacemos con esta alerta?", single-select rows (56dp): "Posponer 7 días" / "Posponer 30 días" / "Mascota fallecida" / "Cambió de veterinario" / "Otro motivo" (reveals `AppTextField` "Motivo", optional). Actions: outline "Volver" / primary-text "Confirmar". Posponer hides until date then re-enters lists. Descartar states mute the alert permanently (carné still shows the dose). Success snackbar "Alerta descartada" / "Alerta pospuesta hasta el {dd/mm/aaaa}" with Deshacer (this is reversible, allowed).
+- **Descartar/posponer sheet (D-12)**: Heading "¿Qué hacemos con esta alerta?", single-select rows (56dp): "Posponer 7 días" / "Posponer 30 días" / "Mascota fallecida" / "Cambió de veterinario" / "Otro motivo" (reveals `AppTextField` "Motivo", optional). Actions: outline "Volver" / primary-text "Aplicar". Posponer hides until date then re-enters lists. Descartar states mute the alert permanently (carné still shows the dose). Success snackbar "Alerta descartada" / "Alerta pospuesta hasta el {dd/mm/aaaa}" with Deshacer (this is reversible, allowed).
 - **D-13:** items overdue > 6 months are not listed; footer Label `textMuted` (only if any hidden): "Se ocultan las vacunas vencidas hace más de 6 meses. Siguen marcadas en cada carné."
 - **Empty (no alerts):** Heading "Todo al día", Body `textSecondary` "No hay vacunas vencidas ni próximas en la clínica."
 - Not filtered per veterinarian (D-14). In multi-vet mode no vet marker is added to tiles (alerts belong to the clinic).
@@ -244,7 +245,7 @@ A4 portrait, margins 36pt (printing package). Same hierarchy as the public page,
 | Regenerar enlace | "¿Regenerar el enlace del carné?" | "El enlace anterior dejará de funcionar. Quien lo tenga verá un aviso de enlace no válido. Deberá compartir el nuevo." | "Volver" / **"Regenerar"** (destructive) |
 | Restablecer protocolo | "¿Restablecer valores estándar?" | "Se usarán los intervalos estándar para {Biológico}. Las dosis ya registradas no cambian." | "Volver" / "Restablecer" (primary text) |
 | Desactivar biológico propio | "¿Desactivar {Biológico}?" | "Dejará de aparecer al registrar dosis. Las dosis ya registradas se conservan." | "Volver" / **"Desactivar"** (destructive) |
-| Descartar alerta | "¿Qué hacemos con esta alerta?" | single-select list | "Volver" / "Confirmar" |
+| Descartar alerta | "¿Qué hacemos con esta alerta?" | single-select list | "Volver" / "Aplicar" |
 | Biológico picker, Mascota search, Compartir carné | sheets as above | — | — |
 
 Only "Anular dosis", "Regenerar" and "Desactivar" use destructive color.
@@ -292,10 +293,10 @@ Errors follow the project convention (Spanish messages normalized by the data la
 | Duration chips | "1 año" · "3 años" · "1 mes" · "5 semanas" · "3 meses" · "21 días" · "6 meses" · "Sin refuerzo" |
 | Empty — carné | Heading "Sin vacunas registradas" · Body "Registra la primera dosis de {Mascota} o la que ya trae en su carné de papel." |
 | Empty — pendientes | Heading "Todo al día" · Body "No hay vacunas vencidas ni próximas en la clínica." |
-| Inicio card | "Vacunas pendientes" · "{n} vencidas" · "{n} esta semana" · "Todo al día" |
+| Inicio card | "Vacunas pendientes" · "{n} vencidas" · "{n} próximas" · "Todo al día" |
 | Quick action | "Vacunar" · sheet "¿A quién vacuna?" · hint "Buscar mascota o dueño" · "No encontramos esa mascota." |
 | Completar cita | "Registrar dosis aplicada" |
-| Alert actions | "Recordar" · "Agendar" · "Registrar" · "Descartar" · "Recordatorio enviado el {dd/mm/aaaa}" · "Sin teléfono" |
+| Alert actions | "Recordar" · "Agendar" · "Registrar" · "Descartar o posponer" · "Recordatorio enviado el {dd/mm/aaaa}" · "Sin teléfono" |
 | Descartar options | "Posponer 7 días" · "Posponer 30 días" · "Mascota fallecida" · "Cambió de veterinario" · "Otro motivo" |
 | Hidden >6 months note | "Se ocultan las vacunas vencidas hace más de 6 meses. Siguen marcadas en cada carné." |
 | Anular motivos | "Error de registro" · "Dosis duplicada" · "Otro motivo" |
@@ -352,14 +353,14 @@ Not applicable. Flutter/Dart app plus one static HTML page — no shadcn/npm reg
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-10-02
 
 ---
 
