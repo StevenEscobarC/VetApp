@@ -11,7 +11,18 @@ class AuthProfile {
     required this.telefono,
     this.clinicaId,
     this.clinicaNombre,
+    this.rolClinica,
+    this.activo = true,
+    this.matricula,
   });
+
+  final String? rolClinica;
+  final bool activo;
+  final String? matricula;
+
+  /// Administrador activo de la clínica; la UI lo usa solo como comodidad,
+  /// la autoridad real la imponen las RPC y RLS.
+  bool get esAdmin => rolClinica == 'admin' && activo;
 
   final String id;
   final String nombre;
@@ -111,7 +122,10 @@ class SupabaseAuthRepository {
     try {
       final data = await _client
           .from('perfiles')
-          .select('id, nombre, rol, telefono, clinica_id, clinicas(nombre)')
+          .select(
+            'id, nombre, rol, telefono, clinica_id, rol_clinica, activo, '
+            'matricula, clinicas(nombre)',
+          )
           .eq('id', userId)
           .single();
       final clinic = data['clinicas'] as Map<String, dynamic>?;
@@ -123,6 +137,9 @@ class SupabaseAuthRepository {
         telefono: data['telefono'] as String? ?? '',
         clinicaId: data['clinica_id'] as String?,
         clinicaNombre: clinic?['nombre'] as String?,
+        rolClinica: data['rol_clinica'] as String?,
+        activo: data['activo'] as bool? ?? true,
+        matricula: data['matricula'] as String?,
       );
     } catch (_) {
       throw const AuthFailure('No encontramos tu perfil. Intenta de nuevo.');

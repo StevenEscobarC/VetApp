@@ -40,6 +40,31 @@ const vetProfile = AuthProfile(
   telefono: '',
   clinicaId: 'cli-1',
   clinicaNombre: 'Clínica Patitas',
+  rolClinica: 'admin',
+);
+
+const vetAdminProfile = vetProfile;
+
+const vetColegaProfile = AuthProfile(
+  id: 'vet-2',
+  nombre: 'Luis Gómez',
+  email: 'luis@vetapp.co',
+  rol: 'VETERINARIO',
+  telefono: '',
+  clinicaId: 'cli-1',
+  clinicaNombre: 'Clínica Patitas',
+  rolClinica: 'veterinario',
+);
+
+const vetRetiradoProfile = AuthProfile(
+  id: 'vet-3',
+  nombre: 'Marta Ruiz',
+  email: 'marta@vetapp.co',
+  rol: 'VETERINARIO',
+  telefono: '',
+  clinicaId: 'cli-1',
+  rolClinica: 'veterinario',
+  activo: false,
 );
 
 const clienteProfile = AuthProfile(
