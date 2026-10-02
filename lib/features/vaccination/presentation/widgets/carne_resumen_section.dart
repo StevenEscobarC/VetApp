@@ -39,7 +39,7 @@ class CarneResumenSection extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: Text('Carné de vacunación', style: textTheme.titleMedium),
+              child: Text('Carné de vacunación', style: textTheme.titleLarge),
             ),
             if (carneAsync.hasValue)
               Text(

@@ -209,7 +209,7 @@ class _Contenido extends StatelessWidget {
                 child: const Icon(Icons.vaccines_outlined, size: 32),
               ),
               const SizedBox(height: AppSpacing.md),
-              Text('Sin vacunas registradas', style: textTheme.titleMedium),
+              Text('Sin vacunas registradas', style: textTheme.titleLarge),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Registra la primera dosis de ${carne.mascotaNombre} o la '

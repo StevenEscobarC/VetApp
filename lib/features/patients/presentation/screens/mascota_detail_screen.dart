@@ -258,7 +258,7 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
             onPressed: _abrirRegistrarPeso,
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text('Historia clínica', style: textTheme.titleMedium),
+          Text('Historia clínica', style: textTheme.titleLarge),
           const SizedBox(height: AppSpacing.md),
           HistoriaClinicaTimeline(mascotaId: widget.mascotaId),
           const SizedBox(height: AppSpacing.md),

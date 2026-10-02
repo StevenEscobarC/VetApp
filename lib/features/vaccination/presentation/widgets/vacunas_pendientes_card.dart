@@ -86,7 +86,7 @@ class VacunasPendientesCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Vacunas pendientes', style: textTheme.titleMedium),
+                    Text('Vacunas pendientes', style: textTheme.titleLarge),
                     const SizedBox(height: AppSpacing.sm),
                     contenido,
                   ],

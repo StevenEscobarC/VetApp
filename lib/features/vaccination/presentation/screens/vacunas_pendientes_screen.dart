@@ -169,7 +169,7 @@ class _VacunasPendientesScreenState
     TextTheme textTheme,
   ) => [
     const SizedBox(height: AppSpacing.sm),
-    Text(titulo, style: textTheme.titleMedium),
+    Text(titulo, style: textTheme.titleLarge),
     const SizedBox(height: AppSpacing.sm),
     for (final p in items) ...[
       PendienteTile(
