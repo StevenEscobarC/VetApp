@@ -17,7 +17,8 @@ class SupabaseCitaRepository {
   static const _select =
       '*, clientes!citas_cliente_misma_clinica_fkey(nombre, telefono, direccion), '
       'cita_mascotas(mascotas!cita_mascotas_mascota_fkey(id, nombre, especie, foto_path)), '
-      'consultas(mascota_id)';
+      'consultas(mascota_id), '
+      'veterinario:perfiles!citas_veterinario_perfil_fkey(nombre)';
 
   /// Citas con `fecha_hora` en `[inicioUtc, finUtc)`, por hora ascendente.
   Future<List<Cita>> entre(DateTime inicioUtc, DateTime finUtc) async {
@@ -29,7 +30,7 @@ class SupabaseCitaRepository {
           .lt('fecha_hora', finUtc.toUtc().toIso8601String())
           .order('fecha_hora');
       return (rows as List)
-          .map((row) => _fromRow(row as Map<String, dynamic>))
+          .map((row) => citaDesdeFila(row as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
       throw CitaFailure(_messageFor(e));
@@ -46,7 +47,7 @@ class SupabaseCitaRepository {
           .select(_select)
           .eq('id', id)
           .single();
-      return _fromRow(row);
+      return citaDesdeFila(row);
     } on PostgrestException catch (e) {
       throw CitaFailure(_messageFor(e));
     } catch (_) {
@@ -160,50 +161,53 @@ class SupabaseCitaRepository {
     }
   }
 
-  Cita _fromRow(Map<String, dynamic> row) {
-    final cliente = row['clientes'] as Map<String, dynamic>?;
-    final mascotas = ((row['cita_mascotas'] as List?) ?? const [])
-        .map((e) => (e as Map<String, dynamic>)['mascotas'])
-        .whereType<Map<String, dynamic>>()
-        .map(
-          (m) => MascotaDeCita(
-            id: m['id'] as String,
-            nombre: m['nombre'] as String,
-            especie: m['especie'] as String,
-            fotoPath: m['foto_path'] as String?,
-          ),
-        )
-        .toList();
-    final conConsulta = ((row['consultas'] as List?) ?? const [])
-        .map((e) => (e as Map<String, dynamic>)['mascota_id'])
-        .whereType<String>()
-        .toSet();
-
-    return Cita(
-      id: row['id'] as String,
-      clinicaId: row['clinica_id'] as String,
-      clienteId: row['cliente_id'] as String,
-      veterinarioId: row['veterinario_id'] as String,
-      fechaHora: DateTime.parse(row['fecha_hora'] as String).toUtc(),
-      duracionMin: (row['duracion_min'] as num).toInt(),
-      modalidad: ModalidadCita.desdeValor(row['modalidad'] as String),
-      direccion: row['direccion'] as String?,
-      motivo: row['motivo'] as String,
-      notas: row['notas'] as String?,
-      estado: EstadoCita.desdeValor(row['estado'] as String),
-      recordatorioEnviadoAt: row['recordatorio_enviado_at'] == null
-          ? null
-          : DateTime.parse(row['recordatorio_enviado_at'] as String).toUtc(),
-      clienteNombre: (cliente?['nombre'] as String?) ?? '',
-      clienteTelefono: cliente?['telefono'] as String?,
-      clienteDireccion: cliente?['direccion'] as String?,
-      mascotas: mascotas,
-      mascotasConConsulta: conConsulta,
-    );
-  }
-
   String _messageFor(PostgrestException e, {bool estado = false}) =>
       mensajeErrorCita(e, estado: estado);
+}
+
+/// Fila de `citas` (con embeds) a [Cita]. Top-level para poder probarla.
+Cita citaDesdeFila(Map<String, dynamic> row) {
+  final cliente = row['clientes'] as Map<String, dynamic>?;
+  final veterinario = row['veterinario'] as Map<String, dynamic>?;
+  final mascotas = ((row['cita_mascotas'] as List?) ?? const [])
+      .map((e) => (e as Map<String, dynamic>)['mascotas'])
+      .whereType<Map<String, dynamic>>()
+      .map(
+        (m) => MascotaDeCita(
+          id: m['id'] as String,
+          nombre: m['nombre'] as String,
+          especie: m['especie'] as String,
+          fotoPath: m['foto_path'] as String?,
+        ),
+      )
+      .toList();
+  final conConsulta = ((row['consultas'] as List?) ?? const [])
+      .map((e) => (e as Map<String, dynamic>)['mascota_id'])
+      .whereType<String>()
+      .toSet();
+
+  return Cita(
+    id: row['id'] as String,
+    clinicaId: row['clinica_id'] as String,
+    clienteId: row['cliente_id'] as String,
+    veterinarioId: row['veterinario_id'] as String,
+    veterinarioNombre: veterinario?['nombre'] as String?,
+    fechaHora: DateTime.parse(row['fecha_hora'] as String).toUtc(),
+    duracionMin: (row['duracion_min'] as num).toInt(),
+    modalidad: ModalidadCita.desdeValor(row['modalidad'] as String),
+    direccion: row['direccion'] as String?,
+    motivo: row['motivo'] as String,
+    notas: row['notas'] as String?,
+    estado: EstadoCita.desdeValor(row['estado'] as String),
+    recordatorioEnviadoAt: row['recordatorio_enviado_at'] == null
+        ? null
+        : DateTime.parse(row['recordatorio_enviado_at'] as String).toUtc(),
+    clienteNombre: (cliente?['nombre'] as String?) ?? '',
+    clienteTelefono: cliente?['telefono'] as String?,
+    clienteDireccion: cliente?['direccion'] as String?,
+    mascotas: mascotas,
+    mascotasConConsulta: conConsulta,
+  );
 }
 
 /// Traducciones centralizadas de `PostgrestException.code` a mensajes en

@@ -75,12 +75,17 @@ class Cita {
     this.clienteTelefono,
     this.clienteDireccion,
     this.mascotasConConsulta = const {},
+    this.veterinarioNombre,
   });
 
   final String id;
   final String clinicaId;
   final String clienteId;
   final String veterinarioId;
+
+  /// Nombre del veterinario asignado (embed de `perfiles`); sirve para firmar
+  /// mensajes y marcar la cita en la agenda de equipo.
+  final String? veterinarioNombre;
   final DateTime fechaHora;
   final int duracionMin;
   final ModalidadCita modalidad;
@@ -116,6 +121,8 @@ class Cita {
   }
 
   Cita copyWith({
+    String? veterinarioId,
+    String? veterinarioNombre,
     DateTime? fechaHora,
     int? duracionMin,
     ModalidadCita? modalidad,
@@ -131,7 +138,8 @@ class Cita {
       id: id,
       clinicaId: clinicaId,
       clienteId: clienteId,
-      veterinarioId: veterinarioId,
+      veterinarioId: veterinarioId ?? this.veterinarioId,
+      veterinarioNombre: veterinarioNombre ?? this.veterinarioNombre,
       fechaHora: fechaHora ?? this.fechaHora,
       duracionMin: duracionMin ?? this.duracionMin,
       modalidad: modalidad ?? this.modalidad,

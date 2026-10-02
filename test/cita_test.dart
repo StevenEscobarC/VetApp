@@ -72,4 +72,14 @@ void main() {
       expect(conMascotas(['Luna', 'Rocky']).nombresMascotasCorto, 'Luna y Rocky');
     });
   });
+
+  group('Cita veterinario', () {
+    test('copyWith cambia el vet y conserva veterinarioNombre', () {
+      expect(citaColegaFixture.copyWith().veterinarioNombre, 'Luis Torres');
+      expect(
+        citaLunaHoy.copyWith(veterinarioId: 'vet-2').veterinarioId,
+        'vet-2',
+      );
+    });
+  });
 }

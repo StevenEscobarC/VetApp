@@ -276,3 +276,26 @@ final List<Cita> citasSemanaFixture = [
   citaCanceladaHoy,
   citaLunaHoy,
 ];
+
+/// Cita de un colega (vet-2) el mismo día que [citaLunaHoy] y solapada con
+/// ella (10:45-11:15 vs 10:30-11:00).
+final citaColegaFixture = Cita(
+  id: 'cita-colega',
+  clinicaId: 'cli-1',
+  clienteId: 'c-juan',
+  veterinarioId: 'vet-2',
+  veterinarioNombre: 'Luis Torres',
+  fechaHora: deBogota(2026, 9, 30, 10, 45),
+  duracionMin: 30,
+  modalidad: ModalidadCita.consultorio,
+  motivo: 'Control colega',
+  estado: EstadoCita.pendiente,
+  clienteNombre: 'Juan Gómez',
+  mascotas: const [_max],
+);
+
+/// [citasSemanaFixture] más la cita del colega.
+final List<Cita> citasEquipoFixture = [
+  ...citasSemanaFixture,
+  citaColegaFixture,
+];
