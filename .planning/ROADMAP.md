@@ -267,7 +267,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 05-12-PLAN.md — Tarjeta Inicio, acceso rápido "Vacunar" (Inicio/Agenda) y badges en lista de pacientes
+- [x] 05-12-PLAN.md — Tarjeta Inicio, acceso rápido "Vacunar" (Inicio/Agenda) y badges en lista de pacientes
 - [ ] 05-15-PLAN.md — Más > Datos de la clínica: el admin edita nombre/ciudad/dirección/teléfono y el logo (cámara/galería, recorte cuadrado, comprimido)
 - [ ] 05-16-PLAN.md — Logo de la clínica en el carné de la app y en el PDF (+ Caprasimo en el PDF, respaldo Figtree)
 - [ ] 05-17-PLAN.md — Logo en la página pública: la Edge Function firma el logo (300 s) y la página lo muestra con respaldo solo nombre
@@ -349,7 +349,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
 | 4. Agenda y Citas | 11/11 | Complete    | 2026-10-01 |
-| 5. Vacunación y Desparasitación | 10/17 | In Progress|  |
+| 5. Vacunación y Desparasitación | 11/17 | In Progress|  |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
 | 8. Dashboard y Diseño Visual | 0/TBD | Not started | - |
