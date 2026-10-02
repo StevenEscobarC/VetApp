@@ -43,6 +43,7 @@ Depende de la **Fase 4.1** (Equipo de la clínica): cada dosis registra qué vet
 - **D-16:** **Un link permanente por mascota**, que siempre muestra el carné actualizado, y **revocable**: "Regenerar link" invalida el anterior. Token no adivinable.
 - **D-17:** Compartir: **WhatsApp al dueño** (mensaje formal + link al teléfono +57 del cliente), **hoja de compartir nativa**, y **PDF descargable** del carné (`pdf`/`printing`, ya instalados). Sin código QR en esta fase.
 - **D-18:** El dueño lo ve **sin cuenta** (VAC-05).
+- **D-19:** El carné público y su PDF llevan un pie discreto **"Hecho con VetApp"** (crecimiento orgánico: cada carné compartido es marketing hacia dueños y otras clínicas). Decidido por el usuario 2026-10-02 a partir de la recomendación de `vetapp-negocio`. Si en la Fase 5.1 (Planes y límites) se decide ocultarlo en planes pagos, eso se resuelve allá; aquí siempre se muestra.
 
 ### Claude's Discretion
 - Schema exacto: tabla de dosis aplicadas (con `anulada`, `motivo_anulacion`, `externa`, `clinica_externa`, `producto`, `lote`, `duracion_elegida`/intervalo, `veterinario_id`), tablas de protocolos (global semilla + por clínica), cálculo de próxima dosis/estado (vista SQL o función vs dominio Dart — que no se desincronice), RLS y tests (vía `vetapp-supabase`). Reconciliar con la entidad existente `vacuna.dart` (eliminar `proximaDosis` como campo guardado, ampliar `TipoBiologico` o reemplazar el enum por el catálogo).

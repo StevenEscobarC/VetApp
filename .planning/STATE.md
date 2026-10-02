@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 04.1 complete (11/11) — ready to discuss Phase 05
-last_updated: 2026-10-02T04:12:07.086Z
-last_activity: 2026-10-02 -- Phase 04.1 execution started
+status: planning
+stopped_at: "Phase 5 + 4.1 context gathered — next: plan 04.1 (antes de la 5)"
+last_updated: "2026-10-02T04:21:22.903Z"
+last_activity: 2026-10-02
 progress:
-  total_phases: 10
-  completed_phases: 4
+  total_phases: 11
+  completed_phases: 5
   total_plans: 44
   completed_plans: 44
-  percent: 40
+  percent: 45
 ---
 
 # Project State
@@ -93,6 +93,7 @@ None yet.
 - Phase 9 added (2026-09-24): Directorio de Veterinarias — el cliente explora, busca y califica las clínicas de la plataforma, con reseñas públicas. Origen: propuesta del usuario durante la discusión de la Fase 2, colocada al final por su dependencia de Agenda (Fase 4). Requisitos DIR-01..05, REV-01..05 agregados a REQUIREMENTS.md.
 - Vinculación de cuenta cliente↔mascotas agregada (2026-09-24): `clientes` (vet-managed) y `perfiles` (cuenta CLIENTE autenticada) no tenían vínculo — decisión del usuario: el veterinario invita/vincula desde la ficha del cliente. Lado veterinario = CLI-05 (Fase 2, esta fase); lado cliente (reclamar el código, ver "Mis mascotas") = DIR-06 (Fase 9). Requiere columna nueva `clientes.perfiles_id` (nullable).
 - Phase 4.1 inserted after Phase 4: Equipo de la clínica (varios veterinarios por clínica: invitación por código, roles admin/veterinario, agenda por vet) — decidido en discuss de Fase 5 para que 5-8 nazcan multi-vet (URGENT)
+- Phase 5.1 inserted after Phase 5: Planes y límites (suscripción por clínica, límite de pacientes y miembros, pantalla Mi plan sin botón de pago, oferta Clínica al generar el primer código de invitación) — recomendado por vetapp-negocio, aprobado por el usuario 2026-10-02
 
 ### Quick Tasks Completed
 

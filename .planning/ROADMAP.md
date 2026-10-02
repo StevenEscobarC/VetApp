@@ -21,8 +21,10 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-10-01)
 
 - [x] **Phase 4: Agenda y Citas** - Calendario de citas con recordatorios locales y por WhatsApp (completed 2026-10-01)
-- [x] **Phase 4.1: Equipo de la clínica** (INSERTED) - Varios veterinarios por clínica: invitación por código, roles admin/veterinario, agenda por veterinario (completed 2026-10-02)
+- [x] **Phase 4.1: Equipo de la clínica** (INSERTED) - Varios veterinarios por clínica: invitación por código, roles admin/veterinario, agenda por veterinario
+ (completed 2026-10-02)
 - [ ] **Phase 5: Vacunación y Desparasitación** - Carné digital con cálculo automático de próxima dosis y enlace compartible
+- [ ] **Phase 5.1: Planes y límites** (INSERTED) - Suscripción por clínica: límites de pacientes/miembros, pantalla Mi plan (sin pago en la app), oferta Clínica al invitar
 - [ ] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo
 - [ ] **Phase 7: Facturación** - Cotizaciones/facturas en PDF con descuento automático de inventario
 - [ ] **Phase 8: Dashboard y Diseño Visual** - Resumen operativo real y diseño terracota/crema aplicado a toda la app
@@ -242,6 +244,16 @@ Plans:
 
 **Plans**: TBD
 **UI hint**: yes
+
+### Phase 05.1: Planes y límites (INSERTED)
+
+**Goal:** Cada clínica tiene un plan (Gratis / Pro / Clínica) que la app respeta — límite de pacientes en Gratis, límite de miembros según el plan, pantalla "Mi plan" sin botón de pago (cobro por fuera: Wompi / Mercado Pago, política de Google Play) y la oferta de 30 días del plan Clínica al generar el primer código de invitación — sin bloquear nunca la historia clínica existente. Estrategia de precios en `.planning/business/STRATEGY.md`.
+**Requirements**: TBD (definir en discuss-phase 5.1)
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.1 to break down)
 
 ### Phase 6: Inventario
 
