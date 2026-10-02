@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-10-01)
 
 - [x] **Phase 4: Agenda y Citas** - Calendario de citas con recordatorios locales y por WhatsApp (completed 2026-10-01)
-- [ ] **Phase 4.1: Equipo de la clínica** (INSERTED) - Varios veterinarios por clínica: invitación por código, roles admin/veterinario, agenda por veterinario
+- [x] **Phase 4.1: Equipo de la clínica** (INSERTED) - Varios veterinarios por clínica: invitación por código, roles admin/veterinario, agenda por veterinario (completed 2026-10-02)
 - [ ] **Phase 5: Vacunación y Desparasitación** - Carné digital con cálculo automático de próxima dosis y enlace compartible
 - [ ] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo
 - [ ] **Phase 7: Facturación** - Cotizaciones/facturas en PDF con descuento automático de inventario
@@ -210,7 +210,7 @@ Plans:
   3. Al retirar a un veterinario pierde acceso de inmediato; sus consultas, citas y vacunas siguen visibles con "Atendió: Dr(a). X" (ya no hay `ON DELETE CASCADE` que borre historia clínica)
   4. La agenda muestra "Mías" por defecto con filtro "Todas" (solo visible con 2+ veterinarios); cruces y recordatorios locales son por veterinario asignado; el WhatsApp va firmado por el veterinario asignado
   5. Un veterinario que trabaja solo no ve ningún cambio en su flujo (sin selectores ni filtros nuevos)
-**Plans:** 10/11 plans executed
+**Plans:** 11/11 plans complete
 **UI hint**: yes
 
 Plans:
@@ -224,7 +224,7 @@ Plans:
 - [x] 04.1-08-PLAN.md — Asignar/reasignar cita a un colega
 - [x] 04.1-09-PLAN.md — Recordatorios por veterinario y WhatsApp firmado por el asignado
 - [x] 04.1-10-PLAN.md — Acceso revocado (crear mi clínica / unirme con código)
-- [ ] 04.1-11-PLAN.md — Gate + probe en vivo + auditoría de marca + UAT vetapp-qa
+- [x] 04.1-11-PLAN.md — Gate + probe en vivo + auditoría de marca + UAT vetapp-qa
 
 ### Phase 5: Vacunación y Desparasitación
 
