@@ -27,6 +27,11 @@ class FakeAuthProfileNotifier extends AuthProfileNotifier {
   }
 
   @override
+  Future<void> refrescar() async {
+    state = AsyncData<AuthProfile?>(profile);
+  }
+
+  @override
   Future<void> signOut() async {
     state = const AsyncData<AuthProfile?>(null);
   }

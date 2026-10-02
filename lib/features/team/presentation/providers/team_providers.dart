@@ -91,6 +91,22 @@ class TeamActions {
     _refrescar(miembroId);
   }
 
+  Future<void> crearMiClinica(String nombre) async {
+    await _ref.read(teamRepositoryProvider).crearMiClinica(nombre);
+    _refrescarPerfil();
+  }
+
+  Future<void> unirseAClinica(String codigo) async {
+    await _ref.read(teamRepositoryProvider).unirseAClinica(codigo);
+    _refrescarPerfil();
+  }
+
+  void _refrescarPerfil() {
+    _ref.invalidate(teamProvider);
+    _ref.invalidate(agendaSemanaProvider);
+    _ref.invalidate(authProfileProvider);
+  }
+
   void _refrescar(String miembroId) {
     _ref.invalidate(teamProvider);
     _ref.invalidate(agendaSemanaProvider);

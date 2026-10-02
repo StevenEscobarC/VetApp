@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -32,10 +33,16 @@ class AuthProfileNotifier extends AsyncNotifier<AuthProfile?> {
       final event = next.value?.event;
       if (event == AuthChangeEvent.signedIn ||
           event == AuthChangeEvent.signedOut ||
-          event == AuthChangeEvent.userUpdated) {
+          event == AuthChangeEvent.userUpdated ||
+          event == AuthChangeEvent.tokenRefreshed) {
         ref.invalidateSelf();
       }
     });
+
+    // Un veterinario retirado conserva su JWT: al volver a la app se relee el
+    // perfil para que el router lo mande a /acceso-revocado (T6).
+    final lifecycle = AppLifecycleListener(onResume: ref.invalidateSelf);
+    ref.onDispose(lifecycle.dispose);
 
     if (repo.currentSession == null) return null;
     try {
@@ -45,6 +52,8 @@ class AuthProfileNotifier extends AsyncNotifier<AuthProfile?> {
       return null;
     }
   }
+
+  Future<void> refrescar() async => ref.invalidateSelf();
 
   Future<void> signOut() async {
     await ref.read(authRepositoryProvider).signOut();
