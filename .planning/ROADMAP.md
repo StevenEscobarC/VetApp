@@ -242,7 +242,7 @@ Plans:
   4. El veterinario puede generar un link público de solo lectura con el carné de vacunación de una mascota, sin exponer la historia clínica completa
   5. El dueño puede ver el carné de vacunación compartido sin necesidad de cuenta
 
-**Plans**: 13 plans
+**Plans**: 16 plans
 
 Plans:
 **Wave 1**
@@ -253,23 +253,29 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-04-PLAN.md — Smoke Q1..Q40 (185 checks) + sondas + [BLOCKING] aplicar en vivo (MCP) y pegar smoke
 - [x] 05-05-PLAN.md — Registrar dosis (/dosis/nueva): biológico, fecha, chips de duración, Otro, externa, próxima calculada
 - [x] 05-06-PLAN.md — Compartir carné: enlace permanente, WhatsApp, hoja nativa, PDF "Hecho con VetApp", regenerar
+- [ ] 05-14-PLAN.md — Logo de la clínica (D-26..D-28): logo_path, bucket privado clinica-logos, RPC actualizar_clinica solo admin, logo_path en el carné + contrato Dart (lib/features/clinic)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
+- [ ] 05-04-PLAN.md — Smoke Q1..Q48 (193 checks, incl. logo) + sondas + [BLOCKING] aplicar en vivo (MCP) y pegar smoke
 - [ ] 05-07-PLAN.md — Carné en la ficha (/pacientes/:id/carne), tarjetas por biológico, anular con motivo, badge
 - [ ] 05-08-PLAN.md — Más > Protocolos (catálogo editable, solo admin en multi-vet)
 - [ ] 05-09-PLAN.md — Vacunas pendientes (/vacunas): Recordar/Agendar/Registrar/Descartar-posponer
 - [ ] 05-10-PLAN.md — Completar cita -> registrar dosis vinculada a la cita
-- [ ] 05-11-PLAN.md — [BLOCKING] Desplegar Edge Function + GitHub Pages, sondas y README (respaldo documentado)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 05-12-PLAN.md — Tarjeta Inicio, acceso rápido "Vacunar" (Inicio/Agenda) y badges en lista de pacientes
+- [ ] 05-15-PLAN.md — Más > Datos de la clínica: el admin edita nombre/ciudad/dirección/teléfono y el logo (cámara/galería, recorte cuadrado, comprimido)
+- [ ] 05-16-PLAN.md — Logo de la clínica en el carné: app, PDF y página pública (URL firmada 300 s desde la Edge Function, respaldo solo nombre)
 
 **Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 05-11-PLAN.md — [BLOCKING] Desplegar Edge Function + GitHub Pages, sondas y README (respaldo documentado)
+
+**Wave 6** *(blocked on Wave 5 completion)*
 
 - [ ] 05-13-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca, UAT vetapp-qa y verificación en celular real
 **UI hint**: yes
