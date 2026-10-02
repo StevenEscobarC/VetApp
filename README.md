@@ -89,6 +89,33 @@ Agrega membresía y roles (`perfiles.rol_clinica`, `activo`, `matricula`), códi
 2. En una consulta nueva, pega y ejecuta el archivo completo [`supabase/tests/rls_smoke_test.sql`](supabase/tests/rls_smoke_test.sql). Espera el mensaje `RLS SMOKE: PASS (145 checks)` (115 de las Fases 1-4 + 30 de la Fase 4.1); termina en error a propósito para revertir los datos de prueba.
 3. Corre `bash supabase/tests/verify_live_schema.sh` — debe imprimir `OK citas veterinario embed`, `OK consultas veterinario embed` y terminar con `LIVE_SCHEMA_OK`.
 
+## Carné público (Fase 5)
+
+El dueño de la mascota abre un enlace y ve el carné de vacunación y desparasitación sin cuenta ni instalación.
+
+**Arquitectura:** página estática en GitHub Pages (`public_carne/`, publicada en `https://stevenescobarc.github.io/VetApp/c/`) -> Edge Function `carne` (JSON, `verify_jwt=false`) -> RPC `carne_publico`, ejecutable solo con `service_role`. La página nunca habla directo con la base de datos.
+
+**Por qué no HTML desde Supabase:** el gateway de Edge Functions reescribe las respuestas HTML a `text/plain`, así que la página se sirve desde Pages y la función solo devuelve JSON.
+
+**Pasos de despliegue**
+
+1. Desplegar la función `supabase/functions/carne/index.ts` con `verify_jwt=false` (CLI `supabase functions deploy carne --no-verify-jwt` o el MCP de Supabase). `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` los inyecta el runtime; `CARNE_ORIGEN` por defecto es `https://stevenescobarc.github.io`.
+2. Definir la variable del repo (no es secreta): `gh variable set CARNE_FUNCTION_URL --body "https://<project-ref>.supabase.co/functions/v1/carne"`. El workflow `.github/workflows/pages-carne.yml` genera `config.js` con ella.
+3. Activar Pages con fuente GitHub Actions: `gh api -X POST repos/StevenEscobarC/VetApp/pages -f build_type=workflow` (o Settings > Pages > Source: GitHub Actions).
+4. `git push origin master`; el workflow "Carné público (GitHub Pages)" publica `public_carne/`.
+5. Verificar: `REQUIRE_CARNE_FN=1 bash supabase/tests/verify_live_schema.sh` debe terminar con `LIVE_SCHEMA_OK`.
+
+**App Flutter:** el enlace que copia la app usa por defecto `https://stevenescobarc.github.io/VetApp/c/`. Se puede cambiar con `--dart-define=CARNE_BASE_URL=https://otro.dominio/c/`.
+
+**Privacidad**
+
+- El token va en el fragmento `#` de la URL: no llega a los logs del servidor ni se envía como `Referer` (la página usa `no-referrer`) (D-15).
+- Token inválido o inexistente responde siempre `404 {"error":"no_encontrado"}` sin tocar la base de datos si no cumple el formato (D-20).
+- Los enlaces se pueden revocar y la respuesta no expone `logo_path` ni `foto_path`; el logo de la clínica y la foto se entregan como URL firmadas de corta vida (el logo, 300 s, D-26) (D-23).
+- CORS solo permite el origen de Pages, nunca `*` ni el origen del solicitante.
+
+**FALLBACK (no habilitado; brecha futura):** si el despliegue de la Edge Function quedara bloqueado, se otorgaría a `anon` una RPC pública sin foto (variante de `carne_publico` sin `foto_path`, con el token validado por regex) y la página apuntaría a `/rest/v1/rpc/<rpc>` con la clave anon. Debe planificarse con `/gsd:plan-phase 5 --gaps`; hoy no está activo.
+
 ## Ejecutar Flutter
 
 No se guardan claves en el código fuente. Crea un archivo `dart_define.json` en la raíz del repo (ya está en `.gitignore`, nunca se sube) con este contenido:
