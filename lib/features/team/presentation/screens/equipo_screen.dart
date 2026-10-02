@@ -172,7 +172,9 @@ class _SkeletonTile extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: AppColors.surfaceMuted,
-            borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+            borderRadius: BorderRadius.all(
+              Radius.circular(AppSpacing.radiusMd),
+            ),
           ),
           child: SizedBox.expand(),
         ),

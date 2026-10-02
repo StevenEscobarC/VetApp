@@ -26,6 +26,7 @@ class MasScreen extends ConsumerWidget {
         .value
         ?.where((m) => m.activo)
         .length;
+    final matricula = ref.watch(authProfileProvider).value?.matricula;
     return Scaffold(
       appBar: const AppTopBar(title: 'Más'),
       body: Padding(
@@ -33,6 +34,33 @@ class MasScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            AppCard(
+              onTap: () => context.push('/mas/perfil'),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_outline),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Mi perfil',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                    if (matricula != null && matricula.isNotEmpty)
+                      Text(
+                        'Mat. $matricula',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             AppCard(
               onTap: () => context.push('/mas/equipo'),
               child: ConstrainedBox(
@@ -50,8 +78,9 @@ class MasScreen extends ConsumerWidget {
                     if (miembros != null)
                       Text(
                         miembros == 1 ? '1 miembro' : '$miembros miembros',
-                        style: Theme.of(context).textTheme.labelLarge
-                            ?.copyWith(color: AppColors.textSecondary),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     const Icon(Icons.chevron_right),
                   ],
