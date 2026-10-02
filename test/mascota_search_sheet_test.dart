@@ -67,24 +67,21 @@ Future<void> _abrir(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets(
-    'buscar "lu" lista Luna con especie, dueño y chip; tocar abre el '
-    'formulario de dosis',
-    (tester) async {
-      await _abrir(tester);
-      await tester.enterText(find.byType(TextFormField), 'lu');
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.pumpAndSettle();
+  testWidgets('buscar "lu" lista Luna con especie, dueño y chip; tocar abre el '
+      'formulario de dosis', (tester) async {
+    await _abrir(tester);
+    await tester.enterText(find.byType(TextFormField), 'lu');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Luna'), findsOneWidget);
-      expect(find.text('Gato · Rita Gómez'), findsOneWidget);
-      expect(find.text('Vencida'), findsOneWidget);
+    expect(find.text('Luna'), findsOneWidget);
+    expect(find.text('Gato · Rita Gómez'), findsOneWidget);
+    expect(find.text('Vencida'), findsOneWidget);
 
-      await tester.tap(find.text('Luna'));
-      await tester.pumpAndSettle();
-      expect(find.text('DOSIS m-2'), findsOneWidget);
-    },
-  );
+    await tester.tap(find.text('Luna'));
+    await tester.pumpAndSettle();
+    expect(find.text('DOSIS m-2'), findsOneWidget);
+  });
 
   testWidgets('sin resultados ofrece Registrar paciente nuevo', (tester) async {
     await _abrir(tester);
