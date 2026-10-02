@@ -166,6 +166,7 @@ class Carne {
     required this.duenoTelefono,
     required this.clinicaNombre,
     required this.clinicaCiudad,
+    this.clinicaLogoPath,
     required this.biologicos,
     required this.dosis,
   });
@@ -186,6 +187,10 @@ class Carne {
       duenoTelefono: (d['telefono'] as String?) ?? '',
       clinicaNombre: (c['nombre'] as String?) ?? '',
       clinicaCiudad: (c['ciudad'] as String?) ?? '',
+      clinicaLogoPath: switch (c['logo_path']) {
+        final String p when p.isNotEmpty => p,
+        _ => null,
+      },
       biologicos: [
         for (final b in (j['biologicos'] as List? ?? const []))
           BiologicoCarne.desdeJson(b as Map<String, dynamic>),
@@ -208,6 +213,9 @@ class Carne {
   final String duenoTelefono;
   final String clinicaNombre;
   final String clinicaCiudad;
+
+  /// Ruta en el bucket `clinica-logos` (nunca una URL); null si no hay logo.
+  final String? clinicaLogoPath;
   final List<BiologicoCarne> biologicos;
   final List<DosisCarne> dosis;
 

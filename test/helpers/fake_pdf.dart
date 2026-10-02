@@ -18,6 +18,13 @@ Future<({pw.Font regular, pw.Font bold})> fuentesQueFallan() {
   throw Exception('sin red');
 }
 
+/// Fuente de display offline (Caprasimo en producción) para el carné PDF.
+Future<pw.Font> fuenteDisplayDePrueba() async => pw.Font.timesBold();
+
+/// Simula la descarga fallida de la fuente de display: el carné debe seguir
+/// generándose con Figtree semibold.
+Future<pw.Font> fuenteDisplayQueFalla() => throw Exception('sin red');
+
 /// Registra cada llamada a `compartirPdfProvider` sin tocar el share sheet
 /// nativo del sistema operativo — mismo patrón "resultado fijo o error fijo
 /// + bitácora de llamadas" que [FakeMascotaFotoDatasource]

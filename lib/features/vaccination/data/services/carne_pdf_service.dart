@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
@@ -20,6 +21,33 @@ Future<({pw.Font regular, pw.Font bold})> _cargarFuentesReales() async {
   return (regular: regular, bold: bold);
 }
 
+/// Carga la fuente de display (Caprasimo) del PDF. Seam aparte del
+/// [CargarFuentesPdf] compartido para no tocar el PDF de historia clínica.
+typedef CargarFuenteDisplayPdf = Future<pw.Font> Function();
+
+/// Descarga los bytes del logo de la clínica a partir de su ruta en storage.
+typedef CargarLogoPdf = Future<Uint8List> Function(String path);
+
+/// Decide si unos bytes son una imagen que el renderizador puede decodificar.
+typedef ValidarImagenPdf = Future<bool> Function(Uint8List bytes);
+
+/// Valida con `dart:ui` que [bytes] decodifican a una imagen; así unos bytes
+/// corruptos nunca llegan a `pw.MemoryImage` ni rompen `doc.save()`.
+Future<bool> imagenDecodificable(Uint8List bytes) async {
+  try {
+    final codec = await ui.instantiateImageCodec(bytes);
+    try {
+      final frame = await codec.getNextFrame();
+      frame.image.dispose();
+      return true;
+    } finally {
+      codec.dispose();
+    }
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Nombre corto del propietario (D-20): primera palabra + inicial de la
 /// segunda ('María F.'); igual que `_nombre_corto` en SQL.
 String propietarioCorto(String nombre) {
@@ -36,10 +64,56 @@ PdfColor _color(int argb) => PdfColor.fromInt(argb);
 /// Solo contiene datos mínimos: propietario como 'Nombre I.', sin teléfono
 /// ni dirección del dueño, sin dosis anuladas ni historia clínica.
 class CarnePdfService {
-  CarnePdfService({CargarFuentesPdf? cargarFuentes})
-    : _cargarFuentes = cargarFuentes ?? _cargarFuentesReales;
+  CarnePdfService({
+    CargarFuentesPdf? cargarFuentes,
+    CargarFuenteDisplayPdf? cargarFuenteDisplay,
+    CargarLogoPdf? cargarLogo,
+    ValidarImagenPdf? validarImagen,
+    Duration timeoutLogo = const Duration(seconds: 5),
+  }) : _cargarFuentes = cargarFuentes ?? _cargarFuentesReales,
+       _cargarFuenteDisplay = cargarFuenteDisplay,
+       _cargarLogo = cargarLogo,
+       _validarImagen = validarImagen ?? imagenDecodificable,
+       _timeoutLogo = timeoutLogo;
 
   final CargarFuentesPdf _cargarFuentes;
+  final CargarFuenteDisplayPdf? _cargarFuenteDisplay;
+  final CargarLogoPdf? _cargarLogo;
+  final ValidarImagenPdf _validarImagen;
+  final Duration _timeoutLogo;
+
+  /// Estilos Display 28 (nombre de la mascota) y Heading 20 ('Carné de
+  /// vacunación') con la fuente de display (UI-SPEC Typography).
+  @visibleForTesting
+  static ({pw.TextStyle nombre, pw.TextStyle titulo}) estilosTitulo(
+    pw.Font display,
+  ) => (
+    nombre: pw.TextStyle(font: display, fontSize: 28),
+    titulo: pw.TextStyle(font: display, fontSize: 20),
+  );
+
+  Future<pw.Font> _fuenteDisplay(pw.Font respaldo) async {
+    final cargar = _cargarFuenteDisplay;
+    if (cargar == null) return respaldo;
+    try {
+      return await cargar();
+    } catch (_) {
+      return respaldo;
+    }
+  }
+
+  /// Logo decodificado o null; nunca lanza (D-26, T-05-54).
+  Future<pw.MemoryImage?> _logo(String? path) async {
+    final cargar = _cargarLogo;
+    if (path == null || path.isEmpty || cargar == null) return null;
+    try {
+      final bytes = await cargar(path).timeout(_timeoutLogo);
+      if (!await _validarImagen(bytes)) return null;
+      return pw.MemoryImage(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
 
   static const _columnas = [
     'Fecha',
@@ -100,6 +174,9 @@ class CarnePdfService {
   }) async {
     try {
       final fuentes = await _cargarFuentes();
+      final display = await _fuenteDisplay(fuentes.bold);
+      final titulos = estilosTitulo(display);
+      final logo = await _logo(carne.clinicaLogoPath);
       final regular = pw.TextStyle(font: fuentes.regular, fontSize: 10);
       final bold = pw.TextStyle(font: fuentes.bold, fontSize: 10);
       final primary = _color(AppColors.primary.toARGB32());
@@ -211,8 +288,19 @@ class CarnePdfService {
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
                 children: [
-                  // Hueco reservado para el logo de la clínica (D-26, plan
-                  // posterior): se insertará aquí, junto al nombre.
+                  if (logo != null) ...[
+                    pw.ClipRRect(
+                      horizontalRadius: 4,
+                      verticalRadius: 4,
+                      child: pw.Image(
+                        logo,
+                        width: 36,
+                        height: 36,
+                        fit: pw.BoxFit.cover,
+                      ),
+                    ),
+                    pw.SizedBox(width: 8),
+                  ],
                   pw.Expanded(
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -226,10 +314,7 @@ class CarnePdfService {
                       ],
                     ),
                   ),
-                  pw.Text(
-                    'Carné de vacunación',
-                    style: bold.copyWith(fontSize: 16),
-                  ),
+                  pw.Text('Carné de vacunación', style: titulos.titulo),
                 ],
               ),
               pw.SizedBox(height: 6),
@@ -264,7 +349,7 @@ class CarnePdfService {
             ),
           ),
           build: (context) => [
-            pw.Text(carne.mascotaNombre, style: bold.copyWith(fontSize: 22)),
+            pw.Text(carne.mascotaNombre, style: titulos.nombre),
             pw.Text(especieRaza, style: regular),
             if (nacimiento != null)
               pw.Text('Nació el ${formatearFecha(nacimiento)}', style: regular),

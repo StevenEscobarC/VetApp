@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
+import 'package:vetapp/features/clinic/domain/clinica_failure.dart';
+import 'package:vetapp/features/clinic/presentation/providers/clinica_providers.dart';
 import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
 import 'package:vetapp/features/vaccination/domain/entities/protocolo.dart';
 import 'package:vetapp/features/vaccination/domain/vacuna_failure.dart';
@@ -82,6 +85,9 @@ Carne _carne({
   List<BiologicoCarne>? biologicos,
   List<DosisCarne>? dosis,
   bool vetActivo = true,
+  String clinicaNombre = 'Clínica',
+  String clinicaCiudad = 'Bogotá',
+  String? clinicaLogoPath,
 }) => Carne(
   hoy: DateTime.utc(2026, 10, 2),
   mascotaId: 'm-1',
@@ -90,8 +96,9 @@ Carne _carne({
   raza: '',
   duenoNombre: 'Rita',
   duenoTelefono: '3001112233',
-  clinicaNombre: 'Clínica',
-  clinicaCiudad: 'Bogotá',
+  clinicaNombre: clinicaNombre,
+  clinicaCiudad: clinicaCiudad,
+  clinicaLogoPath: clinicaLogoPath,
   biologicos:
       biologicos ??
       [
@@ -169,6 +176,7 @@ Carne _carne({
 Widget _app({
   required FakeVacunaRepository repo,
   List<String>? ubicaciones,
+  List<Override> extra = const [],
 }) {
   return routerHarness(
     initialLocation: '/pacientes/m-1/carne',
@@ -186,7 +194,7 @@ Widget _app({
         },
       ),
     ],
-    overrides: [vacunaRepositoryProvider.overrideWithValue(repo)],
+    overrides: [vacunaRepositoryProvider.overrideWithValue(repo), ...extra],
   );
 }
 
@@ -197,6 +205,89 @@ void _pantallaAlta(WidgetTester tester) {
 }
 
 void main() {
+  const rutaLogo = 'c1/logo-1700000000000.jpg';
+  final logo = find.byKey(const Key('logo-clinica'));
+
+  testWidgets('membrete sin logo: solo nombre y ciudad, sin logo', (
+    tester,
+  ) async {
+    _pantallaAlta(tester);
+    final repo = FakeVacunaRepository(
+      carnes: {
+        'm-1': _carne(
+          clinicaNombre: 'Veterinaria El Roble',
+          clinicaCiudad: 'Medellín',
+        ),
+      },
+    );
+    await tester.pumpWidget(_app(repo: repo));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Veterinaria El Roble · Medellín'), findsOneWidget);
+    expect(logo, findsNothing);
+  });
+
+  testWidgets('membrete con logo lo muestra junto al nombre', (tester) async {
+    _pantallaAlta(tester);
+    final repo = FakeVacunaRepository(
+      carnes: {
+        'm-1': _carne(
+          clinicaNombre: 'Veterinaria El Roble',
+          clinicaCiudad: 'Medellín',
+          clinicaLogoPath: rutaLogo,
+        ),
+      },
+    );
+    await tester.pumpWidget(
+      _app(
+        repo: repo,
+        extra: [
+          clinicaLogoUrlProvider(
+            rutaLogo,
+          ).overrideWith((ref) async => 'https://example.test/y'),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(logo, findsOneWidget);
+    expect(find.text('Veterinaria El Roble · Medellín'), findsOneWidget);
+  });
+
+  testWidgets('membrete: si el logo falla queda solo el nombre', (
+    tester,
+  ) async {
+    _pantallaAlta(tester);
+    final repo = FakeVacunaRepository(
+      carnes: {
+        'm-1': _carne(
+          clinicaNombre: 'Veterinaria El Roble',
+          clinicaCiudad: 'Medellín',
+          clinicaLogoPath: rutaLogo,
+        ),
+      },
+    );
+    await tester.pumpWidget(
+      _app(
+        repo: repo,
+        extra: [
+          clinicaLogoUrlProvider(rutaLogo).overrideWith(
+            (ref) => throw const ClinicaFailure('No pudimos cargar el logo.'),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(logo, findsNothing);
+    expect(find.text('Veterinaria El Roble · Medellín'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('agrupa por biológico: vencida primero, luego alfabético', (
     tester,
   ) async {
