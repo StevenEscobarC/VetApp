@@ -68,6 +68,28 @@ else
 fi
 rm -f "$inv_body"
 
+# Fase 5: las 4 tablas de vacunación no conceden nada a anon (revoke all + RLS solo veterinarios).
+# Se acepta 401/403/404 (sin privilegio) o 200 con cuerpo [] -- nunca filas.
+for t in protocolos_vacunacion dosis_aplicadas vacuna_alertas carne_enlaces; do
+  col=id
+  [ "$t" = "vacuna_alertas" ] && col=dosis_ref_id
+  [ "$t" = "carne_enlaces" ] && col=mascota_id
+  t_body=$(mktemp)
+  t_code=$(curl -s -o "$t_body" -w '%{http_code}' \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+    "$SUPABASE_URL/rest/v1/$t?select=$col&limit=1")
+  if [ "$t_code" = "401" ] || [ "$t_code" = "403" ] || [ "$t_code" = "404" ]; then
+    echo "OK $t protegida $t_code"
+  elif [ "$t_code" = "200" ] && [ "$(tr -d '[:space:]' < "$t_body")" = "[]" ]; then
+    echo "OK $t 200 sin filas"
+  else
+    echo "FAIL $t $t_code"
+    any_fail=1
+  fi
+  rm -f "$t_body"
+done
+
 anon_code=$(curl -s -o /dev/null -w '%{http_code}' \
   -X POST \
   -H "apikey: $SUPABASE_ANON_KEY" \
@@ -84,7 +106,7 @@ else
   any_fail=1
 fi
 
-for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario generar_invitacion_clinica revocar_invitacion retirar_miembro cambiar_rol_miembro crear_mi_clinica unirse_a_clinica es_admin_clinica es_miembro_activo es_autor_en_mi_clinica consumir_invitacion; do
+for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario generar_invitacion_clinica revocar_invitacion retirar_miembro cambiar_rol_miembro crear_mi_clinica unirse_a_clinica es_admin_clinica es_miembro_activo es_autor_en_mi_clinica consumir_invitacion protocolos_efectivos guardar_protocolo restablecer_protocolo desactivar_protocolo registrar_dosis anular_dosis previsualizar_dosis carne_de_mascota vacunas_pendientes vacunas_resumen vacunas_resumen_mascotas gestionar_alerta_vacuna obtener_o_crear_enlace_carne regenerar_enlace_carne carne_publico actualizar_clinica; do
   payload="{}"
   case "$rpc" in
     revocar_invitacion|es_miembro_activo|es_autor_en_mi_clinica)
@@ -123,6 +145,36 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
     actualizar_cita)
       payload='{"p_cita_id":"00000000-0000-0000-0000-000000000000","p_mascota_ids":["00000000-0000-0000-0000-000000000000"],"p_fecha_hora":"2026-01-01T15:00:00Z"}'
       ;;
+    protocolos_efectivos)
+      payload='{"p_especie":"perro"}'
+      ;;
+    guardar_protocolo)
+      payload='{"p_codigo":"probe","p_nombre":"probe","p_tipo":"vacuna","p_especies":["perro"],"p_dosis_serie":1,"p_intervalo_serie_dias":null,"p_intervalo_refuerzo_dias":null,"p_opciones_duracion_dias":[]}'
+      ;;
+    restablecer_protocolo|desactivar_protocolo)
+      payload='{"p_codigo":"probe"}'
+      ;;
+    registrar_dosis)
+      payload='{"p_mascota_id":"00000000-0000-0000-0000-000000000000","p_codigo_protocolo":"polivalente","p_biologico_nombre":null,"p_fecha_aplicacion":"2026-01-01"}'
+      ;;
+    anular_dosis)
+      payload='{"p_dosis_id":"00000000-0000-0000-0000-000000000000","p_motivo":"probe"}'
+      ;;
+    previsualizar_dosis)
+      payload='{"p_mascota_id":"00000000-0000-0000-0000-000000000000","p_codigo_protocolo":"polivalente","p_fecha_aplicacion":"2026-01-01"}'
+      ;;
+    carne_de_mascota|obtener_o_crear_enlace_carne|regenerar_enlace_carne)
+      payload='{"p_mascota_id":"00000000-0000-0000-0000-000000000000"}'
+      ;;
+    gestionar_alerta_vacuna)
+      payload='{"p_dosis_ref_id":"00000000-0000-0000-0000-000000000000","p_accion":"descartar"}'
+      ;;
+    carne_publico)
+      payload='{"p_token":"0000000000000000000000000000000000000000000000000000000000000000"}'
+      ;;
+    actualizar_clinica)
+      payload='{"p_nombre":"probe","p_ciudad":"","p_direccion":"","p_telefono":"","p_logo_path":null}'
+      ;;
   esac
 
   rpc_code=$(curl -s -o /dev/null -w '%{http_code}' \
@@ -137,6 +189,8 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
     echo "OK rpc $rpc protegido $rpc_code"
   elif [ "$rpc_code" = "404" ] && { [ "$rpc" = "crear_perfil_nuevo_usuario" ] || [ "$rpc" = "consumir_invitacion" ]; }; then
     echo "OK rpc $rpc no expuesta 404 (función de trigger)"
+  elif [ "$rpc_code" = "404" ] && [ "$rpc" = "carne_publico" ]; then
+    echo "OK rpc carne_publico no expuesta a anon 404 (solo service_role)"
   elif [ "$rpc_code" = "404" ]; then
     echo "FAIL rpc $rpc 404 (no aplicada)"
     any_fail=1
@@ -170,7 +224,7 @@ rm -f "$embed_body"
 # Sonda de embeds de la Fase 4.1: nombre del veterinario asignado/autor vía las FK a perfiles.
 # Con anon, RLS oculta todo: se espera 200 con cuerpo [].
 probe_embed() {
-  local table="$1" select="$2" label="$3" body code
+  local table="$1" select="$2" label="$3" allow_denied="${4:-}" body code
   body=$(mktemp)
   code=$(curl -s -G -o "$body" -w '%{http_code}' \
     -H "apikey: $SUPABASE_ANON_KEY" \
@@ -180,6 +234,8 @@ probe_embed() {
     "$SUPABASE_URL/rest/v1/$table")
   if [ "$code" = "200" ] && [ "$(tr -d '[:space:]' < "$body")" = "[]" ]; then
     echo "OK $label"
+  elif [ -n "$allow_denied" ] && { [ "$code" = "401" ] || [ "$code" = "403" ]; }; then
+    echo "OK $label (anon sin privilegio $code; el hint de la FK resolvió, no hubo 400)"
   else
     echo "FAIL $label $code"
     cat "$body"
@@ -190,6 +246,44 @@ probe_embed() {
 }
 probe_embed citas '*, veterinario:perfiles!citas_veterinario_perfil_fkey(nombre)' 'citas veterinario embed'
 probe_embed consultas '*, veterinario:perfiles!consultas_veterinario_perfil_fkey(nombre, activo)' 'consultas veterinario embed'
+# Fase 5: el hint dosis_veterinario_perfil_fkey lo usa SupabaseVacunaRepository. anon no tiene
+# privilegios sobre dosis_aplicadas: [] o 401/403 es correcto; 400 significa hint equivocado.
+probe_embed dosis_aplicadas '*, veterinario:perfiles!dosis_veterinario_perfil_fkey(nombre, matricula, activo)' 'dosis veterinario embed' allow_denied
+
+# Fase 5 (D-26): el bucket clinica-logos es privado; la URL pública no debe servir nada.
+logo_code=$(curl -s -o /dev/null -w '%{http_code}' \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  "$SUPABASE_URL/storage/v1/object/public/clinica-logos/00000000-0000-0000-0000-000000000000/logo-1700000000000.jpg")
+if [ "$logo_code" = "200" ]; then
+  echo "FAIL clinica-logos público 200"
+  any_fail=1
+elif [ "$logo_code" = "400" ] || [ "$logo_code" = "401" ] || [ "$logo_code" = "403" ] || [ "$logo_code" = "404" ]; then
+  echo "OK clinica-logos privado $logo_code"
+else
+  echo "FAIL clinica-logos respuesta inesperada $logo_code"
+  any_fail=1
+fi
+
+# Fase 5 (VAC-04): Edge Function pública `carne`. Un token inválido responde 404 no_encontrado.
+# Mientras no esté desplegada se imprime PENDIENTE (REQUIRE_CARNE_FN=1 lo convierte en FAIL).
+fn_body=$(mktemp)
+fn_code=$(curl -s -o "$fn_body" -w '%{http_code}' \
+  -X POST \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"token":"xx"}' \
+  "$SUPABASE_URL/functions/v1/carne" || true)
+if [ "$fn_code" = "404" ] && grep -q "no_encontrado" "$fn_body"; then
+  echo "OK carne edge function (token inválido -> 404)"
+elif [ "${REQUIRE_CARNE_FN:-0}" = "1" ]; then
+  echo "FAIL carne edge function $fn_code"
+  any_fail=1
+else
+  echo "PENDIENTE carne edge function (no desplegada aún)"
+fi
+rm -f "$fn_body"
 
 if [ "$any_fail" -ne 0 ]; then
   exit 1
