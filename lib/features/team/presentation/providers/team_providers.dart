@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/data/supabase_client_provider.dart';
+import '../../../../core/data/clock_provider.dart';
+import '../../../appointments/presentation/providers/citas_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/repositories/supabase_team_repository.dart';
 import '../../domain/invitacion.dart';
@@ -66,6 +68,36 @@ class TeamActions {
   Future<void> revocarInvitacion(String id) async {
     await _ref.read(teamRepositoryProvider).revocarInvitacion(id);
     _ref.invalidate(invitacionVigenteProvider);
+  }
+
+  Future<int> contarCitasAbiertas(String miembroId) {
+    return _ref
+        .read(teamRepositoryProvider)
+        .contarCitasAbiertas(miembroId, _ref.read(clockProvider)());
+  }
+
+  /// Retira a [miembroId] y devuelve cuántas citas se reasignaron. Las citas
+  /// movidas obligan a resincronizar agenda y recordatorios locales (D-09).
+  Future<int> retirar(String miembroId, {String? reasignarA}) async {
+    final n = await _ref
+        .read(teamRepositoryProvider)
+        .retirarMiembro(miembroId, reasignarA: reasignarA);
+    _refrescar(miembroId);
+    return n;
+  }
+
+  Future<void> cambiarRol(String miembroId, String rol) async {
+    await _ref.read(teamRepositoryProvider).cambiarRol(miembroId, rol);
+    _refrescar(miembroId);
+  }
+
+  void _refrescar(String miembroId) {
+    _ref.invalidate(teamProvider);
+    _ref.invalidate(agendaSemanaProvider);
+    _ref.read(citasRevisionProvider.notifier).incrementar();
+    if (_ref.read(authProfileProvider).value?.id == miembroId) {
+      _ref.invalidate(authProfileProvider);
+    }
   }
 }
 

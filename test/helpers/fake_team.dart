@@ -47,6 +47,33 @@ class FakeTeamRepository implements SupabaseTeamRepository {
     );
   }
 
+  /// Citas abiertas que devuelve [contarCitasAbiertas].
+  int citasAbiertas = 0;
+
+  /// Error para [retirarMiembro] / [cambiarRol] / [contarCitasAbiertas].
+  Object? errorCambio;
+  final List<(String, String?)> retiradas = [];
+  final List<(String, String)> rolesCambiados = [];
+
+  @override
+  Future<int> contarCitasAbiertas(String veterinarioId, DateTime desde) async {
+    if (errorCambio != null) throw errorCambio!;
+    return citasAbiertas;
+  }
+
+  @override
+  Future<int> retirarMiembro(String miembroId, {String? reasignarA}) async {
+    if (errorCambio != null) throw errorCambio!;
+    retiradas.add((miembroId, reasignarA));
+    return citasAbiertas;
+  }
+
+  @override
+  Future<void> cambiarRol(String miembroId, String rol) async {
+    if (errorCambio != null) throw errorCambio!;
+    rolesCambiados.add((miembroId, rol));
+  }
+
   @override
   Future<void> revocarInvitacion(String id) async {
     if (errorInvitacion != null) throw errorInvitacion!;
