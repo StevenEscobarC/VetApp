@@ -1530,3 +1530,344 @@ begin
   return v_nueva;
 end;
 $$;
+
+-- 8. Citas por veterinario (D-07, T8). Se eliminan las firmas de 8 argumentos antes de
+-- redefinir con p_veterinario_id para evitar sobrecargas ambiguas en PostgREST.
+drop function if exists public.crear_cita(uuid, uuid[], timestamptz, integer, text, text, text, text);
+drop function if exists public.actualizar_cita(uuid, uuid[], timestamptz, integer, text, text, text, text);
+
+create or replace function public.crear_cita(
+  p_cliente_id uuid,
+  p_mascota_ids uuid[],
+  p_fecha_hora timestamptz,
+  p_duracion_min integer default 30,
+  p_modalidad text default 'consultorio',
+  p_direccion text default '',
+  p_motivo text default 'Consulta general',
+  p_notas text default '',
+  p_veterinario_id uuid default null
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_clinica_id uuid := public.mi_clinica_id();
+  v_vet uuid := coalesce(p_veterinario_id, auth.uid());
+  v_cita_id uuid;
+begin
+  if not public.es_veterinario() or v_clinica_id is null then
+    raise exception 'Solo un veterinario con clínica asignada puede crear citas.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if not public.es_miembro_activo(v_vet) then
+    raise exception 'Ese veterinario ya no está en tu clínica.' using errcode = '23503';
+  end if;
+
+  if p_mascota_ids is null or coalesce(array_length(p_mascota_ids, 1), 0) = 0 then
+    raise exception 'Elige al menos una mascota.' using errcode = 'check_violation';
+  end if;
+
+  -- Misma guarda de dueño: todas las mascotas deben ser del cliente y de la clínica.
+  if exists (
+    select 1
+    from unnest(p_mascota_ids) as x(id)
+    where not exists (
+      select 1 from public.mascotas m
+      where m.id = x.id and m.dueno_id = p_cliente_id and m.clinica_id = v_clinica_id
+    )
+  ) or not exists (
+    select 1 from public.clientes c
+    where c.id = p_cliente_id and c.clinica_id = v_clinica_id
+  ) then
+    raise exception 'El cliente o la mascota no existe en tu clínica.'
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  insert into public.citas (
+    clinica_id, cliente_id, veterinario_id, fecha_hora, duracion_min,
+    modalidad, direccion, motivo, notas
+  ) values (
+    v_clinica_id, p_cliente_id, v_vet, p_fecha_hora, p_duracion_min,
+    p_modalidad, trim(p_direccion), trim(p_motivo), trim(p_notas)
+  ) returning id into v_cita_id;
+
+  insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+  select v_cita_id, d.id, v_clinica_id
+  from (select distinct unnest(p_mascota_ids) as id) d;
+
+  return v_cita_id;
+end;
+$$;
+
+-- p_veterinario_id null o igual al veterinario actual de la cita = sin cambio (no se
+-- revisa membresía): así editar una cita abierta de un veterinario ya retirado sigue
+-- funcionando. Solo un id DISTINTO se valida con es_miembro_activo y se escribe.
+create or replace function public.actualizar_cita(
+  p_cita_id uuid,
+  p_mascota_ids uuid[],
+  p_fecha_hora timestamptz,
+  p_duracion_min integer default 30,
+  p_modalidad text default 'consultorio',
+  p_direccion text default '',
+  p_motivo text default 'Consulta general',
+  p_notas text default '',
+  p_veterinario_id uuid default null
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_clinica_id uuid := public.mi_clinica_id();
+  v_cliente_id uuid;
+  v_estado text;
+  v_vet_actual uuid;
+  v_vet_nuevo uuid;
+begin
+  if not public.es_veterinario() or v_clinica_id is null then
+    raise exception 'Solo un veterinario con clínica asignada puede editar citas.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  select c.cliente_id, c.estado, c.veterinario_id into v_cliente_id, v_estado, v_vet_actual
+  from public.citas c
+  where c.id = p_cita_id and c.clinica_id = v_clinica_id;
+
+  if not found then
+    raise exception 'La cita no existe en tu clínica.' using errcode = 'foreign_key_violation';
+  end if;
+
+  if v_estado not in ('pendiente', 'confirmada') then
+    raise exception 'Solo se pueden editar citas pendientes o confirmadas.'
+      using errcode = 'check_violation';
+  end if;
+
+  if p_mascota_ids is null or coalesce(array_length(p_mascota_ids, 1), 0) = 0 then
+    raise exception 'Elige al menos una mascota.' using errcode = 'check_violation';
+  end if;
+
+  if p_veterinario_id is not null and p_veterinario_id <> v_vet_actual then
+    if not public.es_miembro_activo(p_veterinario_id) then
+      raise exception 'Ese veterinario ya no está en tu clínica.' using errcode = '23503';
+    end if;
+    v_vet_nuevo := p_veterinario_id;
+  end if;
+
+  if exists (
+    select 1
+    from unnest(p_mascota_ids) as x(id)
+    where not exists (
+      select 1 from public.mascotas m
+      where m.id = x.id and m.dueno_id = v_cliente_id and m.clinica_id = v_clinica_id
+    )
+  ) then
+    raise exception 'El cliente o la mascota no existe en tu clínica.'
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  if exists (
+    select 1
+    from public.cita_mascotas cm
+    join public.consultas co
+      on co.cita_id = cm.cita_id and co.mascota_id = cm.mascota_id
+    where cm.cita_id = p_cita_id
+      and cm.mascota_id <> all (p_mascota_ids)
+  ) then
+    raise exception 'No puedes quitar una mascota que ya tiene consulta registrada en esta cita.'
+      using errcode = 'check_violation';
+  end if;
+
+  update public.citas set
+    fecha_hora = p_fecha_hora,
+    duracion_min = p_duracion_min,
+    modalidad = p_modalidad,
+    direccion = trim(p_direccion),
+    motivo = trim(p_motivo),
+    notas = trim(p_notas),
+    veterinario_id = coalesce(v_vet_nuevo, veterinario_id)
+  where id = p_cita_id and clinica_id = v_clinica_id;
+
+  delete from public.cita_mascotas
+  where cita_id = p_cita_id and mascota_id <> all (p_mascota_ids);
+
+  insert into public.cita_mascotas (cita_id, mascota_id, clinica_id)
+  select p_cita_id, d.id, v_clinica_id
+  from (select distinct unnest(p_mascota_ids) as id) d
+  on conflict (cita_id, mascota_id) do nothing;
+end;
+$$;
+
+-- citas_insert: el veterinario asignado puede ser cualquier miembro activo de la clínica.
+drop policy if exists citas_insert on public.citas;
+create policy citas_insert on public.citas for insert to authenticated
+with check (
+  public.es_veterinario()
+  and clinica_id = public.mi_clinica_id()
+  and public.es_miembro_activo(veterinario_id)
+  and estado in ('pendiente', 'confirmada')
+);
+
+-- citas_update NO exige es_miembro_activo en with check: una cita pasada de un veterinario
+-- retirado debe seguir aceptando cambios de estado. La reasignación se valida en el trigger.
+-- cliente_id y clinica_id siguen inmutables; veterinario_id solo cambia en citas abiertas y
+-- hacia un miembro activo (el error de no-miembro usa check_violation como el resto del trigger).
+create or replace function public.citas_validar_update()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_en_ventana boolean;
+begin
+  v_en_ventana := old.updated_at >= now() - interval '10 minutes';
+
+  if new.cliente_id is distinct from old.cliente_id
+     or new.clinica_id is distinct from old.clinica_id then
+    raise exception 'No se puede cambiar el cliente ni la clínica de una cita.'
+      using errcode = 'check_violation';
+  end if;
+
+  if new.veterinario_id is distinct from old.veterinario_id then
+    if old.estado not in ('solicitada', 'pendiente', 'confirmada') then
+      raise exception 'Solo se pueden reasignar citas pendientes o confirmadas.'
+        using errcode = 'check_violation';
+    end if;
+    if not public.es_miembro_activo(new.veterinario_id) then
+      raise exception 'Ese veterinario ya no está en tu clínica.'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if old.estado not in ('solicitada', 'pendiente', 'confirmada') and (
+       new.fecha_hora is distinct from old.fecha_hora
+       or new.duracion_min is distinct from old.duracion_min
+       or new.modalidad is distinct from old.modalidad
+       or new.direccion is distinct from old.direccion
+       or new.motivo is distinct from old.motivo
+       or new.notas is distinct from old.notas
+     ) then
+    raise exception 'Solo se pueden editar citas pendientes o confirmadas.'
+      using errcode = 'check_violation';
+  end if;
+
+  if new.estado is distinct from old.estado and not (
+       (old.estado = 'solicitada' and new.estado in ('pendiente', 'confirmada', 'cancelada'))
+    or (old.estado = 'pendiente' and new.estado in ('confirmada', 'completada', 'cancelada', 'no_asistio'))
+    or (old.estado = 'confirmada' and new.estado in ('pendiente', 'completada', 'cancelada', 'no_asistio'))
+    or (old.estado in ('cancelada', 'no_asistio') and new.estado = 'pendiente')
+    or (old.estado in ('cancelada', 'no_asistio') and new.estado = 'confirmada' and v_en_ventana)
+    or (old.estado = 'completada' and new.estado in ('pendiente', 'confirmada') and v_en_ventana)
+  ) then
+    raise exception 'Cambio de estado no permitido: % -> %.', old.estado, new.estado
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists citas_validar_update on public.citas;
+create trigger citas_validar_update before update on public.citas
+for each row execute procedure public.citas_validar_update();
+
+-- Embed de PostgREST para el nombre del veterinario asignado. citas.veterinario_id sigue
+-- not null (D-17) y mantiene su FK a auth.users on delete restrict.
+do $$ begin
+  alter table public.citas
+    add constraint citas_veterinario_perfil_fkey foreign key (veterinario_id)
+    references public.perfiles(id) on delete restrict;
+exception when duplicate_object then null;
+end $$;
+
+-- 9. Consultas (D-06, T7): el registro legal no se borra en cascada con la cuenta del autor.
+do $$
+declare
+  v_con record;
+begin
+  for v_con in
+    select c.conname
+    from pg_constraint c
+    where c.conrelid = 'public.consultas'::regclass
+      and c.contype = 'f'
+      and c.confrelid = 'auth.users'::regclass
+      and c.confdeltype = 'c'
+      and c.conkey = array[(
+        select a.attnum from pg_attribute a
+        where a.attrelid = 'public.consultas'::regclass and a.attname = 'veterinario_id'
+      )]
+  loop
+    execute format('alter table public.consultas drop constraint %I', v_con.conname);
+  end loop;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'consultas_veterinario_id_fkey'
+      and conrelid = 'public.consultas'::regclass
+  ) then
+    alter table public.consultas
+      add constraint consultas_veterinario_id_fkey foreign key (veterinario_id)
+      references auth.users(id) on delete restrict;
+  end if;
+end;
+$$;
+
+do $$ begin
+  alter table public.consultas
+    add constraint consultas_veterinario_perfil_fkey foreign key (veterinario_id)
+    references public.perfiles(id) on delete restrict;
+exception when duplicate_object then null;
+end $$;
+
+-- 10. Privilegios por columna (T1): un usuario autenticado solo edita nombre, telefono y
+-- matricula de su perfil. rol, clinica_id, rol_clinica y activo cambian únicamente vía RPC
+-- definer. Las columnas futuras de perfiles quedan NO actualizables por defecto.
+revoke update on public.perfiles from authenticated;
+revoke update on public.perfiles from anon;
+grant update (nombre, telefono, matricula) on public.perfiles to authenticated;
+
+-- 11. Grants de las funciones nuevas (consumir_invitacion queda sin grant alguno).
+revoke all on function public.es_admin_clinica() from public, anon;
+revoke all on function public.es_miembro_activo(uuid) from public, anon;
+revoke all on function public.es_autor_en_mi_clinica(uuid) from public, anon;
+revoke all on function public.generar_invitacion_clinica() from public, anon;
+revoke all on function public.revocar_invitacion(uuid) from public, anon;
+revoke all on function public.retirar_miembro(uuid, uuid) from public, anon;
+revoke all on function public.cambiar_rol_miembro(uuid, text) from public, anon;
+revoke all on function public.crear_mi_clinica(text) from public, anon;
+revoke all on function public.unirse_a_clinica(text) from public, anon;
+revoke all on function public.crear_cita(
+  uuid, uuid[], timestamptz, integer, text, text, text, text, uuid
+) from public, anon;
+revoke all on function public.actualizar_cita(
+  uuid, uuid[], timestamptz, integer, text, text, text, text, uuid
+) from public, anon;
+
+grant execute on function public.es_admin_clinica() to authenticated;
+grant execute on function public.es_miembro_activo(uuid) to authenticated;
+grant execute on function public.es_autor_en_mi_clinica(uuid) to authenticated;
+grant execute on function public.generar_invitacion_clinica() to authenticated;
+grant execute on function public.revocar_invitacion(uuid) to authenticated;
+grant execute on function public.retirar_miembro(uuid, uuid) to authenticated;
+grant execute on function public.cambiar_rol_miembro(uuid, text) to authenticated;
+grant execute on function public.crear_mi_clinica(text) to authenticated;
+grant execute on function public.unirse_a_clinica(text) to authenticated;
+grant execute on function public.crear_cita(
+  uuid, uuid[], timestamptz, integer, text, text, text, text, uuid
+) to authenticated;
+grant execute on function public.actualizar_cita(
+  uuid, uuid[], timestamptz, integer, text, text, text, text, uuid
+) to authenticated;
+
+-- Re-afirmar (el bloque superior recrea las versiones antiguas en cada re-ejecución).
+revoke execute on function public.es_veterinario() from public, anon;
+revoke execute on function public.mi_clinica_id() from public, anon;
+grant execute on function public.es_veterinario() to authenticated;
+grant execute on function public.mi_clinica_id() to authenticated;
+revoke execute on function public.crear_perfil_nuevo_usuario() from public, anon, authenticated;
+revoke execute on function public.consumir_invitacion(text, uuid) from public, anon, authenticated;
+
+notify pgrst, 'reload schema';
