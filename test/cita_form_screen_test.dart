@@ -420,6 +420,38 @@ void main() {
     });
   });
 
+  group('CitaFormScreen - motivoInicial', () {
+    testWidgets('motivo=Vacunación preselecciona motivo y 15 min', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: citasSemanaFixture);
+      await tester.pumpWidget(
+        _app(repo: repo, initial: '$_conFicha&motivo=Vacunaci%C3%B3n'),
+      );
+      await tester.pumpAndSettle();
+
+      await _tocarGuardar(tester);
+
+      expect(repo.creadas.single.motivo, 'Vacunación');
+      expect(repo.creadas.single.duracionMin, 15);
+    });
+
+    testWidgets('motivo desconocido cae al valor por defecto', (tester) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: citasSemanaFixture);
+      await tester.pumpWidget(
+        _app(repo: repo, initial: '$_conFicha&motivo=Inventado'),
+      );
+      await tester.pumpAndSettle();
+
+      await _tocarGuardar(tester);
+
+      expect(repo.creadas.single.motivo, 'Consulta general');
+      expect(repo.creadas.single.duracionMin, 30);
+    });
+  });
+
   group('CitaFormScreen - motivo, duración, dónde', () {
     testWidgets('el calendario no ofrece días pasados para una cita nueva', (
       tester,
@@ -826,7 +858,9 @@ void main() {
     ) async {
       _grande(tester);
       final repo = FakeCitaRepository(citas: citasEquipoFixture);
-      await tester.pumpWidget(_app(repo: repo, initial: _conFicha, multi: true));
+      await tester.pumpWidget(
+        _app(repo: repo, initial: _conFicha, multi: true),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Veterinario'), findsOneWidget);
@@ -858,7 +892,9 @@ void main() {
       _grande(tester);
       // Cita de Luis 10:45-11:15; Ana tiene Luna 10:30-11:00 (cruza con 10:30).
       final repo = FakeCitaRepository(citas: [citaLunaHoy]);
-      await tester.pumpWidget(_app(repo: repo, initial: _conFicha, multi: true));
+      await tester.pumpWidget(
+        _app(repo: repo, initial: _conFicha, multi: true),
+      );
       await tester.pumpAndSettle();
 
       // La sugerencia es 9:45; subir a 10:30, ocupado por la cita de Ana.

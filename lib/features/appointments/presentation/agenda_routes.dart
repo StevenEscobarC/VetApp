@@ -35,6 +35,7 @@ final GoRoute agendaRoute = GoRoute(
         clienteIdInicial: state.uri.queryParameters['clienteId'],
         mascotaIdInicial: state.uri.queryParameters['mascotaId'],
         fechaInicial: _parseDia(state.uri.queryParameters['fecha']),
+        motivoInicial: state.uri.queryParameters['motivo'],
       ),
       routes: [
         GoRoute(
