@@ -146,7 +146,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | PAT-01..05 | Phase 2 — Clientes y Pacientes | Complete |
 | HIST-01..04 | Phase 3 — Historia Clínica | Complete |
 | AGND-01..06 | Phase 4 — Agenda y Citas | Pending |
-| TEAM-01..05 | Phase 4.1 — Equipo de la clínica | Pending |
+| TEAM-01..05 | Phase 4.1 — Equipo de la clínica | Complete |
 | VAC-01..05 | Phase 5 — Vacunación y Desparasitación | Pending |
 | INV-01..03 | Phase 6 — Inventario | Pending |
 | BILL-01..04 | Phase 7 — Facturación | Pending |
