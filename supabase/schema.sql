@@ -1112,7 +1112,7 @@ as $$ select exists (
 ) $$;
 
 -- D-13: p_id es autor de citas/consultas en mi clínica (aunque ya no sea miembro).
--- Fase 5: la tabla de vacunas debe sumarse (OR) aquí cuando exista.
+-- Fase 5: incluye dosis_aplicadas (D-09) -- ver redefinición al final del archivo.
 create or replace function public.es_autor_en_mi_clinica(p_id uuid)
 returns boolean language sql stable security definer set search_path = public
 as $$ select
@@ -1869,5 +1869,1295 @@ grant execute on function public.es_veterinario() to authenticated;
 grant execute on function public.mi_clinica_id() to authenticated;
 revoke execute on function public.crear_perfil_nuevo_usuario() from public, anon, authenticated;
 revoke execute on function public.consumir_invitacion(text, uuid) from public, anon, authenticated;
+
+-- ===== Fase 5: Vacunación y desparasitación (delta idempotente) =====
+-- Re-ejecutable. Va DESPUÉS del bloque 4.1 para que la redefinición de
+-- es_autor_en_mi_clinica gane en cada re-pegado (Pitfall 2). Las tablas van antes que las
+-- funciones porque las funciones `language sql` validan sus referencias al crearse.
+
+-- 1. Catálogo de protocolos (D-01): filas globales (clinica_id null) = semillas colombianas;
+-- una fila de clínica con el mismo `codigo` es un override. Escrituras solo vía RPC (D-24).
+create table if not exists public.protocolos_vacunacion (
+  id uuid primary key default gen_random_uuid(),
+  clinica_id uuid null references public.clinicas(id) on delete cascade,
+  codigo text not null check (codigo ~ '^[a-z0-9_:-]{2,64}$'),
+  nombre text not null check (char_length(trim(nombre)) between 1 and 80),
+  tipo text not null check (tipo in ('vacuna', 'desparasitacion_interna', 'desparasitacion_externa')),
+  especies text[] not null check (especies <@ array['perro', 'gato', 'otro'] and cardinality(especies) > 0),
+  edad_min_dias int null,
+  dosis_serie int not null default 1 check (dosis_serie between 1 and 6),
+  intervalo_serie_dias int null check (intervalo_serie_dias is null or intervalo_serie_dias > 0),
+  intervalo_refuerzo_dias int null check (intervalo_refuerzo_dias is null or intervalo_refuerzo_dias > 0),
+  opciones_duracion_dias int[] not null default '{}',
+  intervalos_por_edad jsonb null,
+  activo boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists protocolos_vacunacion_clinica_codigo_uq
+  on public.protocolos_vacunacion (coalesce(clinica_id, '00000000-0000-0000-0000-000000000000'::uuid), codigo);
+
+drop trigger if exists protocolos_vacunacion_tocar_updated_at on public.protocolos_vacunacion;
+create trigger protocolos_vacunacion_tocar_updated_at before update on public.protocolos_vacunacion
+for each row execute procedure public.tocar_updated_at();
+
+-- 2. Dosis aplicadas.
+-- Solo-append (HIST-04, D-08): sin políticas insert/update/delete; escritura solo por
+-- registrar_dosis/anular_dosis. Sin columna de próxima dosis (D-02, Pitfall 7).
+create table if not exists public.dosis_aplicadas (
+  id uuid primary key default gen_random_uuid(),
+  mascota_id uuid not null,
+  clinica_id uuid not null,
+  veterinario_id uuid not null references auth.users(id) on delete restrict,
+  cita_id uuid null references public.citas(id) on delete set null,
+  codigo_protocolo text not null,
+  biologico_nombre text not null,
+  tipo text not null check (tipo in ('vacuna', 'desparasitacion_interna', 'desparasitacion_externa')),
+  fecha_aplicacion date not null,
+  duracion_elegida_dias int null check (duracion_elegida_dias is null or duracion_elegida_dias > 0),
+  sin_refuerzo boolean not null default false,
+  es_refuerzo boolean not null default false,
+  inicia_serie boolean not null default false,
+  externa boolean not null default false,
+  clinica_externa text null check (clinica_externa is null or char_length(clinica_externa) <= 80),
+  producto text null check (producto is null or char_length(producto) <= 80),
+  lote text null check (lote is null or char_length(lote) <= 40),
+  observaciones text null check (observaciones is null or char_length(observaciones) <= 500),
+  anulada boolean not null default false,
+  motivo_anulacion text null check (motivo_anulacion is null or char_length(motivo_anulacion) <= 120),
+  anulada_at timestamptz null,
+  anulada_por uuid null references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint dosis_anulacion_consistente check (anulada = (motivo_anulacion is not null))
+);
+
+do $$ begin
+  alter table public.dosis_aplicadas
+    add constraint dosis_mascota_misma_clinica_fkey foreign key (mascota_id, clinica_id)
+    references public.mascotas(id, clinica_id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter table public.dosis_aplicadas
+    add constraint dosis_veterinario_perfil_fkey foreign key (veterinario_id)
+    references public.perfiles(id) on delete restrict;
+exception when duplicate_object then null;
+end $$;
+
+create index if not exists dosis_aplicadas_mascota_codigo_fecha_idx
+  on public.dosis_aplicadas (mascota_id, codigo_protocolo, fecha_aplicacion);
+create index if not exists dosis_aplicadas_clinica_idx
+  on public.dosis_aplicadas (clinica_id);
+create index if not exists dosis_aplicadas_cita_idx
+  on public.dosis_aplicadas (cita_id) where cita_id is not null;
+
+-- 3. Gestión de alertas (descartar / posponer / recordado). Una fila solo existe si el
+-- veterinario gestionó la última dosis; una dosis nueva no tiene fila (la gestión previa
+-- deja de aplicar sola).
+create table if not exists public.vacuna_alertas (
+  dosis_ref_id uuid primary key references public.dosis_aplicadas(id) on delete cascade,
+  clinica_id uuid not null references public.clinicas(id) on delete cascade,
+  descartada_at timestamptz null,
+  motivo_descarte text null check (motivo_descarte is null or char_length(motivo_descarte) <= 120),
+  pospuesta_hasta date null,
+  recordatorio_enviado_at timestamptz null,
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists vacuna_alertas_tocar_updated_at on public.vacuna_alertas;
+create trigger vacuna_alertas_tocar_updated_at before update on public.vacuna_alertas
+for each row execute procedure public.tocar_updated_at();
+
+-- 4. Enlaces públicos del carné (un token vigente por mascota).
+create table if not exists public.carne_enlaces (
+  mascota_id uuid primary key,
+  clinica_id uuid not null,
+  token text not null unique check (token ~ '^[0-9a-f]{64}$'),
+  activo boolean not null default true,
+  creado_at timestamptz not null default now(),
+  regenerado_at timestamptz null
+);
+
+do $$ begin
+  alter table public.carne_enlaces
+    add constraint carne_enlaces_mascota_misma_clinica_fkey foreign key (mascota_id, clinica_id)
+    references public.mascotas(id, clinica_id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+
+-- RLS: solo lectura para veterinarios de la clínica; ninguna política de escritura.
+alter table public.protocolos_vacunacion enable row level security;
+alter table public.dosis_aplicadas enable row level security;
+alter table public.vacuna_alertas enable row level security;
+alter table public.carne_enlaces enable row level security;
+
+drop policy if exists protocolos_vacunacion_select on public.protocolos_vacunacion;
+create policy protocolos_vacunacion_select on public.protocolos_vacunacion for select to authenticated
+using (public.es_veterinario() and (clinica_id is null or clinica_id = public.mi_clinica_id()));
+
+drop policy if exists dosis_aplicadas_select on public.dosis_aplicadas;
+create policy dosis_aplicadas_select on public.dosis_aplicadas for select to authenticated
+using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+drop policy if exists vacuna_alertas_select on public.vacuna_alertas;
+create policy vacuna_alertas_select on public.vacuna_alertas for select to authenticated
+using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+drop policy if exists carne_enlaces_select on public.carne_enlaces;
+create policy carne_enlaces_select on public.carne_enlaces for select to authenticated
+using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+revoke all on table public.protocolos_vacunacion from anon;
+revoke all on table public.dosis_aplicadas from anon;
+revoke all on table public.vacuna_alertas from anon;
+revoke all on table public.carne_enlaces from anon;
+revoke insert, update, delete, truncate on table public.protocolos_vacunacion from authenticated;
+revoke insert, update, delete, truncate on table public.dosis_aplicadas from authenticated;
+revoke insert, update, delete, truncate on table public.vacuna_alertas from authenticated;
+revoke insert, update, delete, truncate on table public.carne_enlaces from authenticated;
+
+-- 5. Semillas colombianas (D-01). Valencia (quíntuple/séxtuple/óctuple) va como texto libre
+-- en `producto`, no como protocolos separados.
+insert into public.protocolos_vacunacion
+  (clinica_id, codigo, nombre, tipo, especies, edad_min_dias, dosis_serie,
+   intervalo_serie_dias, intervalo_refuerzo_dias, opciones_duracion_dias, intervalos_por_edad)
+values
+  (null, 'puppy_dp', 'Puppy DP', 'vacuna', array['perro'], 42, 1, null, null, '{}', null),
+  (null, 'polivalente', 'Polivalente', 'vacuna', array['perro'], 56, 3, 21, 365, '{}', null),
+  (null, 'leptospirosis', 'Leptospirosis', 'vacuna', array['perro'], 56, 2, 21, 365, '{}', null),
+  (null, 'bordetella', 'Bordetella', 'vacuna', array['perro'], 56, 1, null, 365, '{}', null),
+  (null, 'antirrabica', 'Antirrábica', 'vacuna', array['perro', 'gato'], 84, 1, null, 365, '{365,1095}', null),
+  (null, 'triple_felina', 'Triple felina', 'vacuna', array['gato'], 56, 3, 21, 365, '{}', null),
+  (null, 'leucemia_felina', 'Leucemia felina', 'vacuna', array['gato'], 56, 2, 21, 365, '{}', null),
+  (null, 'desp_interna', 'Desparasitación interna', 'desparasitacion_interna', array['perro', 'gato'], 14, 1, null, 90, '{}',
+    '[{"hasta_dias":56,"intervalo":15},{"hasta_dias":180,"intervalo":30},{"intervalo":90}]'::jsonb),
+  (null, 'desp_externa', 'Desparasitación externa', 'desparasitacion_externa', array['perro', 'gato'], 56, 1, null, 30, '{30,35,84}', null)
+on conflict do nothing;
+
+-- 6. Helpers.
+create or replace function public._hoy_bogota()
+returns date language sql stable set search_path = public
+as $$ select (now() at time zone 'America/Bogota')::date $$;
+
+-- D-20: "Nombre I." (primera palabra + inicial de la segunda); una sola palabra => esa palabra.
+create or replace function public._nombre_corto(p_nombre text)
+returns text language sql immutable set search_path = public
+as $$
+  select case
+    when cardinality(w.p) < 2 then coalesce(w.p[1], '')
+    else w.p[1] || ' ' || upper(left(w.p[2], 1)) || '.'
+  end
+  from (select regexp_split_to_array(btrim(coalesce(p_nombre, '')), '\s+') as p) w
+$$;
+
+-- D-09: p_id es autor de citas/consultas/dosis en mi clínica (aunque ya no sea miembro).
+-- Redefinición de la versión 4.1 con el OR de dosis_aplicadas.
+create or replace function public.es_autor_en_mi_clinica(p_id uuid)
+returns boolean language sql stable security definer set search_path = public
+as $$ select
+  exists (
+    select 1 from public.citas c
+    where c.clinica_id = public.mi_clinica_id() and c.veterinario_id = p_id
+  )
+  or exists (
+    select 1 from public.consultas co
+    join public.mascotas m on m.id = co.mascota_id
+    where co.veterinario_id = p_id and m.clinica_id = public.mi_clinica_id()
+  )
+  or exists (
+    select 1 from public.dosis_aplicadas d where d.clinica_id = public.mi_clinica_id() and d.veterinario_id = p_id
+  )
+$$;
+
+revoke all on function public.es_autor_en_mi_clinica(uuid) from public, anon;
+grant execute on function public.es_autor_en_mi_clinica(uuid) to authenticated;
+
+-- 7. Derivación (ÚNICA fuente del cálculo, D-02, VAC-02): app, alertas y carné público
+-- llaman aquí; p_hoy es parámetro para pruebas deterministas.
+-- Posición de cada dosis válida dentro de su serie. Serie = suma corrida de inicia_serie por
+-- (mascota, codigo). Protocolo efectivo: fila de la clínica con ese codigo, si no la global
+-- (se ignora `activo` para que un protocolo desactivado siga calculando dosis ya puestas).
+create or replace function public._dosis_posiciones(p_clinica uuid, p_mascota uuid)
+returns table (
+  dosis_id uuid, mascota_id uuid, codigo_protocolo text, fecha_aplicacion date,
+  posicion int, dosis_serie int, etiqueta_dosis text, es_ultima boolean
+)
+language sql stable security definer set search_path = public
+as $$
+  with v as (
+    select d.id, d.mascota_id, d.codigo_protocolo, d.fecha_aplicacion, d.created_at,
+           d.es_refuerzo, d.inicia_serie, coalesce(pr.dosis_serie, 1) as dosis_serie
+    from public.dosis_aplicadas d
+    left join lateral (
+      select pv.dosis_serie
+      from public.protocolos_vacunacion pv
+      where pv.codigo = d.codigo_protocolo
+        and (pv.clinica_id = p_clinica or pv.clinica_id is null)
+      order by (pv.clinica_id is null)
+      limit 1
+    ) pr on true
+    where d.clinica_id = p_clinica
+      and not d.anulada
+      and (p_mascota is null or d.mascota_id = p_mascota)
+  ),
+  s as (
+    select v.*,
+           sum(case when v.inicia_serie then 1 else 0 end) over (
+             partition by v.mascota_id, v.codigo_protocolo
+             order by v.fecha_aplicacion, v.created_at, v.id
+           ) as serie_idx
+    from v
+  ),
+  n as (
+    select s.*,
+           row_number() over (
+             partition by s.mascota_id, s.codigo_protocolo, s.serie_idx
+             order by s.fecha_aplicacion, s.created_at, s.id
+           )::int as nn
+    from s
+  )
+  select
+    n.id,
+    n.mascota_id,
+    n.codigo_protocolo,
+    n.fecha_aplicacion,
+    (case when n.es_refuerzo or n.nn > n.dosis_serie then n.dosis_serie else n.nn end)::int,
+    n.dosis_serie,
+    case
+      when n.dosis_serie > 1 and not n.es_refuerzo and n.nn <= n.dosis_serie
+        then 'Dosis ' || n.nn || ' de ' || n.dosis_serie
+      when n.dosis_serie = 1 and n.nn = 1 and not n.es_refuerzo then 'Primera dosis'
+      else 'Refuerzo'
+    end,
+    (row_number() over (
+       partition by n.mascota_id, n.codigo_protocolo
+       order by n.fecha_aplicacion desc, n.created_at desc, n.id desc
+     ) = 1)
+  from n
+$$;
+
+-- Una fila por (mascota, codigo) con >= 1 dosis válida (D-21: sin filas "nunca vacunada").
+-- IMPORTANTE: los CASE de intervalo/ventana/estado se copian en previsualizar_dosis; si se
+-- cambia uno hay que cambiar el otro.
+create or replace function public._carne_filas(p_clinica uuid, p_mascota uuid, p_hoy date)
+returns table (
+  mascota_id uuid, codigo_protocolo text, biologico_nombre text, tipo text,
+  ultima_dosis_id uuid, ultima_fecha date, posicion int, dosis_serie int,
+  proxima_fecha date, etiqueta_proxima text, estado text, dias_vencida int,
+  ventana_dias int, sugerir_reiniciar boolean
+)
+language sql stable security definer set search_path = public
+as $$
+  with u as (
+    select po.dosis_id, po.mascota_id, po.codigo_protocolo, po.fecha_aplicacion,
+           po.posicion, po.dosis_serie,
+           d.biologico_nombre, d.tipo, d.sin_refuerzo, d.duracion_elegida_dias,
+           m.fecha_nacimiento, pr.intervalo_serie_dias, pr.intervalo_refuerzo_dias,
+           pr.intervalos_por_edad
+    from public._dosis_posiciones(p_clinica, p_mascota) po
+    join public.dosis_aplicadas d on d.id = po.dosis_id
+    join public.mascotas m on m.id = d.mascota_id
+    left join lateral (
+      select pv.intervalo_serie_dias, pv.intervalo_refuerzo_dias, pv.intervalos_por_edad
+      from public.protocolos_vacunacion pv
+      where pv.codigo = d.codigo_protocolo
+        and (pv.clinica_id = p_clinica or pv.clinica_id is null)
+      order by (pv.clinica_id is null)
+      limit 1
+    ) pr on true
+    where po.es_ultima
+  ),
+  iv as (
+    select u.*,
+      case
+        when u.posicion < u.dosis_serie then u.intervalo_serie_dias
+        when u.sin_refuerzo then null
+        else coalesce(
+          u.duracion_elegida_dias,
+          (select (t.b ->> 'intervalo')::int
+             from jsonb_array_elements(u.intervalos_por_edad) with ordinality as t(b, ord)
+            where case
+                    when u.fecha_nacimiento is null
+                      then t.ord = jsonb_array_length(u.intervalos_por_edad)
+                    else (t.b ->> 'hasta_dias') is null
+                         or (u.fecha_aplicacion - u.fecha_nacimiento) <= (t.b ->> 'hasta_dias')::int
+                  end
+            order by t.ord
+            limit 1),
+          u.intervalo_refuerzo_dias
+        )
+      end as intervalo
+    from u
+  ),
+  c as (
+    select iv.*,
+      case when iv.intervalo is null then null else iv.fecha_aplicacion + iv.intervalo end as prox,
+      case
+        when iv.tipo like 'desparasitacion%' then 5
+        when iv.posicion < iv.dosis_serie then 3
+        else 14
+      end as ventana
+    from iv
+  )
+  select
+    c.mascota_id,
+    c.codigo_protocolo,
+    c.biologico_nombre,
+    c.tipo,
+    c.dosis_id,
+    c.fecha_aplicacion,
+    c.posicion,
+    c.dosis_serie,
+    c.prox,
+    case
+      when c.posicion < c.dosis_serie then 'Dosis ' || (c.posicion + 1) || ' de ' || c.dosis_serie
+      else 'Refuerzo'
+    end,
+    case
+      when c.prox is null then 'completo'
+      when p_hoy > c.prox then 'vencida'
+      when p_hoy >= c.prox - c.ventana then 'proxima'
+      else 'al_dia'
+    end,
+    case when c.prox is null then 0 else greatest(p_hoy - c.prox, 0) end,
+    c.ventana,
+    (c.posicion < c.dosis_serie and p_hoy - c.fecha_aplicacion > 42)
+  from c
+$$;
+
+revoke all on function public._dosis_posiciones(uuid, uuid) from public, anon, authenticated;
+grant execute on function public._dosis_posiciones(uuid, uuid) to service_role;
+revoke all on function public._carne_filas(uuid, uuid, date) from public, anon, authenticated;
+grant execute on function public._carne_filas(uuid, uuid, date) to service_role;
+
+-- 8. RPCs del catálogo (D-01, D-24). Escrituras solo por aquí; el admin de clínica
+-- (un veterinario independiente siempre lo es desde 4.1 D-04) es el único que escribe.
+drop function if exists public.protocolos_efectivos(text, boolean);
+create or replace function public.protocolos_efectivos(
+  p_especie text default null,
+  p_incluir_inactivos boolean default false
+)
+returns table (
+  codigo text, nombre text, tipo text, especies text[], edad_min_dias int,
+  dosis_serie int, intervalo_serie_dias int, intervalo_refuerzo_dias int,
+  opciones_duracion_dias int[], personalizado boolean, es_semilla boolean, activo boolean
+)
+language plpgsql stable security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+begin
+  if not public.es_veterinario() then
+    raise exception 'Solo un veterinario puede ver el catálogo de protocolos.' using errcode = 'insufficient_privilege';
+  end if;
+
+  return query
+  select e.codigo, e.nombre, e.tipo, e.especies, e.edad_min_dias, e.dosis_serie,
+         e.intervalo_serie_dias, e.intervalo_refuerzo_dias, e.opciones_duracion_dias,
+         e.pers, e.sem, e.activo
+  from (
+    select distinct on (pv.codigo)
+           pv.codigo, pv.nombre, pv.tipo, pv.especies, pv.edad_min_dias, pv.dosis_serie,
+           pv.intervalo_serie_dias, pv.intervalo_refuerzo_dias, pv.opciones_duracion_dias,
+           pv.activo,
+           (pv.clinica_id is not null) as pers,
+           exists (
+             select 1 from public.protocolos_vacunacion g
+             where g.clinica_id is null and g.codigo = pv.codigo
+           ) as sem
+    from public.protocolos_vacunacion pv
+    where pv.clinica_id = v_clinica or pv.clinica_id is null
+    order by pv.codigo, (pv.clinica_id is null)
+  ) e
+  where (p_incluir_inactivos or e.activo)
+    and (p_especie is null or p_especie = any (e.especies))
+  order by e.tipo, e.nombre;
+end;
+$$;
+
+drop function if exists public.guardar_protocolo(text, text, text, text[], int, int, int, int[]);
+create or replace function public.guardar_protocolo(
+  p_codigo text,
+  p_nombre text,
+  p_tipo text,
+  p_especies text[],
+  p_dosis_serie int,
+  p_intervalo_serie_dias int,
+  p_intervalo_refuerzo_dias int,
+  p_opciones_duracion_dias int[]
+)
+returns text
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_nombre text := trim(coalesce(p_nombre, ''));
+  v_codigo text;
+  v_slug text;
+  v_seed public.protocolos_vacunacion;
+  v_opciones int[] := coalesce(p_opciones_duracion_dias, '{}');
+begin
+  if not public.es_veterinario() or not public.es_admin_clinica() then
+    raise exception 'Solo el administrador de la clínica puede modificar el catálogo de protocolos.' using errcode = 'insufficient_privilege';
+  end if;
+
+  if char_length(v_nombre) not between 1 and 80 then
+    raise exception 'El nombre debe tener entre 1 y 80 caracteres.' using errcode = 'check_violation';
+  end if;
+  if p_tipo is null or p_tipo not in ('vacuna', 'desparasitacion_interna', 'desparasitacion_externa') then
+    raise exception 'Tipo de protocolo inválido.' using errcode = 'check_violation';
+  end if;
+  if p_especies is null or cardinality(p_especies) = 0
+     or not (p_especies <@ array['perro', 'gato', 'otro']) then
+    raise exception 'Especies inválidas.' using errcode = 'check_violation';
+  end if;
+  if p_dosis_serie is null or p_dosis_serie not between 1 and 6 then
+    raise exception 'La serie debe tener entre 1 y 6 dosis.' using errcode = 'check_violation';
+  end if;
+  if p_intervalo_serie_dias is not null and p_intervalo_serie_dias <= 0 then
+    raise exception 'El intervalo de la serie debe ser positivo.' using errcode = 'check_violation';
+  end if;
+  if p_dosis_serie > 1 and p_intervalo_serie_dias is null then
+    raise exception 'Una serie de varias dosis requiere intervalo entre dosis.' using errcode = 'check_violation';
+  end if;
+  if p_intervalo_refuerzo_dias is not null and p_intervalo_refuerzo_dias <= 0 then
+    raise exception 'El intervalo de refuerzo debe ser positivo.' using errcode = 'check_violation';
+  end if;
+  if exists (select 1 from unnest(v_opciones) o where o is null or o <= 0) then
+    raise exception 'Las opciones de duración deben ser positivas.' using errcode = 'check_violation';
+  end if;
+
+  if p_codigo is null then
+    v_slug := trim(both '-' from regexp_replace(lower(v_nombre), '[^a-z0-9]+', '-', 'g'));
+    if v_slug = '' then
+      raise exception 'El nombre debe tener letras o números.' using errcode = 'check_violation';
+    end if;
+    v_codigo := 'custom:' || left(v_slug, 50);
+    if exists (
+      select 1 from public.protocolos_vacunacion
+      where clinica_id = v_clinica and codigo = v_codigo
+    ) then
+      raise exception 'Ya existe un protocolo con ese nombre.' using errcode = 'check_violation';
+    end if;
+    insert into public.protocolos_vacunacion
+      (clinica_id, codigo, nombre, tipo, especies, dosis_serie, intervalo_serie_dias,
+       intervalo_refuerzo_dias, opciones_duracion_dias)
+    values
+      (v_clinica, v_codigo, v_nombre, p_tipo, p_especies, p_dosis_serie, p_intervalo_serie_dias,
+       p_intervalo_refuerzo_dias, v_opciones);
+    return v_codigo;
+  end if;
+
+  select * into v_seed from public.protocolos_vacunacion
+  where clinica_id is null and codigo = p_codigo;
+
+  if found then
+    -- Override de una semilla: copia edad_min_dias e intervalos_por_edad de la semilla.
+    insert into public.protocolos_vacunacion
+      (clinica_id, codigo, nombre, tipo, especies, edad_min_dias, dosis_serie,
+       intervalo_serie_dias, intervalo_refuerzo_dias, opciones_duracion_dias, intervalos_por_edad)
+    values
+      (v_clinica, p_codigo, v_nombre, p_tipo, p_especies, v_seed.edad_min_dias, p_dosis_serie,
+       p_intervalo_serie_dias, p_intervalo_refuerzo_dias, v_opciones, v_seed.intervalos_por_edad)
+    on conflict ((coalesce(clinica_id, '00000000-0000-0000-0000-000000000000'::uuid)), codigo)
+    do update set
+      nombre = excluded.nombre,
+      tipo = excluded.tipo,
+      especies = excluded.especies,
+      dosis_serie = excluded.dosis_serie,
+      intervalo_serie_dias = excluded.intervalo_serie_dias,
+      intervalo_refuerzo_dias = excluded.intervalo_refuerzo_dias,
+      opciones_duracion_dias = excluded.opciones_duracion_dias;
+    return p_codigo;
+  end if;
+
+  update public.protocolos_vacunacion
+  set nombre = v_nombre, tipo = p_tipo, especies = p_especies, dosis_serie = p_dosis_serie,
+      intervalo_serie_dias = p_intervalo_serie_dias,
+      intervalo_refuerzo_dias = p_intervalo_refuerzo_dias,
+      opciones_duracion_dias = v_opciones
+  where clinica_id = v_clinica and codigo = p_codigo;
+
+  if not found then
+    raise exception 'Protocolo no encontrado.' using errcode = 'no_data_found';
+  end if;
+  return p_codigo;
+end;
+$$;
+
+drop function if exists public.restablecer_protocolo(text);
+create or replace function public.restablecer_protocolo(p_codigo text)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+begin
+  if not public.es_veterinario() or not public.es_admin_clinica() then
+    raise exception 'Solo el administrador de la clínica puede restablecer protocolos.' using errcode = 'insufficient_privilege';
+  end if;
+  if not exists (
+    select 1 from public.protocolos_vacunacion where clinica_id is null and codigo = p_codigo
+  ) then
+    raise exception 'Solo se pueden restablecer protocolos predefinidos.' using errcode = 'check_violation';
+  end if;
+  delete from public.protocolos_vacunacion where clinica_id = v_clinica and codigo = p_codigo;
+end;
+$$;
+
+drop function if exists public.desactivar_protocolo(text);
+create or replace function public.desactivar_protocolo(p_codigo text)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+begin
+  if not public.es_veterinario() or not public.es_admin_clinica() then
+    raise exception 'Solo el administrador de la clínica puede desactivar protocolos.' using errcode = 'insufficient_privilege';
+  end if;
+  if exists (
+    select 1 from public.protocolos_vacunacion where clinica_id is null and codigo = p_codigo
+  ) then
+    raise exception 'Los protocolos predefinidos no se desactivan.' using errcode = 'check_violation';
+  end if;
+  update public.protocolos_vacunacion set activo = false
+  where clinica_id = v_clinica and codigo = p_codigo;
+  if not found then
+    raise exception 'Solo se pueden desactivar protocolos propios de la clínica.' using errcode = 'check_violation';
+  end if;
+end;
+$$;
+
+-- 9. Registro y anulación de dosis (D-03..D-09, D-22, D-24). Solo-append: la corrección es
+-- anular_dosis con motivo obligatorio, una sola vez.
+drop function if exists public.registrar_dosis(
+  uuid, text, text, date, int, boolean, boolean, boolean, boolean, text, text, text, text, uuid, boolean
+);
+create or replace function public.registrar_dosis(
+  p_mascota_id uuid,
+  p_codigo_protocolo text,
+  p_biologico_nombre text,
+  p_fecha_aplicacion date,
+  p_duracion_elegida_dias int default null,
+  p_sin_refuerzo boolean default false,
+  p_es_refuerzo boolean default false,
+  p_inicia_serie boolean default false,
+  p_externa boolean default false,
+  p_clinica_externa text default null,
+  p_producto text default null,
+  p_lote text default null,
+  p_observaciones text default null,
+  p_cita_id uuid default null,
+  p_guardar_en_catalogo boolean default false
+)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+  v_mascota public.mascotas;
+  v_proto public.protocolos_vacunacion;
+  v_codigo text := trim(coalesce(p_codigo_protocolo, ''));
+  v_nombre text;
+  v_tipo text;
+  v_opciones int[];
+  v_slug text;
+  v_id uuid;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede registrar dosis.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_mascota from public.mascotas
+  where id = p_mascota_id and clinica_id = v_clinica;
+  if not found then
+    raise exception 'La mascota no pertenece a tu clínica.' using errcode = 'insufficient_privilege';
+  end if;
+
+  if p_fecha_aplicacion is null or p_fecha_aplicacion > v_hoy then
+    raise exception 'La fecha de aplicación no puede ser futura.' using errcode = 'check_violation';
+  end if;
+  if v_mascota.fecha_nacimiento is not null and p_fecha_aplicacion < v_mascota.fecha_nacimiento then
+    raise exception 'La fecha de aplicación es anterior al nacimiento de la mascota.' using errcode = 'check_violation';
+  end if;
+
+  if v_codigo = '' or char_length(v_codigo) > 64 then
+    raise exception 'Código de protocolo inválido.' using errcode = 'check_violation';
+  end if;
+
+  if v_codigo like 'otro:%' then
+    v_nombre := nullif(trim(coalesce(p_biologico_nombre, '')), '');
+    if v_nombre is null or char_length(v_nombre) > 80 then
+      raise exception 'El nombre del biológico es obligatorio (máx. 80 caracteres).' using errcode = 'check_violation';
+    end if;
+    v_tipo := 'vacuna';
+    v_opciones := array[21, 30, 90, 180, 365];
+  else
+    select * into v_proto from public.protocolos_vacunacion pv
+    where pv.codigo = v_codigo
+      and (pv.clinica_id = v_clinica or pv.clinica_id is null)
+      and pv.activo
+    order by (pv.clinica_id is null)
+    limit 1;
+    if not found then
+      raise exception 'El protocolo no existe en el catálogo.' using errcode = 'foreign_key_violation';
+    end if;
+    v_nombre := v_proto.nombre;
+    v_tipo := v_proto.tipo;
+    v_opciones := v_proto.opciones_duracion_dias;
+  end if;
+
+  if p_duracion_elegida_dias is not null and not (p_duracion_elegida_dias = any (v_opciones)) then
+    raise exception 'Duración no permitida para este protocolo.' using errcode = 'check_violation';
+  end if;
+
+  -- D-04/D-24: guardar un "Otro" como protocolo propio exige ser admin de la clínica.
+  if p_guardar_en_catalogo and v_codigo like 'otro:%' then
+    if not public.es_admin_clinica() then
+      raise exception 'Solo el administrador de la clínica puede guardar protocolos en el catálogo.' using errcode = 'insufficient_privilege';
+    end if;
+    v_slug := trim(both '-' from regexp_replace(lower(v_nombre), '[^a-z0-9]+', '-', 'g'));
+    if v_slug = '' then
+      raise exception 'El nombre debe tener letras o números.' using errcode = 'check_violation';
+    end if;
+    v_codigo := 'custom:' || left(v_slug, 50);
+    insert into public.protocolos_vacunacion
+      (clinica_id, codigo, nombre, tipo, especies, dosis_serie, intervalo_refuerzo_dias)
+    values
+      (v_clinica, v_codigo, v_nombre, 'vacuna', array[v_mascota.especie], 1,
+       case when p_sin_refuerzo then null else p_duracion_elegida_dias end)
+    on conflict do nothing;
+  end if;
+
+  -- D-22: la cita debe ser de la clínica y cubrir a esta mascota.
+  if p_cita_id is not null and not exists (
+    select 1
+    from public.citas c
+    join public.cita_mascotas cm on cm.cita_id = c.id and cm.clinica_id = c.clinica_id
+    where c.id = p_cita_id and c.clinica_id = v_clinica and cm.mascota_id = p_mascota_id
+  ) then
+    raise exception 'La cita no corresponde a esta mascota.' using errcode = 'foreign_key_violation';
+  end if;
+
+  insert into public.dosis_aplicadas (
+    mascota_id, clinica_id, veterinario_id, cita_id, codigo_protocolo, biologico_nombre, tipo,
+    fecha_aplicacion, duracion_elegida_dias, sin_refuerzo, es_refuerzo, inicia_serie, externa,
+    clinica_externa, producto, lote, observaciones
+  ) values (
+    p_mascota_id, v_clinica, auth.uid(), p_cita_id, v_codigo, v_nombre, v_tipo,
+    p_fecha_aplicacion, p_duracion_elegida_dias, coalesce(p_sin_refuerzo, false),
+    coalesce(p_es_refuerzo, false), coalesce(p_inicia_serie, false), coalesce(p_externa, false),
+    nullif(trim(coalesce(p_clinica_externa, '')), ''), nullif(trim(coalesce(p_producto, '')), ''),
+    nullif(trim(coalesce(p_lote, '')), ''), nullif(trim(coalesce(p_observaciones, '')), '')
+  )
+  returning id into v_id;
+
+  -- No se toca vacuna_alertas: la nueva última dosis no tiene fila de gestión, así que un
+  -- descartar/posponer previo deja de aplicar solo.
+  return v_id;
+end;
+$$;
+
+drop function if exists public.anular_dosis(uuid, text);
+create or replace function public.anular_dosis(p_dosis_id uuid, p_motivo text)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_dosis public.dosis_aplicadas;
+  v_motivo text := nullif(trim(coalesce(p_motivo, '')), '');
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede anular dosis.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_dosis from public.dosis_aplicadas
+  where id = p_dosis_id and clinica_id = v_clinica
+  for update;
+  if not found then
+    raise exception 'La dosis no pertenece a tu clínica.' using errcode = 'insufficient_privilege';
+  end if;
+
+  if v_motivo is null or char_length(v_motivo) > 120 then
+    raise exception 'El motivo es obligatorio (máx. 120 caracteres).' using errcode = 'check_violation';
+  end if;
+  if v_dosis.anulada then
+    raise exception 'La dosis ya fue anulada.' using errcode = 'check_violation';
+  end if;
+
+  update public.dosis_aplicadas
+  set anulada = true, motivo_anulacion = v_motivo, anulada_at = now(), anulada_por = auth.uid()
+  where id = p_dosis_id;
+end;
+$$;
+
+-- 10. Previsualización (sin insertar): mismos CASE que _carne_filas -- si se cambia uno hay
+-- que cambiar el otro. La dosis hipotética se ubica por fecha como lo haría el insert real.
+drop function if exists public.previsualizar_dosis(uuid, text, date, int, boolean, boolean, boolean);
+create or replace function public.previsualizar_dosis(
+  p_mascota_id uuid,
+  p_codigo_protocolo text,
+  p_fecha_aplicacion date,
+  p_duracion_elegida_dias int default null,
+  p_sin_refuerzo boolean default false,
+  p_es_refuerzo boolean default false,
+  p_inicia_serie boolean default false
+)
+returns table (
+  posicion int, dosis_serie int, etiqueta_dosis text, proxima_fecha date,
+  etiqueta_proxima text, sugerir_reiniciar boolean
+)
+language plpgsql stable security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_mascota public.mascotas;
+  v_proto public.protocolos_vacunacion;
+  v_serie int := 1;
+  v_n int;
+  v_pos int;
+  v_intervalo int;
+  v_prox date;
+  v_reiniciar boolean := false;
+  v_prev record;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede previsualizar dosis.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_mascota from public.mascotas
+  where id = p_mascota_id and clinica_id = v_clinica;
+  if not found then
+    raise exception 'La mascota no pertenece a tu clínica.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_proto from public.protocolos_vacunacion pv
+  where pv.codigo = p_codigo_protocolo and (pv.clinica_id = v_clinica or pv.clinica_id is null)
+  order by (pv.clinica_id is null)
+  limit 1;
+  if found then
+    v_serie := v_proto.dosis_serie;
+  end if;
+
+  -- n = lugar de la dosis hipotética dentro de su serie.
+  select x.nn into v_n
+  from (
+    select s.hyp,
+           row_number() over (
+             partition by s.serie_idx order by s.fecha_aplicacion, s.created_at, s.hyp
+           )::int as nn
+    from (
+      select d.fecha_aplicacion, d.created_at, d.hyp,
+             sum(case when d.inicia_serie then 1 else 0 end) over (
+               order by d.fecha_aplicacion, d.created_at, d.hyp
+             ) as serie_idx
+      from (
+        select da.fecha_aplicacion, da.created_at, da.inicia_serie, false as hyp
+        from public.dosis_aplicadas da
+        where da.mascota_id = p_mascota_id and da.clinica_id = v_clinica
+          and da.codigo_protocolo = p_codigo_protocolo and not da.anulada
+        union all
+        select p_fecha_aplicacion, now(), coalesce(p_inicia_serie, false), true
+      ) d
+    ) s
+  ) x
+  where x.hyp;
+
+  v_pos := case when coalesce(p_es_refuerzo, false) or v_n > v_serie then v_serie else v_n end;
+
+  v_intervalo := case
+    when v_pos < v_serie then v_proto.intervalo_serie_dias
+    when coalesce(p_sin_refuerzo, false) then null
+    else coalesce(
+      p_duracion_elegida_dias,
+      (select (t.b ->> 'intervalo')::int
+         from jsonb_array_elements(v_proto.intervalos_por_edad) with ordinality as t(b, ord)
+        where case
+                when v_mascota.fecha_nacimiento is null
+                  then t.ord = jsonb_array_length(v_proto.intervalos_por_edad)
+                else (t.b ->> 'hasta_dias') is null
+                     or (p_fecha_aplicacion - v_mascota.fecha_nacimiento) <= (t.b ->> 'hasta_dias')::int
+              end
+        order by t.ord
+        limit 1),
+      v_proto.intervalo_refuerzo_dias
+    )
+  end;
+  v_prox := case when v_intervalo is null then null else p_fecha_aplicacion + v_intervalo end;
+
+  select po.posicion as pos, po.dosis_serie as serie, po.fecha_aplicacion as fecha into v_prev
+  from public._dosis_posiciones(v_clinica, p_mascota_id) po
+  where po.codigo_protocolo = p_codigo_protocolo and po.es_ultima;
+  if found then
+    v_reiniciar := v_prev.pos < v_prev.serie and p_fecha_aplicacion - v_prev.fecha > 42;
+  end if;
+
+  return query select
+    v_pos,
+    v_serie,
+    case
+      when v_serie > 1 and not coalesce(p_es_refuerzo, false) and v_n <= v_serie
+        then 'Dosis ' || v_n || ' de ' || v_serie
+      when v_serie = 1 and v_n = 1 and not coalesce(p_es_refuerzo, false) then 'Primera dosis'
+      else 'Refuerzo'
+    end,
+    v_prox,
+    case
+      when v_pos < v_serie then 'Dosis ' || (v_pos + 1) || ' de ' || v_serie
+      else 'Refuerzo'
+    end,
+    v_reiniciar;
+end;
+$$;
+
+-- 11. Carné completo de una mascota (veterinario). Todo valor derivado sale de _carne_filas
+-- / _dosis_posiciones.
+drop function if exists public.carne_de_mascota(uuid);
+create or replace function public.carne_de_mascota(p_mascota_id uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+  v_mascota public.mascotas;
+  v_cliente public.clientes;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede ver el carné.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_mascota from public.mascotas
+  where id = p_mascota_id and clinica_id = v_clinica;
+  if not found then
+    raise exception 'La mascota no pertenece a tu clínica.' using errcode = 'insufficient_privilege';
+  end if;
+  select * into v_cliente from public.clientes where id = v_mascota.dueno_id;
+
+  return jsonb_build_object(
+    'hoy', v_hoy,
+    'mascota', jsonb_build_object(
+      'id', v_mascota.id, 'nombre', v_mascota.nombre, 'especie', v_mascota.especie,
+      'raza', v_mascota.raza, 'fecha_nacimiento', v_mascota.fecha_nacimiento,
+      'foto_path', v_mascota.foto_path
+    ),
+    'dueno', jsonb_build_object('nombre', v_cliente.nombre, 'telefono', v_cliente.telefono),
+    'clinica', (
+      select jsonb_build_object(
+        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono
+      )
+      from public.clinicas cl where cl.id = v_clinica
+    ),
+    'biologicos', coalesce((
+      select jsonb_agg(to_jsonb(f) - 'mascota_id' order by f.biologico_nombre)
+      from public._carne_filas(v_clinica, p_mascota_id, v_hoy) f
+    ), '[]'::jsonb),
+    'dosis', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', d.id,
+          'codigo_protocolo', d.codigo_protocolo,
+          'biologico_nombre', d.biologico_nombre,
+          'tipo', d.tipo,
+          'fecha_aplicacion', d.fecha_aplicacion,
+          'etiqueta_dosis', po.etiqueta_dosis,
+          'es_ultima', coalesce(po.es_ultima, false),
+          'producto', d.producto,
+          'lote', d.lote,
+          'observaciones', d.observaciones,
+          'externa', d.externa,
+          'clinica_externa', d.clinica_externa,
+          'es_refuerzo', d.es_refuerzo,
+          'cita_id', d.cita_id,
+          'anulada', d.anulada,
+          'motivo_anulacion', d.motivo_anulacion,
+          'anulada_at', d.anulada_at,
+          'veterinario', jsonb_build_object(
+            'nombre', pf.nombre, 'matricula', pf.matricula, 'activo', pf.activo
+          )
+        )
+        order by d.fecha_aplicacion desc, d.created_at desc
+      )
+      from public.dosis_aplicadas d
+      left join public._dosis_posiciones(v_clinica, p_mascota_id) po on po.dosis_id = d.id
+      left join public.perfiles pf on pf.id = d.veterinario_id
+      where d.mascota_id = p_mascota_id and d.clinica_id = v_clinica
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+-- 12. Alertas de la clínica (D-10, D-13, D-14): clínica completa, sin filtrar por veterinario.
+drop function if exists public.vacunas_pendientes();
+create or replace function public.vacunas_pendientes()
+returns table (
+  mascota_id uuid, mascota_nombre text, mascota_especie text, mascota_foto_path text,
+  cliente_id uuid, cliente_nombre text, cliente_telefono text, codigo_protocolo text,
+  biologico_nombre text, tipo text, ultima_dosis_id uuid, posicion int, dosis_serie int,
+  etiqueta_proxima text, proxima_fecha date, estado text, dias_vencida int,
+  recordatorio_enviado_at timestamptz
+)
+language plpgsql stable security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede ver las alertas de vacunación.' using errcode = 'insufficient_privilege';
+  end if;
+
+  return query
+  select f.mascota_id, m.nombre, m.especie, m.foto_path, c.id, c.nombre, c.telefono,
+         f.codigo_protocolo, f.biologico_nombre, f.tipo, f.ultima_dosis_id, f.posicion,
+         f.dosis_serie, f.etiqueta_proxima, f.proxima_fecha, f.estado, f.dias_vencida,
+         a.recordatorio_enviado_at
+  from public._carne_filas(v_clinica, null, v_hoy) f
+  join public.mascotas m on m.id = f.mascota_id
+  join public.clientes c on c.id = m.dueno_id
+  left join public.vacuna_alertas a on a.dosis_ref_id = f.ultima_dosis_id
+  where f.estado in ('vencida', 'proxima')
+    and f.dias_vencida <= 180
+    and (
+      a.dosis_ref_id is null
+      or (a.descartada_at is null and (a.pospuesta_hasta is null or a.pospuesta_hasta <= v_hoy))
+    )
+  order by (f.estado <> 'vencida'), f.dias_vencida desc, f.proxima_fecha asc;
+end;
+$$;
+
+drop function if exists public.vacunas_resumen();
+create or replace function public.vacunas_resumen()
+returns table (vencidas int, proximas int, ocultas_antiguas int)
+language plpgsql stable security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede ver el resumen de vacunación.' using errcode = 'insufficient_privilege';
+  end if;
+
+  return query
+  select
+    (count(*) filter (
+       where f.estado = 'vencida' and f.dias_vencida <= 180
+         and (a.dosis_ref_id is null
+              or (a.descartada_at is null and (a.pospuesta_hasta is null or a.pospuesta_hasta <= v_hoy)))
+     ))::int,
+    (count(*) filter (
+       where f.estado = 'proxima'
+         and (a.dosis_ref_id is null
+              or (a.descartada_at is null and (a.pospuesta_hasta is null or a.pospuesta_hasta <= v_hoy)))
+     ))::int,
+    (count(*) filter (
+       where f.estado = 'vencida' and f.dias_vencida > 180 and a.descartada_at is null
+     ))::int
+  from public._carne_filas(v_clinica, null, v_hoy) f
+  left join public.vacuna_alertas a on a.dosis_ref_id = f.ultima_dosis_id;
+end;
+$$;
+
+-- Insignias por mascota: espejo del carné (ignora gestión de alertas y el corte de 180 días).
+drop function if exists public.vacunas_resumen_mascotas();
+create or replace function public.vacunas_resumen_mascotas()
+returns table (mascota_id uuid, vencidas int, proximas int)
+language plpgsql stable security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede ver el resumen de vacunación.' using errcode = 'insufficient_privilege';
+  end if;
+
+  return query
+  select f.mascota_id,
+         (count(*) filter (where f.estado = 'vencida'))::int,
+         (count(*) filter (where f.estado = 'proxima'))::int
+  from public._carne_filas(v_clinica, null, v_hoy) f
+  group by f.mascota_id
+  having count(*) filter (where f.estado in ('vencida', 'proxima')) > 0;
+end;
+$$;
+
+drop function if exists public.gestionar_alerta_vacuna(uuid, text, text, int);
+create or replace function public.gestionar_alerta_vacuna(
+  p_dosis_ref_id uuid,
+  p_accion text,
+  p_motivo text default null,
+  p_dias int default null
+)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_dosis_clinica uuid;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede gestionar alertas.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select clinica_id into v_dosis_clinica from public.dosis_aplicadas
+  where id = p_dosis_ref_id and clinica_id = v_clinica;
+  if not found then
+    raise exception 'La dosis no pertenece a tu clínica.' using errcode = 'insufficient_privilege';
+  end if;
+
+  if p_accion is null or p_accion not in ('descartar', 'posponer', 'recordado', 'restaurar') then
+    raise exception 'Acción de alerta inválida.' using errcode = 'check_violation';
+  end if;
+
+  if p_accion = 'descartar' then
+    insert into public.vacuna_alertas (dosis_ref_id, clinica_id, descartada_at, motivo_descarte)
+    values (p_dosis_ref_id, v_clinica, now(), nullif(trim(coalesce(p_motivo, '')), ''))
+    on conflict (dosis_ref_id) do update
+      set descartada_at = now(), motivo_descarte = excluded.motivo_descarte;
+  elsif p_accion = 'posponer' then
+    if p_dias is null or p_dias not in (7, 15, 30) then
+      raise exception 'Posponer admite 7, 15 o 30 días.' using errcode = 'check_violation';
+    end if;
+    insert into public.vacuna_alertas (dosis_ref_id, clinica_id, pospuesta_hasta)
+    values (p_dosis_ref_id, v_clinica, public._hoy_bogota() + p_dias)
+    on conflict (dosis_ref_id) do update set pospuesta_hasta = excluded.pospuesta_hasta;
+  elsif p_accion = 'recordado' then
+    insert into public.vacuna_alertas (dosis_ref_id, clinica_id, recordatorio_enviado_at)
+    values (p_dosis_ref_id, v_clinica, now())
+    on conflict (dosis_ref_id) do update set recordatorio_enviado_at = excluded.recordatorio_enviado_at;
+  else
+    insert into public.vacuna_alertas (dosis_ref_id, clinica_id)
+    values (p_dosis_ref_id, v_clinica)
+    on conflict (dosis_ref_id) do update
+      set descartada_at = null, motivo_descarte = null, pospuesta_hasta = null;
+  end if;
+end;
+$$;
+
+-- 13. Enlaces públicos del carné (D-16). Token de 64 hex con dos gen_random_uuid() (sin
+-- pgcrypto); reintento ante unique_violation como generar_codigo_vinculacion.
+drop function if exists public.obtener_o_crear_enlace_carne(uuid);
+create or replace function public.obtener_o_crear_enlace_carne(p_mascota_id uuid)
+returns text
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_token text;
+  v_intento int := 0;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede compartir el carné.' using errcode = 'insufficient_privilege';
+  end if;
+  if not exists (select 1 from public.mascotas where id = p_mascota_id and clinica_id = v_clinica) then
+    raise exception 'La mascota no pertenece a tu clínica.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select ce.token into v_token from public.carne_enlaces ce
+  where ce.mascota_id = p_mascota_id and ce.clinica_id = v_clinica and ce.activo;
+  if v_token is not null then
+    return v_token;
+  end if;
+
+  loop
+    v_intento := v_intento + 1;
+    begin
+      insert into public.carne_enlaces (mascota_id, clinica_id, token)
+      values (p_mascota_id, v_clinica,
+              replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''))
+      on conflict (mascota_id) do update
+        set token = excluded.token, activo = true, regenerado_at = now()
+      returning token into v_token;
+      exit;
+    exception when unique_violation then
+      if v_intento >= 5 then
+        raise;
+      end if;
+    end;
+  end loop;
+  return v_token;
+end;
+$$;
+
+drop function if exists public.regenerar_enlace_carne(uuid);
+create or replace function public.regenerar_enlace_carne(p_mascota_id uuid)
+returns text
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_token text;
+  v_intento int := 0;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede compartir el carné.' using errcode = 'insufficient_privilege';
+  end if;
+  if not exists (select 1 from public.mascotas where id = p_mascota_id and clinica_id = v_clinica) then
+    raise exception 'La mascota no pertenece a tu clínica.' using errcode = 'insufficient_privilege';
+  end if;
+
+  loop
+    v_intento := v_intento + 1;
+    begin
+      insert into public.carne_enlaces (mascota_id, clinica_id, token)
+      values (p_mascota_id, v_clinica,
+              replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''))
+      on conflict (mascota_id) do update
+        set token = excluded.token, activo = true, regenerado_at = now()
+      returning token into v_token;
+      exit;
+    exception when unique_violation then
+      if v_intento >= 5 then
+        raise;
+      end if;
+    end;
+  end loop;
+  return v_token;
+end;
+$$;
+
+-- 14. Carné público (VAC-04). Solo la Edge Function `carne` (service_role) la ejecuta; anon
+-- nunca (D-25). Token malformado/desconocido/inactivo => null indistinguible. Salida limitada
+-- a D-15/D-20/D-23: sin ids, sin contacto del dueño, sin anuladas ni notas internas.
+drop function if exists public.carne_publico(text);
+create or replace function public.carne_publico(p_token text)
+returns jsonb
+language plpgsql stable security definer set search_path = public
+as $$
+declare
+  v_hoy date := public._hoy_bogota();
+  v_enlace public.carne_enlaces;
+  v_mascota public.mascotas;
+  v_cliente public.clientes;
+begin
+  if p_token is null or p_token !~ '^[0-9a-f]{64}$' then
+    return null;
+  end if;
+
+  select * into v_enlace from public.carne_enlaces where token = p_token and activo;
+  if not found then
+    return null;
+  end if;
+
+  select * into v_mascota from public.mascotas
+  where id = v_enlace.mascota_id and clinica_id = v_enlace.clinica_id;
+  if not found then
+    return null;
+  end if;
+  select * into v_cliente from public.clientes where id = v_mascota.dueno_id;
+
+  return jsonb_build_object(
+    'hoy', v_hoy,
+    'mascota', jsonb_build_object(
+      'nombre', v_mascota.nombre, 'especie', v_mascota.especie, 'raza', v_mascota.raza,
+      'fecha_nacimiento', v_mascota.fecha_nacimiento, 'foto_path', v_mascota.foto_path
+    ),
+    'propietario', public._nombre_corto(v_cliente.nombre),
+    'clinica', (
+      select jsonb_build_object(
+        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono
+      )
+      from public.clinicas cl where cl.id = v_enlace.clinica_id
+    ),
+    'biologicos', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'biologico_nombre', f.biologico_nombre,
+          'tipo', f.tipo,
+          'ultima_fecha', f.ultima_fecha,
+          'posicion', f.posicion,
+          'dosis_serie', f.dosis_serie,
+          'proxima_fecha', f.proxima_fecha,
+          'etiqueta_proxima', f.etiqueta_proxima,
+          'estado', f.estado
+        )
+        order by f.biologico_nombre
+      )
+      from public._carne_filas(v_enlace.clinica_id, v_enlace.mascota_id, v_hoy) f
+    ), '[]'::jsonb),
+    'dosis', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'biologico_nombre', d.biologico_nombre,
+          'tipo', d.tipo,
+          'fecha_aplicacion', d.fecha_aplicacion,
+          'etiqueta_dosis', po.etiqueta_dosis,
+          'es_ultima', po.es_ultima,
+          'producto', d.producto,
+          'lote', d.lote,
+          'externa', d.externa,
+          'clinica_externa', d.clinica_externa,
+          'veterinario', case
+            when d.externa then null
+            else jsonb_build_object('nombre', pf.nombre, 'matricula', pf.matricula)
+          end
+        )
+        order by d.fecha_aplicacion desc, d.created_at desc
+      )
+      from public.dosis_aplicadas d
+      join public._dosis_posiciones(v_enlace.clinica_id, v_enlace.mascota_id) po on po.dosis_id = d.id
+      left join public.perfiles pf on pf.id = d.veterinario_id
+      where d.mascota_id = v_enlace.mascota_id
+        and d.clinica_id = v_enlace.clinica_id
+        and not d.anulada
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+-- 15. Grants.
+revoke all on function public.protocolos_efectivos(text, boolean) from public, anon;
+revoke all on function public.guardar_protocolo(text, text, text, text[], int, int, int, int[]) from public, anon;
+revoke all on function public.restablecer_protocolo(text) from public, anon;
+revoke all on function public.desactivar_protocolo(text) from public, anon;
+revoke all on function public.registrar_dosis(
+  uuid, text, text, date, int, boolean, boolean, boolean, boolean, text, text, text, text, uuid, boolean
+) from public, anon;
+revoke all on function public.anular_dosis(uuid, text) from public, anon;
+revoke all on function public.previsualizar_dosis(uuid, text, date, int, boolean, boolean, boolean) from public, anon;
+revoke all on function public.carne_de_mascota(uuid) from public, anon;
+revoke all on function public.vacunas_pendientes() from public, anon;
+revoke all on function public.vacunas_resumen() from public, anon;
+revoke all on function public.vacunas_resumen_mascotas() from public, anon;
+revoke all on function public.gestionar_alerta_vacuna(uuid, text, text, int) from public, anon;
+revoke all on function public.obtener_o_crear_enlace_carne(uuid) from public, anon;
+revoke all on function public.regenerar_enlace_carne(uuid) from public, anon;
+
+grant execute on function public.protocolos_efectivos(text, boolean) to authenticated;
+grant execute on function public.guardar_protocolo(text, text, text, text[], int, int, int, int[]) to authenticated;
+grant execute on function public.restablecer_protocolo(text) to authenticated;
+grant execute on function public.desactivar_protocolo(text) to authenticated;
+grant execute on function public.registrar_dosis(
+  uuid, text, text, date, int, boolean, boolean, boolean, boolean, text, text, text, text, uuid, boolean
+) to authenticated;
+grant execute on function public.anular_dosis(uuid, text) to authenticated;
+grant execute on function public.previsualizar_dosis(uuid, text, date, int, boolean, boolean, boolean) to authenticated;
+grant execute on function public.carne_de_mascota(uuid) to authenticated;
+grant execute on function public.vacunas_pendientes() to authenticated;
+grant execute on function public.vacunas_resumen() to authenticated;
+grant execute on function public.vacunas_resumen_mascotas() to authenticated;
+grant execute on function public.gestionar_alerta_vacuna(uuid, text, text, int) to authenticated;
+grant execute on function public.obtener_o_crear_enlace_carne(uuid) to authenticated;
+grant execute on function public.regenerar_enlace_carne(uuid) to authenticated;
+
+-- Solo la Edge Function `carne` (service_role) la ejecuta; anon nunca (D-25, VAC-04).
+revoke all on function public.carne_publico(text) from public, anon, authenticated;
+grant execute on function public.carne_publico(text) to service_role;
+
+-- Re-afirmar el helper de autoría (D-09) al cierre del bloque.
+revoke all on function public.es_autor_en_mi_clinica(uuid) from public, anon;
+grant execute on function public.es_autor_en_mi_clinica(uuid) to authenticated;
 
 notify pgrst, 'reload schema';
