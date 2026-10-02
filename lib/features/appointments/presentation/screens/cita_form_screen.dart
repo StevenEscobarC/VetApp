@@ -13,15 +13,19 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/chips/app_filter_chip.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../../core/widgets/status/vet_avatar.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../clients/domain/entities/cliente.dart';
 import '../../../clients/presentation/providers/clientes_providers.dart';
 import '../../../patients/domain/entities/mascota.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
+import '../../../team/presentation/providers/team_providers.dart';
 import '../../domain/cita_failure.dart';
 import '../../domain/cita_solapes.dart';
 import '../../domain/entities/cita.dart';
 import '../../domain/motivos_cita.dart';
 import '../providers/citas_providers.dart';
+import '../widgets/asignar_veterinario_sheet.dart';
 import '../widgets/cliente_search_field.dart';
 import '../widgets/mascota_multi_select.dart';
 import '../widgets/permiso_notificaciones.dart';
@@ -73,6 +77,12 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   bool _domicilio = false;
   bool _notasExpandidas = false;
 
+  // Veterinario asignado (D-07). Crear: el usuario por defecto; editar: el
+  // de la cita. [_vetOriginal] distingue "sin cambio" (se envía null).
+  String? _veterinarioId;
+  String? _veterinarioNombre;
+  String? _vetOriginal;
+
   bool _loading = false;
   String? _error;
 
@@ -86,6 +96,9 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
     setState(() {
       _prefilled = true;
       _clienteId = c.clienteId;
+      _veterinarioId = c.veterinarioId;
+      _veterinarioNombre = c.veterinarioNombre;
+      _vetOriginal = c.veterinarioId;
       _mascotasSel = c.mascotas.map((m) => m.id).toSet();
       _conConsulta = c.mascotasConConsulta;
       final conocido = motivosCita.any((m) => m.label == c.motivo);
@@ -162,6 +175,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
         dia: _dia,
         ahora: ahora,
         duracionMin: _duracion,
+        veterinarioId: _veterinarioId,
       );
       if (h == null) {
         return (
@@ -252,6 +266,21 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
     });
   }
 
+  Future<void> _elegirVeterinario(String yoId) async {
+    final elegido = await elegirVeterinario(
+      context,
+      activos: ref.read(miembrosActivosProvider),
+      seleccionadoId: _veterinarioId ?? yoId,
+      yoId: yoId,
+      indices: ref.read(indicesColorVetProvider),
+    );
+    if (elegido == null || !mounted) return;
+    setState(() {
+      _veterinarioId = elegido.id;
+      _veterinarioNombre = elegido.nombre;
+    });
+  }
+
   Future<bool> _confirmarCruce(List<Cita> cruces) async {
     final String cuerpo;
     if (cruces.length == 1) {
@@ -302,6 +331,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
         duracionMin: _duracion,
         citas: delDia,
         excluirId: widget.citaId,
+        veterinarioId: _veterinarioId,
       );
       if (cruces.isNotEmpty) {
         final seguir = await _confirmarCruce(cruces);
@@ -318,6 +348,13 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
           ? ModalidadCita.domicilio
           : ModalidadCita.consultorio;
       final acciones = ref.read(citaActionsProvider);
+      final yo = ref.read(authProfileProvider).value;
+      final paraOtro =
+          !_editando &&
+          ref.read(esClinicaMultiVetProvider) &&
+          _veterinarioId != null &&
+          _veterinarioId != yo?.id;
+      final nombreOtro = _veterinarioNombre;
       if (_editando) {
         await acciones.actualizar(
           citaId: widget.citaId!,
@@ -328,6 +365,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
           direccion: _dirCtrl.text.trim(),
           motivo: _motivoGuardado,
           notas: _notasCtrl.text.trim(),
+          veterinarioId: _veterinarioId == _vetOriginal ? null : _veterinarioId,
         );
       } else {
         await acciones.crear(
@@ -339,12 +377,19 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
           direccion: _dirCtrl.text.trim(),
           motivo: _motivoGuardado,
           notas: _notasCtrl.text.trim(),
+          veterinarioId: _veterinarioId,
         );
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_editando ? 'Cita actualizada' : 'Cita agendada'),
+          content: Text(
+            _editando
+                ? 'Cita actualizada'
+                : paraOtro
+                ? 'Cita agendada para Dr(a). ${nombreOtro ?? ''}'
+                : 'Cita agendada',
+          ),
         ),
       );
       if (!_editando) {
@@ -374,6 +419,11 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    // Se observa antes del retorno temprano de edición para suscribirse al
+    // equipo desde el primer build.
+    final yo = ref.watch(authProfileProvider).value;
+    final multiVet = ref.watch(esClinicaMultiVetProvider);
+    final equipoError = ref.watch(teamProvider).hasError;
     if (_editando && !_prefilled) {
       final citaAsync = ref.watch(citaProvider(widget.citaId!));
       final cita = citaAsync.asData?.value;
@@ -421,6 +471,11 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
       );
     }
 
+    // Crear: por defecto quien crea. Editar: se conserva el de la cita.
+    if (!_editando && _veterinarioId == null && yo != null) {
+      _veterinarioId = yo.id;
+      _veterinarioNombre = yo.nombre;
+    }
     final semana = ref.watch(agendaSemanaProvider(lunesDeSemana(_dia)));
     final clienteId = _clienteId;
     final clienteAsync = clienteId == null
@@ -584,6 +639,51 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
                 errorText: dirFalta
                     ? 'Escribe la dirección para la visita a domicilio.'
                     : null,
+              ),
+            ],
+            if (multiVet && _veterinarioId != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              titulo('Veterinario'),
+              InkWell(
+                onTap: () => _elegirVeterinario(yo?.id ?? ''),
+                child: AppCard(
+                  child: Row(
+                    children: [
+                      VetAvatar(
+                        nombre: _veterinarioNombre ?? '',
+                        indice:
+                            ref.watch(indicesColorVetProvider)[_veterinarioId] ??
+                            0,
+                        size: 40,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'Dr(a). ${_veterinarioNombre ?? ''}',
+                          style: textTheme.bodyLarge,
+                        ),
+                      ),
+                      if (_veterinarioId == yo?.id) ...[
+                        Text(
+                          '(Tú)',
+                          style: textTheme.labelLarge?.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                      ],
+                      const Icon(Icons.keyboard_arrow_down),
+                    ],
+                  ),
+                ),
+              ),
+            ] else if (!_editando && equipoError) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'No pudimos cargar el equipo. Se asignará a ti.',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textMuted,
+                ),
               ),
             ],
             const SizedBox(height: AppSpacing.md),

@@ -68,19 +68,42 @@ const _bruno = Mascota(
 const _conFicha =
     '/agenda/nueva?fecha=2026-09-30&clienteId=c-maria&mascotaId=m-luna';
 
+final _luisTorres = Miembro(
+  id: 'vet-2',
+  nombre: 'Luis Torres',
+  rolClinica: 'veterinario',
+  activo: true,
+  createdAt: DateTime(2026, 2, 1),
+);
+
+/// Cita de María asignada a Luis (vet-2).
+final _citaDeLuis = citaRockyLunaHoy.copyWith(
+  veterinarioId: 'vet-2',
+  veterinarioNombre: 'Luis Torres',
+);
+
 List<Override> _overrides(
   FakeCitaRepository repo,
-  FakeMascotaRepository mascotas,
-) => [
+  FakeMascotaRepository mascotas, {
+  bool multi = false,
+  bool equipoError = false,
+}) => [
   citaRepositoryProvider.overrideWithValue(repo),
   clienteRepositoryProvider.overrideWithValue(
     FakeClienteRepository(clientes: [_maria, _nuevo]),
   ),
   mascotaRepositoryProvider.overrideWithValue(mascotas),
-  teamRepositoryProvider.overrideWithValue(FakeTeamRepository()),
-  esClinicaMultiVetProvider.overrideWithValue(false),
-  miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
-  indicesColorVetProvider.overrideWithValue(const <String, int>{}),
+  teamRepositoryProvider.overrideWithValue(
+    FakeTeamRepository(
+      miembrosFixture: multi ? [miembroAna, _luisTorres, miembroRetirado] : [],
+      error: equipoError ? Exception('equipo') : null,
+    ),
+  ),
+  if (!equipoError && !multi) ...[
+    esClinicaMultiVetProvider.overrideWithValue(false),
+    miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
+    indicesColorVetProvider.overrideWithValue(const <String, int>{}),
+  ],
   authProfileProvider.overrideWith(
     () => FakeAuthProfileNotifier(profile: vetProfile),
   ),
@@ -95,6 +118,8 @@ Widget _app({
   FakeMascotaRepository? mascotas,
   String initial = '/agenda/nueva?fecha=2026-09-30',
   List<RouteBase>? routes,
+  bool multi = false,
+  bool equipoError = false,
 }) => routerHarness(
   locale: const Locale('es', 'CO'),
   initialLocation: initial,
@@ -102,6 +127,8 @@ Widget _app({
   overrides: _overrides(
     repo,
     mascotas ?? FakeMascotaRepository(mascotas: [_luna]),
+    multi: multi,
+    equipoError: equipoError,
   ),
 );
 
@@ -772,6 +799,181 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Guardar cambios'), findsNothing);
+    });
+  });
+
+  group('CitaFormScreen - veterinario (04.1-08)', () {
+    final mascotasDeMaria = FakeMascotaRepository(mascotas: [_luna, _rocky]);
+    Finder enHoja(String t) =>
+        find.descendant(of: find.byType(BottomSheet), matching: find.text(t));
+
+    testWidgets('clínica de un solo vet: sin sección Veterinario', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: citasSemanaFixture);
+      await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
+      await tester.pumpAndSettle();
+      expect(find.text('Veterinario'), findsNothing);
+
+      await _tocarGuardar(tester);
+      expect(repo.creadas.single.veterinarioId, anyOf('vet-1', isNull));
+      expect(find.text('Cita agendada'), findsOneWidget);
+    });
+
+    testWidgets('multi-vet: elegir a Luis cambia la fila y se envía', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: citasEquipoFixture);
+      await tester.pumpWidget(_app(repo: repo, initial: _conFicha, multi: true));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Veterinario'), findsOneWidget);
+      expect(find.text('Dr(a). Ana Ramírez'), findsOneWidget);
+      expect(find.text('(Tú)'), findsOneWidget);
+
+      await tester.tap(find.text('Dr(a). Ana Ramírez'));
+      await tester.pumpAndSettle();
+      expect(find.text('Asignar a'), findsOneWidget);
+      expect(find.text('Dr(a). Luis Torres'), findsOneWidget);
+      expect(find.text('Dr(a). Marta Ruiz'), findsNothing);
+
+      await tester.tap(find.text('Dr(a). Luis Torres'));
+      await tester.pumpAndSettle();
+      expect(find.text('Asignar a'), findsNothing);
+      expect(find.text('Dr(a). Luis Torres'), findsOneWidget);
+
+      await _tocarGuardar(tester);
+      expect(repo.creadas.single.veterinarioId, 'vet-2');
+      expect(
+        find.text('Cita agendada para Dr(a). Luis Torres'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('el cruce solo considera la agenda del vet elegido', (
+      tester,
+    ) async {
+      _grande(tester);
+      // Cita de Luis 10:45-11:15; Ana tiene Luna 10:30-11:00 (cruza con 10:30).
+      final repo = FakeCitaRepository(citas: [citaLunaHoy]);
+      await tester.pumpWidget(_app(repo: repo, initial: _conFicha, multi: true));
+      await tester.pumpAndSettle();
+
+      // La sugerencia es 9:45; subir a 10:30, ocupado por la cita de Ana.
+      await _sumar(tester, 3);
+      await _tocarGuardar(tester);
+      expect(find.text('Se cruza con otra cita'), findsOneWidget);
+      await tester.tap(find.text('Cambiar hora'));
+      await tester.pumpAndSettle();
+
+      // Con Luis no hay cruce.
+      await tester.tap(find.text('Dr(a). Ana Ramírez'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dr(a). Luis Torres'));
+      await tester.pumpAndSettle();
+      await _tocarGuardar(tester);
+      expect(find.text('Se cruza con otra cita'), findsNothing);
+      expect(repo.creadas, hasLength(1));
+      expect(repo.creadas.single.veterinarioId, 'vet-2');
+    });
+
+    testWidgets('error de equipo al crear: asigna a quien crea', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: citasSemanaFixture);
+      await tester.pumpWidget(
+        _app(repo: repo, initial: _conFicha, equipoError: true),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No pudimos cargar el equipo. Se asignará a ti.'),
+        findsOneWidget,
+      );
+      await _tocarGuardar(tester);
+      expect(repo.creadas.single.veterinarioId, anyOf('vet-1', isNull));
+    });
+
+    testWidgets('error de equipo al editar: sin aviso y vet sin cambio', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: [_citaDeLuis]);
+      await tester.pumpWidget(
+        _app(
+          repo: repo,
+          mascotas: mascotasDeMaria,
+          initial: '/agenda/cita-2/editar',
+          equipoError: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Se asignará a ti'), findsNothing);
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+      expect(repo.actualizadas.single.veterinarioId, isNull);
+    });
+
+    testWidgets('editar cita de vet retirado sin tocar el vet: envía null', (
+      tester,
+    ) async {
+      _grande(tester);
+      final cita = _citaDeLuis.copyWith(
+        veterinarioId: 'vet-retirado',
+        veterinarioNombre: 'Marta Ruiz',
+      );
+      final repo = FakeCitaRepository(citas: [cita]);
+      await tester.pumpWidget(
+        _app(
+          repo: repo,
+          mascotas: mascotasDeMaria,
+          initial: '/agenda/cita-2/editar',
+          multi: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Dr(a). Marta Ruiz'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+      expect(repo.actualizadas.single.veterinarioId, isNull);
+      expect(
+        find.text('Ese veterinario ya no está en tu clínica.'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('editar: elegir otro vet lo envía; el mismo envía null', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(citas: [_citaDeLuis]);
+      await tester.pumpWidget(
+        _app(
+          repo: repo,
+          mascotas: mascotasDeMaria,
+          initial: '/agenda/cita-2/editar',
+          multi: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Preselecciona al vet actual (Luis).
+      expect(find.text('Dr(a). Luis Torres'), findsOneWidget);
+
+      await tester.tap(find.text('Dr(a). Luis Torres'));
+      await tester.pumpAndSettle();
+      await tester.tap(enHoja('Dr(a). Ana Ramírez'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dr(a). Ana Ramírez'));
+      await tester.pumpAndSettle();
+      await tester.tap(enHoja('Dr(a). Luis Torres'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+      expect(repo.actualizadas.single.veterinarioId, isNull);
     });
   });
 }

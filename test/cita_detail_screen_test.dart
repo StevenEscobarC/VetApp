@@ -12,10 +12,28 @@ import 'package:vetapp/features/appointments/presentation/agenda_routes.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/screens/cita_detail_screen.dart';
 
+import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/team/domain/miembro.dart';
+import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
+
+import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_team.dart';
 import 'helpers/router_harness.dart';
 
-Widget _detalle(FakeCitaRepository repo, String id) => routerHarness(
+final _luisTorres = Miembro(
+  id: 'vet-2',
+  nombre: 'Luis Torres',
+  rolClinica: 'veterinario',
+  activo: true,
+  createdAt: DateTime(2026, 2, 1),
+);
+
+Widget _detalle(
+  FakeCitaRepository repo,
+  String id, {
+  bool multi = false,
+}) => routerHarness(
   initialLocation: '/agenda/$id',
   routes: [
     GoRoute(
@@ -48,18 +66,27 @@ Widget _detalle(FakeCitaRepository repo, String id) => routerHarness(
           Scaffold(body: Text('paciente ${state.pathParameters['id']}')),
     ),
   ],
-  overrides: [citaRepositoryProvider.overrideWithValue(repo)],
+  overrides: [
+    citaRepositoryProvider.overrideWithValue(repo),
+    authProfileProvider.overrideWith(
+      () => FakeAuthProfileNotifier(profile: vetProfile),
+    ),
+    teamRepositoryProvider.overrideWithValue(
+      FakeTeamRepository(miembrosFixture: multi ? [miembroAna, _luisTorres] : []),
+    ),
+  ],
 );
 
 Future<void> _abrir(
   WidgetTester tester,
   FakeCitaRepository repo,
-  String id,
-) async {
+  String id, {
+  bool multi = false,
+}) async {
   tester.view.physicalSize = const Size(800, 2000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(_detalle(repo, id));
+  await tester.pumpWidget(_detalle(repo, id, multi: multi));
   await tester.pumpAndSettle();
 }
 
@@ -289,5 +316,58 @@ void main() {
       paths.toList().indexOf('nueva'),
       lessThan(paths.toList().indexOf(':id')),
     );
+  });
+
+  group('veterinario (04.1-08)', () {
+    testWidgets('un solo vet: sin fila Veterinario ni Reasignar', (
+      tester,
+    ) async {
+      await _abrir(tester, FakeCitaRepository(citas: [citaLunaHoy]), 'cita-1');
+      expect(find.text('Veterinario'), findsNothing);
+      expect(find.text('Reasignar cita'), findsNothing);
+    });
+
+    testWidgets('multi-vet: fila Veterinario, Reasignar y Deshacer', (
+      tester,
+    ) async {
+      final repo = FakeCitaRepository(citas: [citaColegaFixture]);
+      await _abrir(tester, repo, 'cita-colega', multi: true);
+
+      expect(find.text('Veterinario'), findsOneWidget);
+      expect(find.text('Dr(a). Luis Torres'), findsOneWidget);
+
+      await tester.tap(find.text('Reasignar cita'));
+      await tester.pumpAndSettle();
+      expect(find.text('Asignar a'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text('Dr(a). Ana Ramírez'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(repo.reasignadas.single.veterinarioId, 'vet-1');
+      expect(find.text('Cita reasignada a Dr(a). Ana Ramírez'), findsOneWidget);
+
+      await tester.tap(find.text('Deshacer'));
+      await tester.pump();
+      await tester.pump();
+      expect(repo.reasignadas.last.veterinarioId, 'vet-2');
+      expect(repo.reasignadas, hasLength(2));
+    });
+
+    testWidgets('cita terminal: muestra el vet pero no Reasignar', (
+      tester,
+    ) async {
+      final repo = FakeCitaRepository(
+        citas: [_conEstado(citaColegaFixture, EstadoCita.completada)],
+      );
+      await _abrir(tester, repo, 'cita-colega', multi: true);
+      expect(find.text('Veterinario'), findsOneWidget);
+      expect(find.text('Reasignar cita'), findsNothing);
+    });
   });
 }

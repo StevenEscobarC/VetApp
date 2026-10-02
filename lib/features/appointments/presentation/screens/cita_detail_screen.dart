@@ -10,10 +10,14 @@ import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/status/app_status_chip.dart';
+import '../../../../core/widgets/status/vet_avatar.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../team/presentation/providers/team_providers.dart';
 import '../../domain/cita_failure.dart';
 import '../../domain/entities/cita.dart';
 import '../estado_cita_ui.dart';
 import '../providers/citas_providers.dart';
+import '../widgets/asignar_veterinario_sheet.dart';
 import '../widgets/cita_acciones.dart';
 
 const _yaNoExiste = 'Esta cita ya no existe.';
@@ -114,6 +118,10 @@ class _Contenido extends ConsumerWidget {
     final dir = cita.direccion ?? '';
     final notas = (cita.notas ?? '').trim();
     final enviado = cita.recordatorioEnviadoAt;
+    final multiVet = ref.watch(esClinicaMultiVetProvider);
+    final yoId = ref.watch(authProfileProvider).value?.id ?? '';
+    final indices = ref.watch(indicesColorVetProvider);
+    final nombreVet = cita.veterinarioNombre ?? '';
 
     Widget dato(String etiqueta, Widget valor) => Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -161,6 +169,48 @@ class _Contenido extends ConsumerWidget {
               ],
             ),
           ),
+          if (multiVet) ...[
+            dato(
+              'Veterinario',
+              Row(
+                children: [
+                  VetAvatar(
+                    nombre: nombreVet,
+                    indice: indices[cita.veterinarioId] ?? 0,
+                    size: 24,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      'Dr(a). $nombreVet',
+                      style: textTheme.bodyLarge,
+                    ),
+                  ),
+                  if (cita.veterinarioId == yoId) ...[
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      '(Tú)',
+                      style: textTheme.labelLarge?.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (!cita.estado.esTerminal)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(
+                  label: 'Reasignar cita',
+                  variant: AppButtonVariant.text,
+                  icon: Icons.swap_horiz,
+                  expand: false,
+                  onPressed: () => _reasignar(context, ref, yoId, indices),
+                ),
+              ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           dato('Motivo', Text(cita.motivo, style: textTheme.bodyLarge)),
           dato(
             'Dónde',
@@ -246,6 +296,53 @@ class _Contenido extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Elige a otro miembro activo y reasigna con "Deshacer" (6 s). Captura
+  /// acciones y messenger antes de esperar, como [cambiarEstadoConDeshacer].
+  Future<void> _reasignar(
+    BuildContext context,
+    WidgetRef ref,
+    String yoId,
+    Map<String, int> indices,
+  ) async {
+    final actions = ref.read(citaActionsProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    final elegido = await elegirVeterinario(
+      context,
+      activos: ref.read(miembrosActivosProvider),
+      seleccionadoId: cita.veterinarioId,
+      yoId: yoId,
+      indices: indices,
+    );
+    if (elegido == null || elegido.id == cita.veterinarioId) return;
+    final anterior = cita.veterinarioId;
+    try {
+      await actions.reasignar(cita.id, elegido.id);
+    } on CitaFailure catch (e) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.message)));
+      return;
+    }
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Cita reasignada a Dr(a). ${elegido.nombre}'),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: 'Deshacer',
+            onPressed: () async {
+              try {
+                await actions.reasignar(cita.id, anterior);
+              } on CitaFailure catch (e) {
+                messenger.showSnackBar(SnackBar(content: Text(e.message)));
+              }
+            },
+          ),
+        ),
+      );
   }
 
   List<Widget> _acciones(BuildContext context, WidgetRef ref) {
