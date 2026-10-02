@@ -13,6 +13,7 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/cita_failure.dart';
 import '../../domain/entities/cita.dart';
 import '../../domain/whatsapp_recordatorio.dart';
+import '../../../team/presentation/providers/team_providers.dart';
 import '../providers/citas_providers.dart';
 
 /// Hoja "Recordar a los de mañana" (D-15): recorre a los clientes de uno en
@@ -107,7 +108,9 @@ class _RecordarMananaSheetState extends ConsumerState<RecordarMananaSheet>
     if (numero == null) return;
     final mensaje = mensajeRecordatorio(
       cita: cita,
-      veterinario: profile?.nombre ?? '',
+      veterinario: firmaVeterinario(
+        cita.veterinarioNombre ?? profile?.nombre ?? '',
+      ),
       clinica: profile?.clinicaNombre,
     );
     _esperandoRetorno = true;
@@ -136,6 +139,7 @@ class _RecordarMananaSheetState extends ConsumerState<RecordarMananaSheet>
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final actual = _actual;
+    final multiVet = ref.watch(esClinicaMultiVetProvider);
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -165,6 +169,13 @@ class _RecordarMananaSheetState extends ConsumerState<RecordarMananaSheet>
                             '${hora12(aBogota(c.fechaHora))}',
                             style: textTheme.bodyLarge,
                           ),
+                          if (multiVet && c.veterinarioNombre != null)
+                            Text(
+                              c.veterinarioNombre!.trim().split(' ').first,
+                              style: textTheme.labelLarge?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
                           Text(
                             c.nombresMascotas,
                             style: textTheme.bodyMedium?.copyWith(

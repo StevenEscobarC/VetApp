@@ -192,6 +192,12 @@ class RecordatoriosSync {
       if (perfil == null || !perfil.esVeterinario) return;
 
       final servicio = _ref.read(recordatoriosServiceProvider);
+      // T9: un veterinario retirado no debe conservar avisos con nombres de
+      // clientes en su teléfono.
+      if (!perfil.activo) {
+        await servicio.cancelarTodo();
+        return;
+      }
       if (!await servicio.permisoConcedido()) return;
 
       final minutos = await _ref.read(anticipacionRecordatorioProvider.future);
@@ -207,7 +213,11 @@ class RecordatoriosSync {
           !sigue.esVeterinario) {
         return;
       }
-      await servicio.reprogramar(planificar(citas, minutos, ahora));
+      // D-09: solo las citas asignadas a este veterinario. Pitfall 8: una cita
+      // reasignada desaparece del teléfono anterior en su próxima sincronización
+      // (sin push/realtime por diseño).
+      final mias = citas.where((c) => c.veterinarioId == perfil.id).toList();
+      await servicio.reprogramar(planificar(mias, minutos, ahora));
 
       if (!_lanzamientoAtendido) {
         _lanzamientoAtendido = true;

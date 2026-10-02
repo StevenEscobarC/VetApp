@@ -114,6 +114,42 @@ void main() {
       expect(repo.recordatorios.last.enviadoAt, isNull);
     });
 
+    testWidgets('firma con el veterinario asignado, no con quien envía', (
+      tester,
+    ) async {
+      // vet-1 para esquivar el filtro "Mías"; la firma sale del nombre.
+      final repo = FakeCitaRepository(
+        citas: [citaLunaHoy.copyWith(veterinarioNombre: 'Luis Torres')],
+      );
+      final l = FakeLanzadorExterno();
+      await _abrir(tester, '/agenda', repo, l);
+
+      await tester.tap(find.text('WhatsApp'));
+      await _snack(tester);
+
+      final texto = Uri.decodeComponent(
+        l.abiertos.single.toString().split('text=').last,
+      );
+      expect(texto, contains('Dr(a). Luis Torres, Clínica Patitas'));
+      expect(texto, isNot(contains('Ana Ramírez')));
+    });
+
+    testWidgets('sin veterinarioNombre cae al veterinario en sesión', (
+      tester,
+    ) async {
+      final repo = FakeCitaRepository(citas: [citaLunaHoy]);
+      final l = FakeLanzadorExterno();
+      await _abrir(tester, '/agenda', repo, l);
+
+      await tester.tap(find.text('WhatsApp'));
+      await _snack(tester);
+
+      final texto = Uri.decodeComponent(
+        l.abiertos.single.toString().split('text=').last,
+      );
+      expect(texto, contains('Dr(a). Ana Ramírez, Clínica Patitas'));
+    });
+
     testWidgets('legacy sin normalizar sigue funcionando', (tester) async {
       final repo = FakeCitaRepository(
         citas: [_conTelefono(citaLunaHoy, '300 123 4567')],

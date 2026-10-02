@@ -9,9 +9,12 @@ import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/screens/agenda_screen.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/team/domain/miembro.dart';
+import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_team.dart';
 import 'helpers/fake_url_launcher.dart';
 import 'helpers/router_harness.dart';
 
@@ -48,6 +51,7 @@ Future<void> _abrir(
   FakeCitaRepository repo,
   FakeLanzadorExterno l, {
   DateTime? dia,
+  bool multiVet = false,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1;
@@ -68,6 +72,10 @@ Future<void> _abrir(
           () => FakeAuthProfileNotifier(profile: vetProfile),
         ),
         clockProvider.overrideWithValue(() => _ahora),
+        teamRepositoryProvider.overrideWithValue(FakeTeamRepository()),
+        esClinicaMultiVetProvider.overrideWithValue(multiVet),
+        miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
+        indicesColorVetProvider.overrideWithValue(const <String, int>{}),
       ],
     ),
   );
@@ -231,6 +239,51 @@ void main() {
       await _ida(tester);
       expect(repo.recordatorios, isEmpty);
       expect(find.text('Pendiente de enviar'), findsNWidgets(2));
+    });
+  });
+
+  group('firma por veterinario (D-10)', () {
+    // Se mantiene veterinarioId vet-1 para esquivar el filtro "Mías" de la
+    // agenda; la firma solo depende de veterinarioNombre.
+    final deLuis = _cita(
+      'l',
+      11,
+      'Lola Tres',
+      '3201112233',
+    ).copyWith(veterinarioNombre: 'Luis Torres');
+
+    testWidgets('multi-vet: etiqueta por fila y firma de cada cita', (
+      tester,
+    ) async {
+      final l = FakeLanzadorExterno();
+      await _abrir(
+        tester,
+        FakeCitaRepository(citas: [deLuis]),
+        l,
+        multiVet: true,
+      );
+      await tester.tap(find.textContaining('Recordar a todos'));
+      await tester.pumpAndSettle();
+      expect(find.text('Luis'), findsOneWidget);
+
+      await tester.tap(find.text('Enviar a Lola Tres'));
+      await tester.pumpAndSettle();
+      final texto = Uri.decodeComponent(
+        l.abiertos.single.toString().split('text=').last,
+      );
+      expect(texto, contains('Dr(a). Luis Torres, Clínica Patitas'));
+      expect(texto, isNot(contains('Ana Ramírez')));
+    });
+
+    testWidgets('un solo veterinario no muestra etiqueta', (tester) async {
+      await _abrir(
+        tester,
+        FakeCitaRepository(citas: [deLuis]),
+        FakeLanzadorExterno(),
+      );
+      await tester.tap(find.textContaining('Recordar a todos'));
+      await tester.pumpAndSettle();
+      expect(find.text('Luis'), findsNothing);
     });
   });
 }

@@ -3,6 +3,13 @@ import '../../../core/utils/telefono_co.dart';
 import '../../../core/utils/zona_bogota.dart';
 import 'entities/cita.dart';
 
+/// Firma del veterinario asignado: 'Dr(a). {nombre}', o vacío si no hay
+/// nombre. El prefijo vive solo aquí.
+String firmaVeterinario(String nombre) {
+  final n = nombre.trim();
+  return n.isEmpty ? '' : 'Dr(a). $n';
+}
+
 /// Mensaje formal (D-14, trato de "usted") con plantilla fija; la plantilla
 /// editable es una idea diferida.
 String mensajeRecordatorio({
