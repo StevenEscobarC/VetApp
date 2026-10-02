@@ -15,16 +15,19 @@ bool ocupaHorario(EstadoCita e) =>
     e != EstadoCita.cancelada && e != EstadoCita.noAsistio;
 
 /// Citas activas que se cruzan con `[inicio, inicio+duracionMin)`, por hora.
+/// Con [veterinarioId] solo cuenta la agenda de ese veterinario (D-09).
 List<Cita> solapesCon({
   required DateTime inicio,
   required int duracionMin,
   required Iterable<Cita> citas,
   String? excluirId,
+  String? veterinarioId,
 }) {
   final r = citas
       .where(
         (c) =>
             c.id != excluirId &&
+            (veterinarioId == null || c.veterinarioId == veterinarioId) &&
             ocupaHorario(c.estado) &&
             solapa(inicio, duracionMin, c.fechaHora, c.duracionMin),
       )
@@ -65,6 +68,7 @@ DateTime? primerHuecoLibre({
   required DateTime ahora,
   required int duracionMin,
   String? excluirId,
+  String? veterinarioId,
 }) {
   final limite = deBogota(dia.year, dia.month, dia.day, 22);
   var candidato = inicioBusquedaHueco(dia: dia, ahora: ahora);
@@ -76,6 +80,7 @@ DateTime? primerHuecoLibre({
       duracionMin: duracionMin,
       citas: citas,
       excluirId: excluirId,
+      veterinarioId: veterinarioId,
     ).isEmpty) {
       return candidato;
     }

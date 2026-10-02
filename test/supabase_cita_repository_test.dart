@@ -6,6 +6,29 @@ PostgrestException _check(String mensaje) =>
     PostgrestException(message: mensaje, code: '23514');
 
 void main() {
+  group('mensajeErrorCita - reasignación', () {
+    test('veterinario fuera de la clínica (23503)', () {
+      expect(
+        mensajeErrorCita(
+          PostgrestException(
+            message: 'Ese veterinario ya no está en tu clínica.',
+            code: '23503',
+          ),
+        ),
+        'Ese veterinario ya no está en tu clínica.',
+      );
+    });
+
+    test('reasignar una cita cerrada (23514)', () {
+      expect(
+        mensajeErrorCita(
+          _check('Solo se pueden reasignar citas pendientes o confirmadas.'),
+        ),
+        'Solo se pueden reasignar citas pendientes o confirmadas.',
+      );
+    });
+  });
+
   group('mensajeErrorCita - check_violation (23514)', () {
     test('quitar una mascota con consulta no se confunde con "elige una"', () {
       expect(

@@ -10,6 +10,8 @@ import 'package:vetapp/features/appointments/presentation/providers/citas_provid
 import 'package:vetapp/features/appointments/presentation/screens/agenda_screen.dart';
 import 'package:vetapp/features/appointments/presentation/screens/cita_detail_screen.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/team/domain/miembro.dart';
+import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
@@ -24,6 +26,9 @@ List<Override> _overrides(FakeCitaRepository repo, FakeLanzadorExterno l) => [
   authProfileProvider.overrideWith(
     () => FakeAuthProfileNotifier(profile: vetProfile),
   ),
+  esClinicaMultiVetProvider.overrideWithValue(false),
+  miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
+  indicesColorVetProvider.overrideWithValue(const <String, int>{}),
   clockProvider.overrideWithValue(() => _ahora),
 ];
 

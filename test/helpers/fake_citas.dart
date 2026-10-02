@@ -33,6 +33,7 @@ class FakeCitaRepository implements SupabaseCitaRepository {
       String direccion,
       String motivo,
       String notas,
+      String? veterinarioId,
     })
   >
   creadas = [];
@@ -47,6 +48,7 @@ class FakeCitaRepository implements SupabaseCitaRepository {
     required String direccion,
     required String motivo,
     required String notas,
+    String? veterinarioId,
   }) async {
     if (errorCrear != null) throw errorCrear!;
     if (error != null) throw error!;
@@ -59,6 +61,7 @@ class FakeCitaRepository implements SupabaseCitaRepository {
       direccion: direccion,
       motivo: motivo,
       notas: notas,
+      veterinarioId: veterinarioId,
     ));
     return idResultado;
   }
@@ -77,9 +80,21 @@ class FakeCitaRepository implements SupabaseCitaRepository {
       String direccion,
       String motivo,
       String notas,
+      String? veterinarioId,
     })
   >
   actualizadas = [];
+
+  /// Cada [reasignar], en orden.
+  final List<({String citaId, String veterinarioId})> reasignadas = [];
+
+  @override
+  Future<void> reasignar(String citaId, String veterinarioId) async {
+    if (error != null) throw error!;
+    final i = _indice(citaId);
+    reasignadas.add((citaId: citaId, veterinarioId: veterinarioId));
+    citas[i] = citas[i].copyWith(veterinarioId: veterinarioId);
+  }
 
   /// Cada [marcarRecordatorioEnviado], en orden.
   final List<({String citaId, DateTime? enviadoAt})> recordatorios = [];
@@ -108,6 +123,7 @@ class FakeCitaRepository implements SupabaseCitaRepository {
     required String direccion,
     required String motivo,
     required String notas,
+    String? veterinarioId,
   }) async {
     if (error != null) throw error!;
     final i = _indice(citaId);
@@ -120,6 +136,7 @@ class FakeCitaRepository implements SupabaseCitaRepository {
       direccion: direccion,
       motivo: motivo,
       notas: notas,
+      veterinarioId: veterinarioId,
     ));
     citas[i] = citas[i].copyWith(
       fechaHora: fechaHora,

@@ -84,6 +84,61 @@ void main() {
       expect(container.read(citasRevisionProvider), antes + 1);
     });
 
+    test('crear y actualizar propagan veterinarioId', () async {
+      final repo = FakeCitaRepository(citas: [citaLunaHoy]);
+      final container = ProviderContainer(
+        overrides: [citaRepositoryProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+      final actions = container.read(citaActionsProvider);
+      final t = deBogota(2026, 9, 30, 9, 0);
+
+      await actions.crear(
+        clienteId: 'c-maria',
+        mascotaIds: const ['m-luna'],
+        fechaHora: t,
+        duracionMin: 30,
+        modalidad: ModalidadCita.consultorio,
+        direccion: '',
+        motivo: 'Consulta general',
+        notas: '',
+        veterinarioId: 'vet-2',
+      );
+      await actions.actualizar(
+        citaId: 'cita-1',
+        mascotaIds: const ['m-luna'],
+        fechaHora: t,
+        duracionMin: 30,
+        modalidad: ModalidadCita.consultorio,
+        direccion: '',
+        motivo: 'Consulta general',
+        notas: '',
+      );
+
+      expect(repo.creadas.single.veterinarioId, 'vet-2');
+      expect(repo.actualizadas.single.veterinarioId, isNull);
+    });
+
+    test('reasignar registra, refresca y suma una revisión', () async {
+      final repo = FakeCitaRepository(citas: [citaLunaHoy]);
+      final container = ProviderContainer(
+        overrides: [citaRepositoryProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+      final sub = container.listen(citaProvider('cita-1'), (_, _) {});
+      addTearDown(sub.close);
+      await container.read(citaProvider('cita-1').future);
+      final antes = container.read(citasRevisionProvider);
+
+      await container.read(citaActionsProvider).reasignar('cita-1', 'vet-2');
+
+      expect(repo.reasignadas.single.citaId, 'cita-1');
+      expect(repo.reasignadas.single.veterinarioId, 'vet-2');
+      final cita = await container.read(citaProvider('cita-1').future);
+      expect(cita.veterinarioId, 'vet-2');
+      expect(container.read(citasRevisionProvider), antes + 1);
+    });
+
     test('marcarRecordatorioEnviado registra y no suma revisión', () async {
       final repo = FakeCitaRepository(citas: [citaLunaHoy]);
       final container = ProviderContainer(
