@@ -138,11 +138,11 @@ Widget _app(_Repo repo, FakeLanzadorExterno lanzador) => routerHarness(
       builder: (_, s) => Scaffold(body: Text('DOSIS ${s.uri}')),
     ),
     GoRoute(
-      path: '/agenda/nueva',
+      path: '/citas/nueva',
       builder: (_, s) => Scaffold(body: Text('RUTA ${s.uri}')),
     ),
     GoRoute(
-      path: '/pacientes/:id/carne',
+      path: '/carne/:mascotaId',
       builder: (_, s) => Scaffold(body: Text('CARNE ${s.uri}')),
     ),
   ],
@@ -281,7 +281,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'RUTA /agenda/nueva?clienteId=c-rocky&mascotaId=m-rocky&motivo=Vacunaci%C3%B3n',
+        'RUTA /citas/nueva?clienteId=c-rocky&mascotaId=m-rocky&motivo=Vacunaci%C3%B3n',
       ),
       findsOneWidget,
     );
@@ -308,7 +308,7 @@ void main() {
     await _abrir(tester, _repoTodos());
     await tester.tap(find.text('Polivalente · Dosis 2 de 3'));
     await tester.pumpAndSettle();
-    expect(find.text('CARNE /pacientes/m-rocky/carne'), findsOneWidget);
+    expect(find.text('CARNE /carne/m-rocky'), findsOneWidget);
   });
 
   testWidgets('Posponer 7 días + Aplicar y Deshacer', (tester) async {
