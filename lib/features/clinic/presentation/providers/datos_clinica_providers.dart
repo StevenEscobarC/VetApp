@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/recorte_cuadrado.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../vaccination/presentation/providers/vacuna_providers.dart';
 import '../../domain/clinica.dart';
 import '../../domain/clinica_failure.dart';
 import 'clinica_providers.dart';
@@ -78,6 +79,9 @@ class GuardarDatosClinica {
     }
 
     _ref.invalidate(miClinicaProvider);
+    // El carné trae nombre y logo de la clínica en su propia respuesta: sin
+    // esto, un carné ya cargado sigue sin el logo nuevo (QA Fase 5, G8).
+    _ref.invalidate(carneProvider);
     // El nombre de la clínica se usa en Inicio y en las firmas de WhatsApp.
     await _ref.read(authProfileProvider.notifier).refrescar();
     return actualizada;
