@@ -58,11 +58,11 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 
 ### Vacunación (VAC)
 
-- [ ] **VAC-01**: El veterinario puede registrar una vacuna/desparasitación aplicada a una mascota (biológico, fecha aplicada)
-- [ ] **VAC-02**: El sistema calcula automáticamente la próxima fecha de dosis según el protocolo del biológico (no un campo de fecha editable a mano)
-- [ ] **VAC-03**: El veterinario recibe alerta cuando una mascota tiene una dosis próxima o vencida
-- [ ] **VAC-04**: El veterinario puede generar un link público de solo lectura con el carné de vacunación de una mascota (sin exponer historia clínica completa)
-- [ ] **VAC-05**: El dueño puede ver el carné de vacunación compartido sin necesidad de cuenta
+- [x] **VAC-01**: El veterinario puede registrar una vacuna/desparasitación aplicada a una mascota (biológico, fecha aplicada)
+- [x] **VAC-02**: El sistema calcula automáticamente la próxima fecha de dosis según el protocolo del biológico (no un campo de fecha editable a mano)
+- [x] **VAC-03**: El veterinario recibe alerta cuando una mascota tiene una dosis próxima o vencida
+- [x] **VAC-04**: El veterinario puede generar un link público de solo lectura con el carné de vacunación de una mascota (sin exponer historia clínica completa)
+- [x] **VAC-05**: El dueño puede ver el carné de vacunación compartido sin necesidad de cuenta
 
 ### Inventario (INV)
 
@@ -147,7 +147,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | HIST-01..04 | Phase 3 — Historia Clínica | Complete |
 | AGND-01..06 | Phase 4 — Agenda y Citas | Pending |
 | TEAM-01..05 | Phase 4.1 — Equipo de la clínica | Complete |
-| VAC-01..05 | Phase 5 — Vacunación y Desparasitación | Pending |
+| VAC-01..05 | Phase 5 — Vacunación y Desparasitación | Complete |
 | INV-01..03 | Phase 6 — Inventario | Pending |
 | BILL-01..04 | Phase 7 — Facturación | Pending |
 | DASH-01..04 | Phase 8 — Dashboard y Diseño Visual | Pending |
