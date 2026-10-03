@@ -206,3 +206,40 @@ QA: FAIL — F6 (G4), F7 (G5 Agendar crash) y F13 (G6 logo no se puede establece
 2. G8 (menor): el carne en cache no refleja el cambio de logo hasta reiniciar la app.
 
 QA: FAIL — G4, G5 (Agendar y tarjeta) y G6 corregidos; queda G7 (la accion "Compartir carne" del snackbar desde Vacunas pendientes no hace nada) y G8 menor; solo lectura de no-admin sigue BLOCKED
+
+
+## Re-test (r3)
+
+Emulador Pixel_9_API_35 (emulator-5554), APK `build/app/outputs/flutter-apk/app-debug.apk` instalado con `adb install -r` (sin `pm clear`). Misma cuenta/clinica QA ("QA Clinica 41"). Sin cuentas nuevas.
+
+| Caso | Resultado |
+|---|---|
+| 1. G7 Compartir carne desde snackbar | PASS |
+| 2. G8 carne tras guardar datos de la clinica | PASS (parcial, ver nota) |
+| 3. Agendar -> Guardar cita -> dia de la agenda | PASS |
+| 4. Tap de notificacion con /vacunas abierto | BLOCKED |
+
+### 1. G7 - PASS
+Vacunas pendientes > tile Giardia vencida > Registrar > Guardar dosis (hoy) > snackbar `Dosis registrada. Proxima: 01/04/2027` > "Compartir carne". Resultado: se abre el carne de QA Firulais (membrete con logo) con la hoja `Compartir carne de QA Firulais` (WhatsApp al dueno, Compartir enlace, Descargar PDF, Copiar enlace, Regenerar). Sin pantalla roja, no es no-op. Evidencia: `qa/05-G7-compartir-r3.png`. No se pulso ninguna opcion de la hoja (el enlace no se regenero).
+
+### 2. G8 - PASS (parcial)
+Mas > Datos de la clinica: telefono `30012345708` -> `30012345709` (logo intacto, se ve la vista previa) > Guardar cambios > `Datos de la clinica guardados`. Luego Pacientes > QA Firulais > carne (en la misma sesion, sin reiniciar, el carne ya estaba cacheado de antes): sigue mostrando el logo (`Logo de la clinica` / `QA Clinica 41 - Bogota`), sin datos viejos ni error. Evidencia: `qa/05-G8-form-r3.png` (ver incidente abajo), `qa/05-G8-carne-r3.png`.
+- Limitacion: el carne no muestra el telefono, asi que la frescura de datos solo se verifico por logo/nombre/ciudad. No se probo el cambio de logo (opcional; requiere selector de galeria) ni se retiro el logo: sigue puesto.
+- Incidente de la prueba (error mio, no de la app): la primera vez el teclado cambio el layout y escribi el telefono en el campo Direccion. Se corrigio: Direccion restaurada a `Calle 1 No 2` y telefono `30012345709` antes de guardar (verificado por dump). El valor guardado final: telefono `30012345709`, direccion `Calle 1 No 2`.
+
+### 3. Agendar - PASS
+Estado preparado: se anulo la dosis Giardia de hoy (creada en el caso 1) para que la alerta Giardia vencida volviera a Vacunas pendientes. Pendientes > Agendar > "Nueva cita" (cliente y mascota QA Firulais, motivo Vacunacion, 6:00 a. m. hoy) > Guardar cita: aterriza en Agenda con `Sabado 3, 2 citas, seleccionado` y la cita `6:00 - 6:15 a. m. Pendiente QA Firulais Vacunacion`. Sin pantalla roja. Evidencia: `qa/05-G4-agendar-guardada-r3.png`. Cita de prueba luego CANCELADA (Mas acciones > Cancelar cita; queda `Cancelada` en la agenda, el conteo del dia vuelve a 1 cita activa) y su alarma de recordatorio desaparecio de `dumpsys alarm`.
+- Observacion menor: el stepper de hora no baja de 6:00 a. m. (limite de horario), por lo que no se puede crear una cita "dentro de unos minutos" en horario nocturno.
+
+### 4. Notificacion - BLOCKED
+Motivo: el reloj del emulador es 00:59 hora Bogota (05:59 GMT); el stepper de hora no permite citas antes de las 6:00 a. m., asi que el recordatorio mas cercano programable (cita 6:00 a. m., aviso 15 min antes = 10:45 GMT, visible en `dumpsys alarm`) quedaba a ~4 h 45 min. No se puede adelantar el reloj (`adb root` no disponible en esta imagen). El tap de notificacion queda pendiente de una pasada en horario diurno o de dispositivo real.
+
+### Efectos secundarios en los datos de prueba (r3)
+- Dosis agregadas: Giardia 03/10 (ANULADA), Polivalente 15/09 (dosis 2 de 3, el carne muestra proxima 23/10/2026), Desparasitacion interna 15/06. Nota: tras estas dosis la unica alerta vencida sigue siendo Giardia (05/03 -> venc. 01/09).
+- Observacion: la vista previa de Polivalente al registrar con fecha 15/09 decia `Proxima: 06/10/2026`, pero el snackbar y el carne muestran 23/10/2026 (se calcula contra la dosis mas reciente, 02/10). Posible incoherencia previa/guardado cuando hay dosis posteriores a la fecha retroactiva; menor, no bloqueante.
+- Enlace compartido de QA Firulais: ACTIVO, sin regenerar. Logo de la clinica: puesto. Telefono clinica: `30012345709`.
+
+### Cambios al dispositivo (r3)
+`pm clear`: NO. Zona horaria y permisos sin cambios. Se abrio por error la pantalla de ajustes de Gboard y se salio con Atras.
+
+QA: BLOCKED — G7, G8 y Agendar PASS; el tap de notificacion queda BLOCKED (el reloj del emulador impide programar un recordatorio cercano)
