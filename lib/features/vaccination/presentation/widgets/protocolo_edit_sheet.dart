@@ -14,11 +14,28 @@ import 'duracion_chips.dart';
 
 const _intervalosSerie = [14, 21, 28, 30, 90];
 const _intervalosRefuerzo = [180, 365, 1095];
-const _duraciones = [30, 35, 84, 90, 180, 365, 1095];
+const _duraciones = [30, 35, 90, 180, 365, 1095];
 
 List<int> _conActual(List<int> base, Iterable<int?> actuales) {
   final s = {...base, ...actuales.whereType<int>()}.toList()..sort();
   return s;
+}
+
+/// Un chip por etiqueta: 84 y 90 días se leen "3 meses". Si una de las
+/// variantes está seleccionada (p. ej. 84 en la semilla de desparasitación
+/// externa) se muestra esa; si ninguna, la primera.
+List<int> _unaPorEtiqueta(List<int> opciones, Set<int> seleccion) {
+  final grupos = <String, List<int>>{};
+  for (final d in opciones) {
+    (grupos[etiquetaDuracion(d)] ??= []).add(d);
+  }
+  final visibles = {
+    for (final g in grupos.values)
+      ...(g.where(seleccion.contains).isEmpty
+          ? [g.first]
+          : g.where(seleccion.contains)),
+  };
+  return opciones.where(visibles.contains).toList();
 }
 
 /// Hoja de edición del catálogo (D-01, D-03, D-04). [protocolo] null crea un
@@ -263,7 +280,10 @@ class _ProtocoloEditSheetState extends ConsumerState<ProtocoloEditSheet> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final p = _p;
-    final opcionesDuracion = _conActual(_duraciones, _duracionesSel);
+    final opcionesDuracion = _unaPorEtiqueta(
+      _conActual(_duraciones, _duracionesSel),
+      _duracionesSel,
+    );
     final semanas = p?.edadMinDias == null ? null : p!.edadMinDias! ~/ 7;
     final puedeRestablecer = p != null && p.esSemilla && p.personalizado;
     final puedeDesactivar = p != null && !p.esSemilla;
