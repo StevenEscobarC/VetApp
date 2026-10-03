@@ -452,6 +452,7 @@ class _RegistrarDosisScreenState extends ConsumerState<RegistrarDosisScreen> {
                   const SizedBox(height: AppSpacing.md),
                   ProximaPreview(
                     preview: preview,
+                    hoy: _hoy,
                     iniciaSerie: _iniciaSerie,
                     onReiniciar: (v) => setState(() => _iniciaSerie = v),
                   ),

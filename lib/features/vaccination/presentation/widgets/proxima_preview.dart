@@ -6,6 +6,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../domain/entities/carne.dart';
+import '../../domain/estado_dosis_ui.dart';
 
 /// Vista previa de solo lectura de la próxima dosis (D-02): la fecha y las
 /// etiquetas las calcula el servidor; aquí nunca se editan ni se calculan.
@@ -14,11 +15,15 @@ class ProximaPreview extends StatelessWidget {
   const ProximaPreview({
     super.key,
     required this.preview,
+    required this.hoy,
     required this.iniciaSerie,
     required this.onReiniciar,
   });
 
   final AsyncValue<PrevisualizacionDosis?> preview;
+
+  /// Día actual en Bogotá, para el "en N días" de la línea de contexto.
+  final DateTime hoy;
   final bool iniciaSerie;
   final ValueChanged<bool> onReiniciar;
 
@@ -57,10 +62,15 @@ class ProximaPreview extends StatelessWidget {
                 ),
               );
             }
-            final contexto = [
-              p.etiquetaDosis,
-              p.etiquetaProxima,
-            ].where((s) => s.trim().isNotEmpty).join(' · ');
+            // UI-SPEC: "Dosis 2 de 3 · en 21 días" describe la próxima dosis,
+            // no la que se registra. Sin refuerzo no hay línea de contexto.
+            final proxima = p.proximaFecha;
+            final contexto = proxima == null
+                ? ''
+                : [
+                    p.etiquetaProxima,
+                    textoEnDias(proxima, hoy),
+                  ].where((s) => s.trim().isNotEmpty).join(' · ');
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
