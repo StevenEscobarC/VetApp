@@ -11,6 +11,7 @@ import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/status/dosis_estado_chip.dart';
+import '../../../appointments/presentation/agenda_routes.dart';
 import '../../../patients/presentation/widgets/mascota_foto_avatar.dart';
 import '../../domain/entities/carne.dart';
 import '../../domain/entities/protocolo.dart';
@@ -63,15 +64,14 @@ class PendienteTile extends ConsumerWidget {
       TipoDosis.vacuna => 'Vacunación',
       _ => 'Desparasitación',
     };
+    // Ruta de primer nivel: esta fila vive en `/vacunas`, fuera del shell
+    // (empujar `/agenda/nueva` desde aquí rompía el Navigator, G5).
     context.push(
-      Uri(
-        path: '/agenda/nueva',
-        queryParameters: {
-          'clienteId': _p.clienteId,
-          'mascotaId': _p.mascotaId,
-          'motivo': motivo,
-        },
-      ).toString(),
+      rutaNuevaCita(
+        clienteId: _p.clienteId,
+        mascotaId: _p.mascotaId,
+        motivo: motivo,
+      ),
     );
   }
 
@@ -85,8 +85,7 @@ class PendienteTile extends ConsumerWidget {
     mostrarDosisRegistrada(
       context,
       r,
-      onCompartir: () =>
-          context.push('/pacientes/${_p.mascotaId}/carne?compartir=1'),
+      onCompartir: () => context.push(rutaCarne(_p.mascotaId, compartir: true)),
     );
   }
 
@@ -137,7 +136,7 @@ class PendienteTile extends ConsumerWidget {
     final enviado = _p.recordatorioEnviadoAt;
 
     return AppCard(
-      onTap: () => context.push('/pacientes/${_p.mascotaId}/carne'),
+      onTap: () => context.push(rutaCarne(_p.mascotaId)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -89,6 +89,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const AccesoRevocadoScreen(),
       ),
       ...vacunacionRoutes,
+      citaNuevaRaizRoute,
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             AppShell(navigationShell: navigationShell),

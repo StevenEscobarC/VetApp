@@ -44,6 +44,7 @@ class CitaFormScreen extends ConsumerStatefulWidget {
     this.fechaInicial,
     this.citaId,
     this.motivoInicial,
+    this.rutaBase = '/agenda/nueva',
   });
 
   final String? clienteIdInicial;
@@ -58,6 +59,10 @@ class CitaFormScreen extends ConsumerStatefulWidget {
   /// Motivo preseleccionado al crear (p. ej. 'Vacunación' desde las alertas);
   /// se ignora si no coincide con un motivo conocido.
   final String? motivoInicial;
+
+  /// Ubicación de este formulario; sus subrutas `cliente` y `mascota` se
+  /// empujan bajo ella (`/agenda/nueva` o `/citas/nueva`).
+  final String rutaBase;
 
   @override
   ConsumerState<CitaFormScreen> createState() => _CitaFormScreenState();
@@ -231,7 +236,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
 
   Future<void> _nuevoClienteYMascota() async {
     final r = await context.push<({String clienteId, String mascotaId})>(
-      '/agenda/nueva/cliente',
+      '${widget.rutaBase}/cliente',
     );
     if (r == null || !mounted) return;
     ref.invalidate(clienteProvider(r.clienteId));
@@ -244,7 +249,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   }
 
   Future<void> _agregarMascota(String clienteId) async {
-    await context.push('/agenda/nueva/mascota?clienteId=$clienteId');
+    await context.push('${widget.rutaBase}/mascota?clienteId=$clienteId');
     if (!mounted) return;
     ref.invalidate(mascotasDeClienteProvider(clienteId));
   }
