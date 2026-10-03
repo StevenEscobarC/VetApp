@@ -140,3 +140,69 @@
 - WhatsApp real (Recordar, Enviar por WhatsApp), contenido del PDF (dos tablas, "Aplico: Dr(a). ... · Mat. ..."), logo en PDF/pagina publica, solo lectura de no-admin, G6 y G5 en dispositivo fisico.
 
 QA: FAIL — F6 (G4), F7 (G5 Agendar crash) y F13 (G6 logo no se puede establecer) fallan; F13 solo lectura y subpasos de logo BLOCKED
+
+
+
+## Re-test (r2)
+
+- Fecha: 2026-10-02/03 (el reloj del emulador cruzo medianoche UTC durante la prueba; la app paso de "Hoy 02/10" a "03/10"). Mismo AVD, mismo usuario `qa.vet41.admin`, clinica "QA Clinica 41".
+- Build: `build/app/outputs/flutter-apk/app-debug.apk` recien construido, instalado con `adb install -r` (sin `pm clear`). No se crearon cuentas. Credenciales y tokens no copiados aqui.
+- Capturas nuevas (sufijo `-r2`) en `qa/`.
+
+| Flujo | Resultado r2 |
+|-------|--------------|
+| F6 (G4) refresco de Inicio al registrar/anular | PASS |
+| F7 (G5) Agendar sin pantalla roja, prefill, volver | PASS |
+| F7 (G5) tocar la tarjeta pendiente abre el carne | PASS |
+| F7 (G5) accion "Compartir carne" del snackbar desde Pendientes | FAIL parcial (sin pantalla roja, pero la accion no hace nada) - gap G7 |
+| F7 guardar la cita -> dia de la agenda | NO RE-EJECUTADO (ver nota) |
+| F13 (G6) elegir de galeria: preview, telefono conservado, guardar, snackbar | PASS |
+| F13 logo en carne en la app | PASS con observacion G8 (cache) |
+| F13 logo en "Descargar PDF" | PASS (por inspeccion del archivo, no visual) |
+| F13 logo en pagina publica | PASS (estilo: pendiente de push) |
+| F13 Quitar logo + guardar -> solo nombre en carne, PDF y pagina | PASS |
+| F13 re-establecer el logo y dejarlo puesto | PASS (logo ACTIVO al terminar) |
+| F13 solo lectura no-admin | BLOCKED (sin vet no admin activo en la clinica QA; igual que r1) |
+| Menor G1: linea de contexto del preview | PASS |
+| Menor: chip "3 meses" unico en el editor de protocolos | PASS |
+
+### F6 (G4) - PASS
+- Estado inicial: Inicio `Vacunas pendientes / Vencida / 1 vencidas`.
+- Registrar dosis vencida: Vacunar > QA Firulais > Giardia con fecha 05/03/2026 (preview `Proxima: 01/09/2026 / Refuerzo - hace 31 dias`) > Guardar. Sin reiniciar la app, Inicio paso a `2 vencidas` (snackbar `Dosis registrada. Proxima: 01/09/2026`). Lista de pendientes: `Vencidas (2)` con Giardia y Desparasitacion externa.
+- Anular dosis: carne > menu de la dosis Giardia > Anular dosis > Error de registro. Carne: `Vencida / 1 pendientes`, `6 dosis`; Pendientes: `Vencidas (1)`; Inicio (sin reiniciar): `1 vencidas`; lista Pacientes: `QA Firulais ... Vencida`. Los tres lugares coinciden.
+- Evidencia: `qa/05-F6-inicio-antes-r2.png`, `qa/05-F6-inicio-registrada-r2.png`, `qa/05-F6-pendientes-r2.png`, `qa/05-F6-pendientes-anulada-r2.png`, `qa/05-F6-inicio-anulada-r2.png`, `qa/05-F6-pacientes-r2.png`.
+
+### F7 (G5) - PASS (Agendar y tarjeta) / FAIL parcial (Compartir)
+- "Agendar" en la tarjeta de Giardia: abre Nueva cita sin pantalla roja con Cliente QA41, mascota QA Firulais marcada y motivo "Vacunacion" resaltado. Atras vuelve a Vacunas pendientes. Evidencia: `qa/05-F7-agendar-r2.png`, `qa/05-F7-back-pendientes-r2.png`.
+- Tocar la tarjeta (zona del nombre): abre "Carne de vacunacion" de QA Firulais, sin pantalla roja. Evidencia: `qa/05-F7-tile-carne-r2.png`.
+- "Compartir carne" del snackbar tras "Registrar" desde Vacunas pendientes: no hay pantalla roja, pero tras pulsar la accion (3 intentos) no se abre la hoja de compartir ni cambia la pantalla; la lista queda en "Todo al dia". Evidencia: `qa/05-F7-snackbar-compartir-r2.png`, `qa/05-F7-compartir-r2.png`.
+  - Causa probable (G7): `lib/features/vaccination/presentation/widgets/pendiente_tile.dart:84-88`: el closure `onCompartir` usa el `context` de la fila (`context.push(rutaCarne(...))`); al guardar la dosis la alerta sale de la lista y la fila se desmonta, por lo que el `context` ya no es valido y el push no hace nada. Deberia capturar el router antes del `await` (como hace `mascota_search_sheet.dart:52` con `router.push`). Recomendado `/gsd-debug`.
+- Nota: no se re-ejecuto "guardar la cita -> va al dia de la agenda" (el formulario se abrio y se volvio con Atras para no crear citas extra). Queda para otra pasada si se requiere.
+- Nota de interaccion: el snackbar de dosis queda fijo en pantalla (con accion) y tapa el boton "Guardar dosis" y la barra inferior; hay que deslizarlo hacia abajo para descartarlo antes de seguir.
+
+### F13 (G6) - PASS
+- Mas > Datos de la clinica: telefono editado (`30012345708`), "Elegir de galeria" -> selector de fotos -> logo "LOGO QA". Al volver: la vista previa del logo aparece, aparece "Quitar logo", y el telefono editado sigue siendo `30012345708` (G6 resuelto). "Guardar cambios" -> snackbar `Datos de la clinica guardados`. Evidencia: `qa/05-F13-preview-r2.png`, `qa/05-F13-guardado-r2.png`.
+- Carne en la app: tras reiniciar la app el membrete muestra el logo junto a `QA Clinica 41 - Bogota`. Evidencia: `qa/05-F13-carne-logo-r2b.png`. Observacion G8 (menor): inmediatamente despues de guardar, sin reiniciar, el carne siguio sin logo (`qa/05-F13-carne-logo-r2.png`); el logo aparecio tras cerrar y reabrir la app. Causa probable: el carne cacheado (`carneProvider`) no se invalida al guardar los datos de la clinica (`lib/features/clinic/presentation/providers/datos_clinica_providers.dart`, cerca de la linea 47).
+- PDF: "Compartir carne" > "Descargar PDF" abre la hoja `Sharing 1 file / Carne_QA_Firulais_2026-10-03.pdf` (`qa/05-F13-pdf-share-r2.png`). El archivo (`cache/share/`) contiene 1 imagen embebida de 512x512 (el logo); el PDF previo sin logo (2026-10-02) contenia 0 imagenes. No se renderizo visualmente el PDF (sin herramienta); verificacion por inspeccion del archivo.
+- Pagina publica del enlace existente (activo, sigue terminando en `...bb47`, no se regenero): el encabezado muestra el logo junto a `QA Clinica 41 - Bogota`. Evidencia: `qa/05-F13-publico-logo-r2.png`. Estilo: pendiente de push (no se evalua).
+- "Quitar logo" + Guardar: snackbar `Datos de la clinica guardados`, el formulario vuelve a "Agregar logo". Tras reiniciar la app el carne muestra solo `QA Clinica 41 - Bogota`; el PDF nuevo tiene 0 imagenes; la pagina publica recargada muestra solo el nombre de la clinica (`qa/05-F13-publico-sinlogo-r2.png`, `qa/05-F13-quitar-guardado-r2.png`, `qa/05-F13-carne-sinlogo-r2.png`).
+- Logo re-establecido: Elegir de galeria > Guardar > `Datos de la clinica guardados` (`qa/05-F13-relogo-r2.png`). **El logo queda PUESTO** al terminar.
+- Solo lectura de no-admin: BLOCKED igual que en r1 (no hay veterinario no admin activo en QA Clinica 41; no se creo ninguna cuenta).
+
+### Menores
+- G1 PASS: en Vacunar > Polivalente el preview muestra `Proxima: 24/10/2026 / Dosis 3 de 3 - en 21 dias` (formato "Dosis N de M - en N dias"). Evidencia: `qa/05-G1-preview-polivalente-r2.png`.
+- Chip "3 meses": en el editor de Desparasitacion interna, "Duraciones disponibles al registrar" lista `1 mes, 5 semanas, 3 meses, 6 meses, 1 ano, 3 anos`, un solo "3 meses". PASS. Evidencia: `qa/05-F10-chips-r2.png`.
+
+### Estado final de los datos de prueba (r2)
+- Enlace compartido de QA Firulais: ACTIVO, sin regenerar (token termina en `...bb47`).
+- Logo de la clinica: ESTABLECIDO ("LOGO QA"). Telefono de la clinica: `30012345708`.
+- Dosis agregadas en r2: Giardia 05/03/2026 (vencida, la unica vencida pendiente), Desparasitacion externa hoy (30 dias) y retroactiva 15/08, Puppy DP 05/06/2026 (sin refuerzo); una Giardia anulada mas.
+
+### Cambios al dispositivo (r2)
+- `pm clear`: NO. APK reinstalado con `adb install -r`. Zona horaria y permisos sin cambios. Se hizo `am force-stop` de la app dos veces para descartar cache. Chrome: 3 pestanas, una con el carne publico (enlace pegado desde el portapapeles; el token completo aparecio en un volcado del arbol de accesibilidad pero no se copia al reporte). Archivos `/sdcard/Pictures/logo_qa.png` y `logo_qa2.jpg` siguen en el emulador.
+
+### Gaps nuevos
+1. G7 (menor/medio): accion "Compartir carne" del snackbar tras registrar desde Vacunas pendientes no hace nada (contexto de la fila desmontado). `pendiente_tile.dart:84-88`.
+2. G8 (menor): el carne en cache no refleja el cambio de logo hasta reiniciar la app.
+
+QA: FAIL — G4, G5 (Agendar y tarjeta) y G6 corregidos; queda G7 (la accion "Compartir carne" del snackbar desde Vacunas pendientes no hace nada) y G8 menor; solo lectura de no-admin sigue BLOCKED
