@@ -76,15 +76,20 @@ class PendienteTile extends ConsumerWidget {
   }
 
   Future<void> _registrar(BuildContext context, WidgetRef ref) async {
-    final r = await context.push<DosisRegistrada>(
+    // El router se toma antes del await: al registrar, la alerta sale de la
+    // lista y esta fila se desmonta, así que su `context` ya no sirve para
+    // navegar desde el snackbar (QA Fase 5, G7).
+    final router = GoRouter.of(context);
+    final r = await router.push<DosisRegistrada>(
       rutaRegistrarDosis(mascotaId: _p.mascotaId, codigo: _p.codigoProtocolo),
     );
     // RegistrarDosis ya refresca Inicio y pendientes (invalidarVacunas).
     if (r == null || !context.mounted) return;
+    final mascotaId = _p.mascotaId;
     mostrarDosisRegistrada(
       context,
       r,
-      onCompartir: () => context.push(rutaCarne(_p.mascotaId, compartir: true)),
+      onCompartir: () => router.push(rutaCarne(mascotaId, compartir: true)),
     );
   }
 
