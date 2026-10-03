@@ -83,10 +83,13 @@ final mostrarBannerNotificacionesProvider = FutureProvider<bool>((ref) async {
 });
 
 /// Qué hacer al tocar un recordatorio. Es un provider para que los tests lo
-/// sustituyan sin necesidad de un router real.
+/// sustituyan sin necesidad de un router real. Usa `go` y no `push`: la
+/// notificación puede tocarse estando en una ruta de pantalla completa fuera
+/// del shell (/vacunas, /dosis/nueva), y un push hacia una rama del shell
+/// duplica la página del shell en el Navigator raíz (QA Fase 5, G5).
 final abrirCitaDesdeNotificacionProvider =
     Provider<void Function(String citaId)>((ref) {
-      return (id) => ref.read(routerProvider).push('/agenda/$id');
+      return (id) => ref.read(routerProvider).go('/agenda/$id');
     });
 
 /// Mantiene la agenda del sistema sincronizada con Supabase: reprograma al
