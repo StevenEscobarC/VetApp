@@ -13,6 +13,7 @@ import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/media/app_photo_picker.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../clients/presentation/providers/clientes_providers.dart';
+import '../../../vaccination/presentation/providers/vacuna_providers.dart';
 import '../../domain/entities/mascota.dart';
 import '../../domain/mascota_failure.dart';
 import '../providers/mascota_foto_providers.dart';
@@ -266,6 +267,9 @@ class _MascotaFormScreenState extends ConsumerState<MascotaFormScreen> {
       ref.invalidate(mascotaProvider(original.id));
       ref.read(mascotasProvider.notifier).refrescar();
       ref.invalidate(mascotasDeClienteProvider(original.duenoId));
+      // El carné trae su propia copia de nombre/especie/raza y la ficha lo
+      // mantiene vivo: sin esto el estado vacío muestra el nombre anterior.
+      ref.invalidate(carneProvider(original.id));
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Cambios guardados')));
