@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'invalidar_vacunas.dart';
 import 'vacuna_providers.dart';
 
 /// Anula una dosis (D-08): el servidor la marca anulada con motivo y la
-/// recalcula el carné; nada se borra ni se edita. Tras anular, invalida el
-/// carné y las insignias de la lista.
+/// recalcula el carné; nada se borra ni se edita. Tras anular, refresca el
+/// carné, las insignias, Inicio y pendientes ([invalidarVacunas]).
 class AnularDosis {
   AnularDosis(this._ref);
 
@@ -18,8 +19,7 @@ class AnularDosis {
     await _ref
         .read(vacunaRepositoryProvider)
         .anularDosis(dosisId: dosisId, motivo: motivo);
-    _ref.invalidate(carneProvider(mascotaId));
-    _ref.invalidate(resumenVacunasMascotasProvider);
+    invalidarVacunas(_ref, mascotaId: mascotaId);
   }
 }
 
