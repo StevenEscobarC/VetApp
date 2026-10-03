@@ -73,7 +73,7 @@ class DosisEstadoChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(s.icon, size: compact ? 14 : 16, color: iconColor),
-            const SizedBox(width: 6),
+            const SizedBox(width: AppSpacing.xs),
             Text(
               s.label,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(

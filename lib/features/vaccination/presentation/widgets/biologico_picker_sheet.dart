@@ -109,7 +109,7 @@ class _BiologicoPickerSheetState extends ConsumerState<BiologicoPickerSheet> {
                   error: (_, _) => Center(
                     child: Text(
                       'No pudimos cargar el catálogo. Intenta de nuevo.',
-                      style: textTheme.bodyMedium,
+                      style: textTheme.bodyLarge,
                       textAlign: TextAlign.center,
                     ),
                   ),

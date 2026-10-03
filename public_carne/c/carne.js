@@ -136,7 +136,11 @@ function render(modelo) {
     if (cl) banda.appendChild(el('p', 'etiqueta', cl));
     cab.appendChild(banda);
   }
-  cab.appendChild(el('h2', 'encabezado', 'Carné de vacunación'));
+  // Rol de encabezado sin <h2> para no romper el orden (el <h1> es la mascota).
+  const titulo = el('p', 'encabezado', 'Carné de vacunación');
+  titulo.setAttribute('role', 'heading');
+  titulo.setAttribute('aria-level', '2');
+  cab.appendChild(titulo);
   raiz.appendChild(cab);
 
   const bloque = el('section', 'tarjeta mascota');

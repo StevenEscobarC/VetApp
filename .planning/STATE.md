@@ -71,7 +71,14 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+5 pendientes en `.planning/todos/pending/` (de la auditoría competitiva del 02/10/2026):
+- Decidir marca antes del lanzamiento público (bloquea registro público / Play)
+- Política de tratamiento, términos y autorización en registro (Ley 1581; bloquea cobro)
+- Carné público con aviso de privacidad y minimización
+- Empaquetar fuentes y quitar la descarga de google_fonts
+- Landing con precios y cookies sin trackers previos
+
+Semilla: `SEED-001` acceso web para veterinario, dueño y admin (después del móvil v1).
 
 ### Blockers/Concerns
 

@@ -20,6 +20,53 @@ DateTime? _parseDia(String? raw) {
   );
 }
 
+/// "Nueva cita" con sus subrutas `cliente` / `mascota`, montada bajo [ruta]
+/// (`'/agenda/nueva'` dentro del shell o `'/citas/nueva'` de primer nivel).
+GoRoute _nuevaCita({required String path, required String ruta}) => GoRoute(
+  path: path,
+  builder: (_, state) => CitaFormScreen(
+    clienteIdInicial: state.uri.queryParameters['clienteId'],
+    mascotaIdInicial: state.uri.queryParameters['mascotaId'],
+    fechaInicial: _parseDia(state.uri.queryParameters['fecha']),
+    motivoInicial: state.uri.queryParameters['motivo'],
+    rutaBase: ruta,
+  ),
+  routes: [
+    GoRoute(
+      path: 'cliente',
+      builder: (_, _) =>
+          const NuevoClienteMascotaScreen(devolverResultado: true),
+    ),
+    GoRoute(
+      path: 'mascota',
+      builder: (_, state) => MascotaFormScreen(
+        clienteId: state.uri.queryParameters['clienteId'] ?? '',
+      ),
+    ),
+  ],
+);
+
+/// "Nueva cita" de primer nivel (fuera del shell, como `/vacunas` y
+/// `/dosis/nueva`). Las pantallas que viven en una ruta raíz deben empujar
+/// esta y no `/agenda/nueva`: empujar una ruta de una rama del
+/// `StatefulShellRoute` desde una ruta raíz duplica la página del shell en el
+/// Navigator raíz (assert `!keyReservation.contains(key)`, G5).
+final GoRoute citaNuevaRaizRoute = _nuevaCita(
+  path: '/citas/nueva',
+  ruta: '/citas/nueva',
+);
+
+/// Ruta de [citaNuevaRaizRoute] con los valores prefijados codificados.
+String rutaNuevaCita({String? clienteId, String? mascotaId, String? motivo}) =>
+    Uri(
+      path: '/citas/nueva',
+      queryParameters: {
+        'clienteId': ?clienteId,
+        'mascotaId': ?mascotaId,
+        'motivo': ?motivo,
+      },
+    ).toString();
+
 /// Root route for the Agenda tab. Child routes are declared in the order
 /// `nueva` (04-05), then `:id` with its children (04-06): static child
 /// segments MUST precede `:id` so `/agenda/nueva` never matches it (same
@@ -29,28 +76,7 @@ final GoRoute agendaRoute = GoRoute(
   builder: (_, state) =>
       AgendaScreen(diaInicial: _parseDia(state.uri.queryParameters['dia'])),
   routes: [
-    GoRoute(
-      path: 'nueva',
-      builder: (_, state) => CitaFormScreen(
-        clienteIdInicial: state.uri.queryParameters['clienteId'],
-        mascotaIdInicial: state.uri.queryParameters['mascotaId'],
-        fechaInicial: _parseDia(state.uri.queryParameters['fecha']),
-        motivoInicial: state.uri.queryParameters['motivo'],
-      ),
-      routes: [
-        GoRoute(
-          path: 'cliente',
-          builder: (_, _) =>
-              const NuevoClienteMascotaScreen(devolverResultado: true),
-        ),
-        GoRoute(
-          path: 'mascota',
-          builder: (_, state) => MascotaFormScreen(
-            clienteId: state.uri.queryParameters['clienteId'] ?? '',
-          ),
-        ),
-      ],
-    ),
+    _nuevaCita(path: 'nueva', ruta: '/agenda/nueva'),
     GoRoute(
       path: ':id',
       builder: (_, state) =>

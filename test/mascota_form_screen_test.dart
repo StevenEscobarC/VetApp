@@ -14,12 +14,15 @@ import 'package:vetapp/features/patients/domain/mascota_failure.dart';
 import 'package:vetapp/features/patients/presentation/pacientes_routes.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
+import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
+import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/fake_consultas.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
 /// Boots the real route trees (both entry points wire into
@@ -32,6 +35,7 @@ Widget _appUnderTest({
   FakeClienteRepository? clienteRepo,
   FakeMascotaFotoDatasource? fotoDatasource,
   Uint8List? fotoCapturada,
+  FakeVacunaRepository? vacunaRepo,
 }) {
   return routerHarness(
     initialLocation: initialLocation,
@@ -52,9 +56,25 @@ Widget _appUnderTest({
       ),
       capturadorFotoProvider.overrideWithValue(capturadorFalso(fotoCapturada)),
       consultaRepositoryProvider.overrideWithValue(FakeConsultaRepository()),
+      if (vacunaRepo != null)
+        vacunaRepositoryProvider.overrideWithValue(vacunaRepo),
     ],
   );
 }
+
+Carne _carneDe(String nombre) => Carne(
+  hoy: DateTime.utc(2026, 10, 2),
+  mascotaId: 'm-1',
+  mascotaNombre: nombre,
+  especie: 'perro',
+  raza: 'Labrador',
+  duenoNombre: 'Rita Gómez',
+  duenoTelefono: '3001112222',
+  clinicaNombre: 'Clínica Patitas',
+  clinicaCiudad: 'Bogotá',
+  biologicos: const [],
+  dosis: const [],
+);
 
 void main() {
   testWidgets(
@@ -265,6 +285,39 @@ void main() {
         findsOneWidget,
       );
       expect(find.widgetWithText(AppButton, 'Nueva mascota'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'renombrar desde la ficha recarga el carné (el estado vacío no conserva '
+    'el nombre anterior)',
+    (tester) async {
+      final vacunas = FakeVacunaRepository(carnes: {'m-1': _carneDe('Rocky')});
+      await tester.pumpWidget(
+        _appUnderTest(
+          initialLocation: '/pacientes/m-1',
+          mascotaRepo: FakeMascotaRepository(mascotas: [mascotaRocky]),
+          vacunaRepo: vacunas,
+        ),
+      );
+      await tester.pumpAndSettle();
+      int cargasCarne() =>
+          vacunas.llamadas.where((l) => l.metodo == 'carne').length;
+      expect(cargasCarne(), 1);
+
+      await tester.ensureVisible(find.widgetWithText(AppButton, 'Editar'));
+      await tester.tap(find.widgetWithText(AppButton, 'Editar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).at(0), 'QA Rocky');
+      await tester.pump();
+      vacunas.carnes['m-1'] = _carneDe('QA Rocky');
+      await tester.ensureVisible(
+        find.widgetWithText(AppButton, 'Guardar cambios'),
+      );
+      await tester.tap(find.widgetWithText(AppButton, 'Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      expect(cargasCarne(), 2);
     },
   );
 }

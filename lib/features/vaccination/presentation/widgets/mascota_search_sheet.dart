@@ -47,7 +47,9 @@ Future<void> showMascotaSearchSheet(BuildContext context) async {
   mostrarDosisRegistrada(
     context,
     r,
-    onCompartir: () => router.push('/pacientes/$id/carne?compartir=1'),
+    // Ruta de primer nivel: la acción del snackbar puede dispararse desde
+    // una ruta raíz (p. ej. `/vacunas`), donde empujar una del shell rompe.
+    onCompartir: () => router.push(rutaCarne(id, compartir: true)),
   );
 }
 

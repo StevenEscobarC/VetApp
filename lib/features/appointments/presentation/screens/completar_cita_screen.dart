@@ -139,20 +139,20 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
       label: 'Registrar dosis aplicada, ${m.nombre}',
       excludeSemantics: true,
       button: true,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: InkWell(
-          onTap: () async {
-            final r = await context.push<DosisRegistrada>(
-              rutaRegistrarDosis(
-                mascotaId: m.id,
-                citaId: cita.id,
-                categoria: esVacunacion ? 'vacunacion' : 'desparasitacion',
-              ),
-            );
-            ref.invalidate(dosisDeCitaProvider(cita.id));
-            if (r != null && mounted) mostrarDosisRegistrada(context, r);
-          },
+      child: AppCard(
+        onTap: () async {
+          final r = await context.push<DosisRegistrada>(
+            rutaRegistrarDosis(
+              mascotaId: m.id,
+              citaId: cita.id,
+              categoria: esVacunacion ? 'vacunacion' : 'desparasitacion',
+            ),
+          );
+          // RegistrarDosis ya refresca dosisDeCitaProvider (invalidarVacunas).
+          if (r != null && mounted) mostrarDosisRegistrada(context, r);
+        },
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppSpacing.touchTarget),
           child: Row(
             children: [
               const Icon(
@@ -161,7 +161,25 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
                 color: AppColors.primaryText,
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text('Registrar dosis aplicada', style: textTheme.labelLarge),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Registrar dosis aplicada',
+                      style: textTheme.titleMedium,
+                    ),
+                    Text(
+                      m.nombre,
+                      style: textTheme.labelLarge?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.textMuted),
             ],
           ),
         ),

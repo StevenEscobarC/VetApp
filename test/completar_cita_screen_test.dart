@@ -112,8 +112,9 @@ void main() {
       find.text('Puedes registrarla ahora o completar la cita sin consulta.'),
       findsOneWidget,
     );
-    expect(find.text('Rocky'), findsOneWidget);
-    expect(find.text('Luna'), findsOneWidget);
+    // Nombre en la fila de la mascota y en la tarjeta de dosis (Vacunación).
+    expect(find.text('Rocky'), findsNWidgets(2));
+    expect(find.text('Luna'), findsNWidgets(2));
     expect(find.text('Pendiente'), findsNWidgets(2));
     expect(find.text('Registrar consulta'), findsNWidgets(2));
     expect(find.text('Omitir'), findsNWidgets(2));
@@ -164,7 +165,7 @@ void main() {
         mascotasConConsulta: {'m-rocky'},
       );
       ProviderScope.containerOf(
-        tester.element(find.text('Rocky')),
+        tester.element(find.text('Rocky').first),
       ).invalidate(citaProvider('cita-2'));
       await tester.pumpAndSettle();
 

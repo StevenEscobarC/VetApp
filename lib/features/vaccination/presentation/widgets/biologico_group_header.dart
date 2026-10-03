@@ -36,7 +36,7 @@ class BiologicoGroupHeader extends StatelessWidget {
           Expanded(
             child: Text(
               nombre,
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
           DosisEstadoChip(estado: estado),

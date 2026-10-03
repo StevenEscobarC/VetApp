@@ -129,7 +129,7 @@ class CarnePdfService {
     EstadoCarne.alDia => 'Al día',
     EstadoCarne.proxima => 'Próxima',
     EstadoCarne.vencida => 'Vencida',
-    EstadoCarne.completo => 'Completo',
+    EstadoCarne.completo => 'Al día',
   };
 
   static String _aplico(DosisCarne d) {
@@ -230,7 +230,7 @@ class CarnePdfService {
                     ),
                     children: [
                       for (final c in _columnas)
-                        _celda(c, bold.copyWith(fontSize: 9)),
+                        _celda(c, bold.copyWith(fontSize: 10)),
                     ],
                   ),
                   for (var i = 0; i < datos.length; i++)
@@ -261,7 +261,7 @@ class CarnePdfService {
                                 child: pw.Text(
                                   datos[i][j],
                                   style: regular.copyWith(
-                                    fontSize: 9,
+                                    fontSize: 10,
                                     color: _color(
                                       AppColors.destructive.toARGB32(),
                                     ),
@@ -270,7 +270,7 @@ class CarnePdfService {
                               ),
                             )
                           else
-                            _celda(datos[i][j], regular.copyWith(fontSize: 9)),
+                            _celda(datos[i][j], regular.copyWith(fontSize: 10)),
                       ],
                     ),
                 ],

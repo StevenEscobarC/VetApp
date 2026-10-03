@@ -274,7 +274,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 05-11-PLAN.md — [BLOCKING] Desplegar Edge Function + GitHub Pages, sondas y README (respaldo documentado)
+- [x] 05-11-PLAN.md — [BLOCKING] Desplegar Edge Function + GitHub Pages, sondas y README (respaldo documentado)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -349,7 +349,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Clientes y Pacientes | 10/10 | Complete   | 2026-09-26 |
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
 | 4. Agenda y Citas | 11/11 | Complete    | 2026-10-01 |
-| 5. Vacunación y Desparasitación | 15/17 | In Progress|  |
+| 5. Vacunación y Desparasitación | 16/17 | In Progress|  |
 | 6. Inventario | 0/TBD | Not started | - |
 | 7. Facturación | 0/TBD | Not started | - |
 | 8. Dashboard y Diseño Visual | 0/TBD | Not started | - |

@@ -39,7 +39,7 @@ class CarneResumenSection extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: Text('Carné de vacunación', style: textTheme.titleMedium),
+              child: Text('Carné de vacunación', style: textTheme.titleLarge),
             ),
             if (carneAsync.hasValue)
               Text(
@@ -158,7 +158,7 @@ class CarneBadge extends ConsumerWidget {
             size: 16,
             color: AppColors.success,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppSpacing.xs),
           Text(
             'Vacunas al día',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(

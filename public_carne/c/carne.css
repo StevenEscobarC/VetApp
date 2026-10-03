@@ -7,7 +7,7 @@
 :root {
   --fondo: #F5EAD8; --superficie: #EEE7DB; --borde: #DCD3C4; --muted: #EBDDC5;
   --primario: #C67139; --ok-bg: #F0FAE1; --ok: #56633F; --warn-bg: #FFF2EB; --warn: #D97706;
-  --texto: #643312; --error: #DC2626; --tenue: #645C50; --secundario: #474238;
+  --texto: #201E1D; --texto-chip: #643312; --error: #DC2626; --tenue: #645C50; --secundario: #474238;
 }
 
 * { box-sizing: border-box; }
@@ -16,7 +16,7 @@ main { max-width: 640px; margin: 0 auto; padding: 16px; }
 @media (min-width: 600px) { main { padding: 24px; } }
 
 h1, h2, p, dl, dd, dt { margin: 0; }
-.nombre-mascota { font: 400 28px/1.2 "Caprasimo", Georgia, serif; }
+.nombre-mascota { font: 400 28px/1.2 "Caprasimo", Georgia, serif; padding-bottom: 4px; border-bottom: 2px solid var(--primario); }
 .encabezado, .titulo { font: 400 20px/1.3 "Caprasimo", Georgia, serif; }
 .etiqueta, .rotulo { font-size: 14px; font-weight: 600; color: var(--secundario); }
 .etiqueta.tenue { color: var(--tenue); font-weight: 400; margin-top: 24px; }
@@ -37,11 +37,11 @@ h1, h2, p, dl, dd, dt { margin: 0; }
 .resumen { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; margin: 16px 0; }
 .chip { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; }
 .estado-al_dia { background: var(--ok-bg); color: var(--ok); }
-.estado-proxima { background: var(--warn-bg); color: #8A4A00; }
-.estado-vencida { background: #FDECEC; color: var(--error); }
+.estado-proxima { background: var(--warn-bg); color: var(--texto-chip); }
+.estado-vencida { background: #DC2626; color: #fff; }
 
 .grupo { margin-top: 24px; display: grid; gap: 8px; }
-.dosis { background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 16px; display: grid; gap: 8px; overflow-wrap: anywhere; }
+.dosis { background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 16px; display: grid; gap: 8px; overflow-wrap: anywhere; }
 .dosis.historial { background: var(--superficie); }
 .campo { display: flex; flex-direction: column; margin-bottom: 8px; }
 .fila-estado { display: flex; align-items: center; gap: 8px; }
@@ -63,6 +63,6 @@ h1, h2, p, dl, dd, dt { margin: 0; }
 
 @media print {
   body { background: #fff; }
-  .tarjeta, .dosis { background: #fff; }
+  .tarjeta, .dosis { background: var(--superficie); }
   .boton { display: none; }
 }

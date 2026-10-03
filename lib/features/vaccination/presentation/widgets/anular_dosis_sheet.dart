@@ -162,7 +162,7 @@ class _AnularDosisSheetState extends ConsumerState<_AnularDosisSheet> {
             Text(
               'La dosis quedará tachada y no contará para la próxima fecha. '
               'No se puede deshacer.',
-              style: textTheme.bodyMedium?.copyWith(
+              style: textTheme.bodyLarge?.copyWith(
                 color: AppColors.textSecondary,
               ),
             ),
