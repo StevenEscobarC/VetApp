@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/core/utils/captura_foto.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
@@ -12,6 +15,7 @@ import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart'
 import 'package:vetapp/features/clinic/domain/clinica_failure.dart';
 import 'package:vetapp/features/clinic/presentation/providers/clinica_providers.dart';
 import 'package:vetapp/features/clinic/presentation/providers/datos_clinica_providers.dart';
+import 'package:vetapp/features/clinic/presentation/screens/datos_clinica_screen.dart';
 import 'package:vetapp/features/home/presentation/screens/mas_screen.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/team/presentation/equipo_routes.dart';
@@ -31,16 +35,20 @@ const _textoSoloAdmin =
 List<Override> _overrides(
   FakeClinicaRepository repo,
   FakeClinicaLogoDatasource logos,
-  AuthProfile perfil,
-) {
+  AuthProfile perfil, {
+  CapturadorFoto? capturador,
+  AuthProfileNotifier Function()? auth,
+}) {
   SharedPreferences.setMockInitialValues({});
   return [
     authProfileProvider.overrideWith(
-      () => FakeAuthProfileNotifier(profile: perfil),
+      auth ?? () => FakeAuthProfileNotifier(profile: perfil),
     ),
     clinicaRepositoryProvider.overrideWithValue(repo),
     clinicaLogoDatasourceProvider.overrideWithValue(logos),
-    capturadorFotoProvider.overrideWithValue(capturadorFalso(kFotoPrueba)),
+    capturadorFotoProvider.overrideWithValue(
+      capturador ?? capturadorFalso(kFotoPrueba),
+    ),
     recortadorCuadradoProvider.overrideWithValue((Uint8List b) async => b),
     teamRepositoryProvider.overrideWithValue(
       FakeTeamRepository(miembrosFixture: []),
@@ -56,6 +64,8 @@ Future<void> _abrir(
   FakeClinicaLogoDatasource logos, {
   AuthProfile perfil = vetProfile,
   String initial = '/mas/clinica',
+  CapturadorFoto? capturador,
+  AuthProfileNotifier Function()? auth,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1;
@@ -70,7 +80,13 @@ Future<void> _abrir(
           routes: masTeamRoutes,
         ),
       ],
-      overrides: _overrides(repo, logos, perfil),
+      overrides: _overrides(
+        repo,
+        logos,
+        perfil,
+        capturador: capturador,
+        auth: auth,
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -81,6 +97,25 @@ Future<void> _tocar(WidgetTester tester, Finder f) async {
   await tester.pumpAndSettle();
   await tester.tap(f);
   await tester.pumpAndSettle();
+}
+
+/// Perfil cuya recarga queda en espera de [_RecargaPerfil.puerta]: simula el
+/// refresco del perfil al volver a la app (AppLifecycleListener.onResume).
+class _RecargaPerfil {
+  Completer<void>? puerta;
+}
+
+class _AuthRecargable extends FakeAuthProfileNotifier {
+  _AuthRecargable(this.recarga) : super(profile: vetProfile);
+
+  final _RecargaPerfil recarga;
+
+  @override
+  Future<AuthProfile?> build() async {
+    final puerta = recarga.puerta;
+    if (puerta != null) await puerta.future;
+    return super.build();
+  }
 }
 
 void main() {
@@ -175,5 +210,50 @@ void main() {
     expect(find.text('Datos de la clínica'), findsOneWidget);
     await _tocar(tester, find.text('Datos de la clínica'));
     expect(find.text('Nombre de la clínica'), findsOneWidget);
+  });
+
+  testWidgets('G6: la recarga del perfil al volver del selector conserva vista '
+      'previa y campos editados', (tester) async {
+    final repo = FakeClinicaRepository();
+    final logos = FakeClinicaLogoDatasource();
+    final recarga = _RecargaPerfil();
+    final selector = Completer<Uint8List?>();
+    await _abrir(
+      tester,
+      repo,
+      logos,
+      capturador: (_, _) => selector.future,
+      auth: () => _AuthRecargable(recarga),
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '3001234567'),
+      '30012345709',
+    );
+    await _tocar(tester, find.text('Elegir de galería'));
+
+    // La app pasa a segundo plano por la galería y al volver se relee el
+    // perfil: miClinicaProvider se recarga mientras el selector sigue abierto.
+    recarga.puerta = Completer<void>();
+    ProviderScope.containerOf(
+      tester.element(find.byType(DatosClinicaScreen)),
+    ).invalidate(authProfileProvider);
+    await tester.pump();
+    expect(find.text('Guardar cambios'), findsOneWidget);
+    recarga.puerta!.complete();
+    await tester.pumpAndSettle();
+
+    selector.complete(kFotoPrueba);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('logo-clinica')), findsOneWidget);
+    expect(find.text('30012345709'), findsOneWidget);
+
+    await _tocar(tester, find.text('Guardar cambios'));
+    expect(logos.subidas, hasLength(1));
+    final llamada = repo.llamadasActualizar.single;
+    expect(llamada['logoPath'], logos.subidas.single);
+    expect(llamada['telefono'], '30012345709');
+    expect(find.text('Datos de la clínica guardados'), findsOneWidget);
   });
 }

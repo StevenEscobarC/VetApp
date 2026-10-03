@@ -292,4 +292,42 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('duraciones: un solo chip "3 meses" (84 y 90 días)', (
+    tester,
+  ) async {
+    const despExterna = Protocolo(
+      codigo: 'desp_externa',
+      nombre: 'Desparasitación externa',
+      tipo: TipoDosis.desparasitacionExterna,
+      especies: ['perro', 'gato'],
+      edadMinDias: 56,
+      dosisSerie: 1,
+      intervaloRefuerzoDias: 30,
+      opcionesDuracionDias: [30, 35, 84],
+      personalizado: false,
+      esSemilla: true,
+      activo: true,
+    );
+    final repo = FakeVacunaRepository(
+      protocolosData: [..._catalogo, despExterna],
+    );
+    await _abrir(tester, repo);
+    await tester.tap(find.text('Giardia'));
+    await tester.pumpAndSettle();
+    expect(find.text('3 meses'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Desparasitación externa'));
+    await tester.pumpAndSettle();
+    expect(find.text('3 meses'), findsOneWidget);
+    // El chip visible es el de 84 días (seleccionado): desmarcarlo lo quita.
+    await _tocar(tester, find.text('3 meses'));
+    await _tocar(tester, find.text('Guardar cambios'));
+    final llamada = repo.llamadas.firstWhere(
+      (l) => l.metodo == 'guardarProtocolo',
+    );
+    expect(llamada.args['opcionesDuracionDias'], [30, 35]);
+  });
 }

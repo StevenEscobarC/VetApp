@@ -31,7 +31,13 @@ class DatosClinicaScreen extends ConsumerWidget {
     final puedeEditar = ref.watch(puedeEditarClinicaProvider);
     return Scaffold(
       appBar: const AppTopBar(title: 'Datos de la clínica'),
+      // El perfil se relee al volver a la app (4.1), p. ej. tras la galería o
+      // la cámara, y eso recarga miClinicaProvider. Mostrar el esqueleto en
+      // esa recarga desmontaría el formulario y perdería la vista previa del
+      // logo y lo editado (G6): se conservan los datos previos.
       body: clinica.when(
+        skipLoadingOnReload: true,
+        skipError: true,
         loading: () => const _Esqueleto(),
         error: (_, _) => Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
