@@ -82,6 +82,8 @@ Semilla: `SEED-001` acceso web para veterinario, dueño y admin (después del m�
 
 ### Blockers/Concerns
 
+- [Marca]: nombre comercial elegido (ver todo de marca + `.planning/business/BRAND.md` local). El cambio de nombre en la app espera 3 compuertas: dominios comprados, SIPI limpio y solicitud ante la SIC. Debe ejecutarse antes del registro público, la ficha en Play, la landing o el dominio del carné; si alguna de esas tareas llega a planificación sin las compuertas, frenar y avisar al usuario.
+
 - [Phase 3]: `03-REVIEW.md` WR-04 — `consultas.veterinario_id references auth.users(id) on delete cascade` (`supabase/schema.sql`) means deleting a vet's `auth.users` row would silently delete every consulta they ever authored, for every patient — legally-relevant clinical records destroyed as a side effect of an unrelated account-lifecycle action, the opposite of HIST-04's append-only guarantee. Accepted as theoretical risk for now (no account-deletion feature exists yet, already flagged in a schema comment citing 03-RESEARCH.md A2) — but must be revisited (`on delete restrict` or a placeholder-user pattern) before any account-deletion feature ships. Not fixed this session because it requires another live SQL Editor paste, and the user was on their phone, away from the PC.
 
 - [Phase 1]: El usuario aún no tiene cuenta creada en supabase.com — bloqueante para FOUND-01, debe resolverse al inicio de la Phase 1.
