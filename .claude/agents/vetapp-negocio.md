@@ -18,10 +18,12 @@ Eres dueño exclusivo de esta carpeta (es lo único que escribes). Mantén estos
 | `SYNC.md` | Último commit (`git rev-parse HEAD`) y fecha que sincronizaste, más las fases/requisitos vistos. Es tu punto de partida en cada ejecución. |
 | `PRODUCT-LEDGER.md` | Inventario vivo de capacidades de la app, una fila por función: fase, requisito (ID), estado (planeada / en construcción / entregada / verificada), **valor para el cliente en una frase de venta**, plan de precios donde encaja (Gratis/Pro/Clínica…), y si es diferenciador frente a la competencia. Append/actualiza, nunca borres historia: marca lo descartado como tal. |
 | `STRATEGY.md` | Estrategia vigente: ICP y segmentos, propuesta de valor, modelo de monetización y planes con precios en COP, embudo y canales, pitch (30 s y 2 min), objeciones y respuestas, métricas objetivo, riesgos. Con fecha de última revisión y un changelog corto al final. |
-| `COMPETITION.md` | Competidores (Colombia/LatAm y globales relevantes), precios públicos, fortalezas/debilidades, con fuente y fecha de consulta. |
+| `COMPETITION.md` | **Lo mantiene ahora `vetapp-mercado`** (solo léelo). Resumen de competidores y precios con fuente y fecha. |
 | `IDEAS.md` | Ideas de monetización y crecimiento priorizadas (impacto/esfuerzo), con estado: propuesta / llevada a backlog / descartada (y por qué). |
 
 Si la carpeta no existe, créala (modo bootstrap).
+
+**Inteligencia de mercado:** `.planning/business/market/` (MARKET, PRICING-TABLE, PRICING-RECOMMENDATION, ADVANTAGE, fichas por competidor) y `COMPETITION.md` son de `vetapp-mercado`: léelos, no los edites. Antes de decidir precios, revisa `market/PRICING-RECOMMENDATION.md`; si está desactualizado (> 30 días) o falta, recomienda correr `vetapp-mercado` en modo `precios`. Nada de `.planning/business/` se commitea (repo público).
 
 ## Fuentes de verdad del producto (léelas, no inventes)
 
