@@ -427,6 +427,7 @@ using (
   and (storage.foldername(name))[1] = public.mi_clinica_id()::text
 );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists mascota_fotos_insert on storage.objects;
 create policy mascota_fotos_insert on storage.objects for insert to authenticated
 with check (
@@ -435,6 +436,7 @@ with check (
   and (storage.foldername(name))[1] = public.mi_clinica_id()::text
 );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists mascota_fotos_update on storage.objects;
 create policy mascota_fotos_update on storage.objects for update to authenticated
 using (
@@ -448,6 +450,7 @@ with check (
   and (storage.foldername(name))[1] = public.mi_clinica_id()::text
 );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists mascota_fotos_delete on storage.objects;
 create policy mascota_fotos_delete on storage.objects for delete to authenticated
 using (
@@ -1165,6 +1168,7 @@ revoke all on public.clinica_invitaciones from anon;
 
 -- 5. Consumo de un código (solo lo llaman el trigger de signup y unirse_a_clinica; T10).
 -- `for update` serializa el uso concurrente del mismo código (T3).
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 create or replace function public.consumir_invitacion(p_codigo text, p_usuario uuid)
 returns uuid
 language plpgsql
@@ -1254,6 +1258,7 @@ for each row execute procedure public.crear_perfil_nuevo_usuario();
 -- Un solo código vigente por clínica: genera uno nuevo y revoca el anterior.
 -- Código de 8 caracteres de un alfabeto de 31 símbolos (sin I, L, O, 0, 1) derivado de
 -- bytes de gen_random_uuid() (CSPRNG); se saltan los bytes 6 y 8 (bits fijos de versión/variante).
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 create or replace function public.generar_invitacion_clinica()
 returns table (id uuid, codigo text, expira_en timestamptz)
 language plpgsql
@@ -2720,6 +2725,7 @@ $$;
 -- 11. Carné completo de una mascota (veterinario). Todo valor derivado sale de _carne_filas
 -- / _dosis_posiciones.
 drop function if exists public.carne_de_mascota(uuid);
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 create or replace function public.carne_de_mascota(p_mascota_id uuid)
 returns jsonb
 language plpgsql stable security definer set search_path = public
@@ -3032,6 +3038,7 @@ $$;
 -- nunca (D-25). Token malformado/desconocido/inactivo => null indistinguible. Salida limitada
 -- a D-15/D-20/D-23: sin ids, sin contacto del dueño, sin anuladas ni notas internas.
 drop function if exists public.carne_publico(text);
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 create or replace function public.carne_publico(p_token text)
 returns jsonb
 language plpgsql stable security definer set search_path = public
@@ -3184,6 +3191,7 @@ create policy clinica_logos_select on storage.objects
     and (storage.foldername(name))[1] = public.mi_clinica_id()::text
   );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists clinica_logos_insert on storage.objects;
 create policy clinica_logos_insert on storage.objects
   for insert to authenticated
@@ -3194,6 +3202,7 @@ create policy clinica_logos_insert on storage.objects
     and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
   );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists clinica_logos_update on storage.objects;
 create policy clinica_logos_update on storage.objects
   for update to authenticated
@@ -3280,5 +3289,887 @@ $$;
 
 revoke all on function public.actualizar_clinica(text, text, text, text, text) from public, anon;
 grant execute on function public.actualizar_clinica(text, text, text, text, text) to authenticated;
+
+-- ===== Fase 5.1: Planes y límites (delta idempotente) =====
+-- Se puede re-ejecutar el archivo completo. Este bloque va DESPUÉS de la Fase 5 a propósito:
+-- sus redefiniciones (generar_invitacion_clinica, consumir_invitacion, carne_de_mascota,
+-- carne_publico, policies de storage) ganan en cada re-pegado (Pitfall 4).
+-- Orden obligatorio: tabla -> backfill Beta -> trigger de prueba Pro (Runtime State Inventory).
+-- Convención de fechas: pagado_hasta = último día incluido (hora de Bogotá).
+-- El plan solo lo cambia soporte con asignar_plan (D-07); ningún usuario de la app escribe aquí.
+
+-- 1. Una fila por clínica: plan base fijado por soporte; las pruebas quedan como historial.
+create table if not exists public.clinica_planes (
+  clinica_id uuid primary key references public.clinicas(id) on delete cascade,
+  plan text not null default 'gratis' check (plan in ('gratis', 'pro', 'clinica', 'beta')),
+  miembros_max int not null default 1 check (miembros_max between 1 and 50),
+  fundador boolean not null default false,
+  pagado_hasta date null,
+  prueba_pro_hasta date null,
+  prueba_clinica_hasta date null,
+  prueba_clinica_usada boolean not null default false,
+  beta_hasta date null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+do $$ begin
+  alter table public.clinica_planes
+    add constraint clinica_planes_pagado_requerido
+    check (plan in ('gratis', 'beta') or pagado_hasta is not null or fundador);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter table public.clinica_planes
+    add constraint clinica_planes_tramo
+    check (plan <> 'clinica' or miembros_max in (2, 3, 5));
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter table public.clinica_planes
+    add constraint clinica_planes_prueba_consistente
+    check (prueba_clinica_hasta is null or prueba_clinica_usada);
+exception when duplicate_object then null;
+end $$;
+
+alter table public.clinica_planes enable row level security;
+
+drop policy if exists clinica_planes_select on public.clinica_planes;
+create policy clinica_planes_select on public.clinica_planes for select to authenticated
+using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+-- Sin políticas de escritura: solo triggers/RPC definer y asignar_plan (D-07).
+revoke all on table public.clinica_planes from anon;
+revoke insert, update, delete, truncate on table public.clinica_planes from authenticated;
+
+-- 2. D-13: las clínicas que ya existen quedan en Beta sin fecha de fin hasta que soporte la fije
+-- con asignar_plan. Solo corre con la tabla vacía (primer despliegue); en re-ejecuciones no hace nada.
+insert into public.clinica_planes (clinica_id, plan) select c.id, 'beta' from public.clinicas c where not exists (select 1 from public.clinica_planes);
+
+-- 3. ÚNICA fuente del plan vigente (PLAN-01): triggers, RPC y mi_plan llaman aquí.
+-- p_hoy es parámetro para pruebas deterministas. Candidatos combinables; gana el de mayor rango
+-- (Beta > Clínica > Pro > Gratis); a igual rango, un plan pagado (vigente o en gracia) gana a una
+-- prueba. Gracia de 15 días solo para planes pagados y la prueba Clínica; Fundador no vence.
+-- "Sin fin" se representa con null (nunca con un valor centinela).
+create or replace function public._plan_efectivo(p_clinica uuid, p_hoy date default public._hoy_bogota())
+returns table (
+  plan text,
+  origen text,
+  estado text,
+  fundador boolean,
+  vigente_hasta date,
+  gracia_hasta date,
+  dias_restantes int,
+  miembros_max int,
+  pacientes_max int,
+  logo_permitido boolean,
+  protocolos_propios_permitidos boolean,
+  ultimo_vencimiento date,
+  ultimo_origen text
+)
+language sql stable security definer set search_path = public
+as $$
+  with fila as (
+    select cp.* from public.clinica_planes cp where cp.clinica_id = p_clinica
+  ),
+  cand as (
+    select 3 as rango, 'beta'::text as plan, 'beta'::text as origen, 999 as miembros,
+           (case when f.fundador then null else f.beta_hasta end)::date as hasta, 0 as gracia
+      from fila f where f.plan = 'beta'
+    union all
+    select (case when f.plan = 'clinica' then 2 else 1 end), f.plan, 'pagado'::text,
+           (case when f.plan = 'clinica' then f.miembros_max else 1 end),
+           (case when f.fundador then null else f.pagado_hasta end)::date, 15
+      from fila f where f.plan in ('pro', 'clinica')
+    union all
+    select 2, 'clinica'::text, 'prueba_clinica'::text, 5, f.prueba_clinica_hasta, 15
+      from fila f where f.prueba_clinica_hasta is not null
+    union all
+    select 1, 'pro'::text, 'prueba_pro'::text, 1, f.prueba_pro_hasta, 0
+      from fila f where f.prueba_pro_hasta is not null
+    union all
+    select 0, 'gratis'::text, 'gratis'::text, 1, null::date, 0
+  ),
+  elegido as (
+    select c.*
+      from cand c
+     where c.hasta is null or p_hoy <= c.hasta + c.gracia
+     order by c.rango desc,
+              (c.origen = 'pagado') desc,
+              (c.hasta is null or p_hoy <= c.hasta) desc,
+              c.hasta desc nulls first
+     limit 1
+  ),
+  ultimo as (
+    select u.hasta, u.origen
+      from cand u
+     where u.origen <> 'gratis' and u.hasta is not null and p_hoy > u.hasta + u.gracia
+     order by u.hasta desc
+     limit 1
+  )
+  select
+    e.plan,
+    e.origen,
+    case
+      when e.hasta is null then 'sin_vencimiento'
+      when p_hoy <= e.hasta then 'vigente'
+      else 'gracia'
+    end,
+    coalesce((select f.fundador from fila f), false),
+    e.hasta,
+    case when e.gracia > 0 and e.hasta is not null then e.hasta + e.gracia end,
+    case
+      when e.hasta is null then null
+      when p_hoy <= e.hasta then e.hasta - p_hoy
+      else e.hasta + e.gracia - p_hoy
+    end,
+    e.miembros,
+    case when e.plan = 'gratis' then 50 end,
+    e.plan <> 'gratis',
+    e.plan <> 'gratis',
+    case when e.plan = 'gratis' then u.hasta end,
+    case when e.plan = 'gratis' then u.origen end
+  from elegido e
+  left join ultimo u on true
+$$;
+
+revoke all on function public._plan_efectivo(uuid, date) from public, anon, authenticated;
+
+-- 4. D-10: toda clínica nueva (signup o crear_mi_clinica) arranca con 30 días de Pro de prueba.
+-- AFTER INSERT para que la fila de la clínica ya exista. Va después del backfill (T-05.1-10).
+create or replace function public.clinicas_crear_plan()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.clinica_planes (clinica_id, plan, prueba_pro_hasta)
+  values (new.id, 'gratis', public._hoy_bogota() + 30)
+  on conflict (clinica_id) do nothing;
+  return new;
+end;
+$$;
+
+revoke all on function public.clinicas_crear_plan() from public, anon, authenticated;
+
+drop trigger if exists clinicas_crear_plan on public.clinicas;
+create trigger clinicas_crear_plan after insert on public.clinicas for each row execute function public.clinicas_crear_plan();
+
+-- 5. Helpers para RLS/storage y triggers. puede_escribir(): el veterinario cuya posición
+-- (admin primero, luego antigüedad) excede los cupos del plan queda en solo lectura (D-02/D-12).
+-- Sin sesión (service_role, jobs) o sin clínica no se bloquea nada.
+create or replace function public.puede_escribir()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select case
+    when auth.uid() is null or not public.es_veterinario() or public.mi_clinica_id() is null then true
+    else coalesce((
+      select r.pos <= (select e.miembros_max from public._plan_efectivo(public.mi_clinica_id()) e)
+        from (
+          select p.id,
+                 row_number() over (
+                   order by coalesce(p.rol_clinica = 'admin', false) desc, p.created_at, p.id
+                 ) as pos
+            from public.perfiles p
+           where p.clinica_id = public.mi_clinica_id() and p.rol = 'VETERINARIO' and p.activo
+        ) r
+       where r.id = auth.uid()
+    ), true)
+  end
+$$;
+
+create or replace function public.plan_permite_logo()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select coalesce((select e.logo_permitido from public._plan_efectivo(public.mi_clinica_id()) e), false)
+$$;
+
+revoke all on function public.puede_escribir() from public, anon;
+grant execute on function public.puede_escribir() to authenticated;
+revoke all on function public.plan_permite_logo() from public, anon;
+grant execute on function public.plan_permite_logo() to authenticated;
+
+-- 6. mi_plan(): una sola llamada con todo lo que la app necesita. La clínica sale SIEMPRE de
+-- mi_clinica_id() (nunca de un parámetro). miembros_max null = Beta sin tope.
+create or replace function public.mi_plan()
+returns jsonb
+language plpgsql stable
+security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_e record;
+  v_usada boolean;
+  v_activos int;
+  v_pacientes int;
+  v_nombre text;
+  v_logo text;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'No tienes acceso a este recurso.' using errcode = '42501';
+  end if;
+
+  select * into v_e from public._plan_efectivo(v_clinica);
+
+  select coalesce(cp.prueba_clinica_usada, false) into v_usada
+    from public.clinica_planes cp where cp.clinica_id = v_clinica;
+  v_usada := coalesce(v_usada, false);
+
+  select count(*) into v_activos
+    from public.perfiles p
+   where p.clinica_id = v_clinica and p.rol = 'VETERINARIO' and p.activo;
+
+  select count(*) into v_pacientes from public.mascotas m where m.clinica_id = v_clinica;
+
+  select cl.nombre, cl.logo_path into v_nombre, v_logo from public.clinicas cl where cl.id = v_clinica;
+
+  return jsonb_build_object(
+    'plan', v_e.plan,
+    'origen', v_e.origen,
+    'estado', v_e.estado,
+    'fundador', v_e.fundador,
+    'vigente_hasta', v_e.vigente_hasta,
+    'gracia_hasta', v_e.gracia_hasta,
+    'dias_restantes', v_e.dias_restantes,
+    'ultimo_vencimiento', v_e.ultimo_vencimiento,
+    'ultimo_origen', v_e.ultimo_origen,
+    'pacientes_count', v_pacientes,
+    'pacientes_max', v_e.pacientes_max,
+    'veterinarios_activos', v_activos,
+    'miembros_max', case when v_e.plan = 'beta' then null else v_e.miembros_max end,
+    'logo_permitido', v_e.logo_permitido,
+    'logo_guardado', v_logo is not null,
+    'protocolos_propios_permitidos', v_e.protocolos_propios_permitidos,
+    'puede_escribir', public.puede_escribir(),
+    'prueba_clinica_disponible', (v_e.plan in ('gratis', 'pro') and not v_usada and v_activos >= v_e.miembros_max),
+    'prueba_clinica_miembros', 5,
+    'hay_colegas', v_activos > 1,
+    'clinica_nombre', v_nombre
+  );
+end;
+$$;
+
+revoke all on function public.mi_plan() from public, anon;
+grant execute on function public.mi_plan() to authenticated;
+
+-- 7. Soporte: única vía para cambiar un plan (D-07). Solo service_role / postgres desde el SQL
+-- Editor o el MCP; cualquier llamada con sesión de app se rechaza (defensa en profundidad).
+-- pagado_hasta = último día incluido (hora de Bogotá). Las pruebas de la clínica no se modifican.
+-- Ejemplos (solo comentarios):
+--   -- Renovar Pro hasta una fecha:
+--   --   select public.asignar_plan('<clinica_id>', 'pro', null, date '2027-01-31');
+--   -- Clínica tramo 3, Fundador (sin vencimiento):
+--   --   select public.asignar_plan('<clinica_id>', 'clinica', 3, null, true);
+create or replace function public.asignar_plan(
+  p_clinica uuid,
+  p_plan text,
+  p_miembros_max int default null,
+  p_pagado_hasta date default null,
+  p_fundador boolean default false,
+  p_beta_hasta date default null
+)
+returns jsonb
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_fundador boolean := coalesce(p_fundador, false);
+  v_miembros int;
+  v_pagado date;
+  v_beta date;
+  v_activos int;
+  v_resultado jsonb;
+begin
+  if auth.uid() is not null then
+    raise exception 'Operación reservada a soporte.' using errcode = '42501';
+  end if;
+
+  if p_plan is null or p_plan not in ('gratis', 'pro', 'clinica', 'beta') then
+    raise exception 'Plan no válido: usa gratis, pro, clinica o beta.' using errcode = 'check_violation';
+  end if;
+
+  if not exists (select 1 from public.clinicas c where c.id = p_clinica) then
+    raise exception 'La clínica no existe.' using errcode = 'foreign_key_violation';
+  end if;
+
+  if p_plan = 'pro' then
+    if p_pagado_hasta is null and not v_fundador then
+      raise exception 'Pro requiere pagado_hasta o fundador.' using errcode = 'check_violation';
+    end if;
+    v_miembros := 1;
+    v_pagado := p_pagado_hasta;
+  elsif p_plan = 'clinica' then
+    if p_miembros_max is null or p_miembros_max not in (2, 3, 5) then
+      raise exception 'El plan Clínica solo admite tramos de 2, 3 o 5 veterinarios.' using errcode = 'check_violation';
+    end if;
+    if p_pagado_hasta is null and not v_fundador then
+      raise exception 'Clínica requiere pagado_hasta o fundador.' using errcode = 'check_violation';
+    end if;
+    v_miembros := p_miembros_max;
+    v_pagado := p_pagado_hasta;
+  elsif p_plan = 'beta' then
+    v_miembros := 5;
+    v_beta := p_beta_hasta;
+  else
+    v_miembros := coalesce(p_miembros_max, 1);
+  end if;
+
+  insert into public.clinica_planes as cp (clinica_id, plan, miembros_max, fundador, pagado_hasta, beta_hasta, updated_at)
+  values (p_clinica, p_plan, v_miembros, v_fundador, v_pagado, v_beta, now())
+  on conflict (clinica_id) do update
+    set plan = excluded.plan,
+        miembros_max = excluded.miembros_max,
+        fundador = excluded.fundador,
+        pagado_hasta = excluded.pagado_hasta,
+        beta_hasta = excluded.beta_hasta,
+        updated_at = now();
+
+  select to_jsonb(e) into v_resultado from public._plan_efectivo(p_clinica) e;
+
+  -- Pitfall 10: avisar si el nuevo plan deja a la clínica con más veterinarios activos que cupos.
+  select count(*) into v_activos
+    from public.perfiles p
+   where p.clinica_id = p_clinica and p.rol = 'VETERINARIO' and p.activo;
+  if v_activos > coalesce((v_resultado->>'miembros_max')::int, 999) then
+    raise notice 'La clínica tiene % veterinarios activos y el plan resultante solo incluye %.',
+      v_activos, v_resultado->>'miembros_max';
+  end if;
+
+  return v_resultado;
+end;
+$$;
+
+revoke all on function public.asignar_plan(uuid, text, int, date, boolean, date) from public, anon, authenticated;
+grant execute on function public.asignar_plan(uuid, text, int, date, boolean, date) to service_role;
+
+-- 8. Límites y bloqueos por plan (triggers). Todos con SQLSTATE propio (clase LP, nunca clase 40
+-- para que PostgREST no reintente) y el mismo código en HINT por si un proxy reescribe el SQLSTATE.
+
+-- LP001 (D-03/D-04): en Gratis la mascota 51 se rechaza. Cubre el INSERT directo que permite
+-- mascotas_insert y las dos RPC de registro sin editarlas (la RPC combinada hace rollback completo,
+-- así que no queda un cliente huérfano). El advisory lock serializa inserciones concurrentes en 49.
+create or replace function public.mascotas_validar_limite()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_max int;
+  v_count int;
+begin
+  select e.pacientes_max into v_max from public._plan_efectivo(new.clinica_id) e;
+  if v_max is null then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('mascotas:' || new.clinica_id::text, 0));
+
+  select count(*) into v_count from public.mascotas m where m.clinica_id = new.clinica_id;
+  if v_count >= v_max then
+    raise exception 'Llegaste a los 50 pacientes del plan Gratis. Con Pro registras pacientes ilimitados.'
+      using errcode = 'LP001', hint = 'LP001';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.mascotas_validar_limite() from public, anon, authenticated;
+
+drop trigger if exists mascotas_validar_limite on public.mascotas;
+create trigger mascotas_validar_limite before insert on public.mascotas for each row execute function public.mascotas_validar_limite();
+
+-- LP003 (D-06): en Gratis no se guarda un logo nuevo. Quitar el logo (null) o guardar otros datos
+-- de la clínica con la misma ruta ya almacenada sigue permitido (el WHEN lo deja pasar).
+create or replace function public.clinicas_validar_logo()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if not coalesce((select e.logo_permitido from public._plan_efectivo(new.id) e), false) then
+    raise exception 'El logo de la clínica es parte de Pro y Clínica. Mientras tanto se muestra solo el nombre.'
+      using errcode = 'LP003', hint = 'LP003';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.clinicas_validar_logo() from public, anon, authenticated;
+
+drop trigger if exists clinicas_validar_logo on public.clinicas;
+create trigger clinicas_validar_logo before update of logo_path on public.clinicas for each row when (new.logo_path is not null and new.logo_path is distinct from old.logo_path) execute function public.clinicas_validar_logo();
+
+-- LP003 (D-06): en Gratis no se crean ni editan protocolos propios. Los cambios solo de `activo`
+-- (desactivar_protocolo) pasan; restablecer_protocolo es un DELETE y no lo cubre este trigger.
+-- registrar_dosis con p_guardar_en_catalogo en Gratis falla completa con LP003: la app mantiene ese
+-- interruptor apagado en Gratis y reabre el formulario con sus datos si recibe LP003.
+create or replace function public.protocolos_validar_plan()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if new.clinica_id is null then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and (to_jsonb(new) - 'activo' - 'updated_at') = (to_jsonb(old) - 'activo' - 'updated_at') then
+    return new;
+  end if;
+
+  if not coalesce((select e.protocolos_propios_permitidos from public._plan_efectivo(new.clinica_id) e), false) then
+    raise exception 'Los protocolos propios son parte de Pro y Clínica. Puedes seguir usando los protocolos estándar.'
+      using errcode = 'LP003', hint = 'LP003';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.protocolos_validar_plan() from public, anon, authenticated;
+
+drop trigger if exists protocolos_validar_plan on public.protocolos_vacunacion;
+create trigger protocolos_validar_plan before insert or update on public.protocolos_vacunacion for each row execute function public.protocolos_validar_plan();
+
+-- LP004 (D-02/D-12, decisión bloqueada 3): el veterinario que excede los cupos del plan queda en
+-- solo lectura. Guarda en las 7 tablas de escritura clínica; NO hay guarda en carne_enlaces ni en
+-- vacuna_alertas (compartir el carné y gestionar alertas siguen permitidos) y marcar el recordatorio
+-- de una cita (recordatorio_enviado_at) tampoco se bloquea. Es trigger y no policy restrictiva para
+-- que UPDATE/DELETE fallen con LP004 en vez de afectar 0 filas (Pitfall 7) y para cubrir también las
+-- RPC security definer (el trigger corre igual bajo el dueño). Devuelve old en DELETE (Pitfall 3).
+-- El nombre `guard_solo_lectura` ordena antes que `mascotas_validar_limite`: LP004 gana sobre LP001.
+create or replace function public.guard_solo_lectura()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_solo_recordatorio boolean := false;
+begin
+  if auth.uid() is null then
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
+  end if;
+
+  if tg_table_name = 'citas' and tg_op = 'UPDATE' then
+    v_solo_recordatorio :=
+      (to_jsonb(new) - 'recordatorio_enviado_at' - 'updated_at')
+      = (to_jsonb(old) - 'recordatorio_enviado_at' - 'updated_at');
+  end if;
+
+  if not v_solo_recordatorio and not public.puede_escribir() then
+    raise exception 'Tu cuenta está en solo lectura: el plan de tu clínica no incluye más veterinarios. Pide al administrador que active el plan.'
+      using errcode = 'LP004', hint = 'LP004';
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.guard_solo_lectura() from public, anon, authenticated;
+
+drop trigger if exists guard_solo_lectura on public.clientes;
+create trigger guard_solo_lectura before insert or update or delete on public.clientes for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.mascotas;
+create trigger guard_solo_lectura before insert or update or delete on public.mascotas for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.mascota_pesos;
+create trigger guard_solo_lectura before insert or update or delete on public.mascota_pesos for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.citas;
+create trigger guard_solo_lectura before insert or update or delete on public.citas for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.cita_mascotas;
+create trigger guard_solo_lectura before insert or update or delete on public.cita_mascotas for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.consultas;
+create trigger guard_solo_lectura before insert or update or delete on public.consultas for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.dosis_aplicadas;
+create trigger guard_solo_lectura before insert or update or delete on public.dosis_aplicadas for each row execute function public.guard_solo_lectura();
+
+-- 9. Storage: el logo nuevo exige un plan que lo permita (D-06) y las fotos de mascota exigen
+-- poder escribir (D-12). Quitar el logo (clinica_logos_delete) y toda lectura quedan intactos.
+drop policy if exists clinica_logos_insert on storage.objects;
+create policy clinica_logos_insert on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and public.plan_permite_logo()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
+  );
+
+drop policy if exists clinica_logos_update on storage.objects;
+create policy clinica_logos_update on storage.objects
+  for update to authenticated
+  using (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and public.plan_permite_logo()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
+  )
+  with check (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and public.plan_permite_logo()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
+  );
+
+drop policy if exists mascota_fotos_insert on storage.objects;
+create policy mascota_fotos_insert on storage.objects for insert to authenticated
+with check (
+  bucket_id = 'mascota-fotos'
+  and public.es_veterinario()
+  and public.puede_escribir()
+  and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+);
+
+drop policy if exists mascota_fotos_update on storage.objects;
+create policy mascota_fotos_update on storage.objects for update to authenticated
+using (
+  bucket_id = 'mascota-fotos'
+  and public.es_veterinario()
+  and public.puede_escribir()
+  and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+)
+with check (
+  bucket_id = 'mascota-fotos'
+  and public.es_veterinario()
+  and public.puede_escribir()
+  and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+);
+
+drop policy if exists mascota_fotos_delete on storage.objects;
+create policy mascota_fotos_delete on storage.objects for delete to authenticated
+using (
+  bucket_id = 'mascota-fotos'
+  and public.es_veterinario()
+  and public.puede_escribir()
+  and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+);
+
+-- 10. Invitaciones con cupo (Fase 5.1). Se redefinen con create or replace: mismas firmas y
+-- mismos grants que en la Fase 4.1; consumir_invitacion conserva sus tres errores P0001 idénticos
+-- porque el repositorio Dart del equipo compara sus textos.
+create or replace function public.generar_invitacion_clinica()
+returns table (id uuid, codigo text, expira_en timestamptz)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_alfabeto constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  v_codigo text;
+  v_bytes bytea;
+  v_i integer;
+  v_expira timestamptz;
+  v_id uuid;
+  v_intento integer := 0;
+  v_pl public.clinica_planes;
+  v_e record;
+  v_activos int;
+begin
+  if not public.es_admin_clinica() or v_clinica is null then
+    raise exception 'Solo un administrador puede hacer esto.' using errcode = '42501';
+  end if;
+
+  -- D-11: el primer código en Gratis/Pro sin cupo abre la prueba Clínica (5 cupos, una vez por
+  -- clínica) en la misma transacción que genera el código. `for update` serializa el cupo (T-05.1-07).
+  insert into public.clinica_planes (clinica_id) values (v_clinica) on conflict (clinica_id) do nothing;
+  select * into v_pl from public.clinica_planes cp where cp.clinica_id = v_clinica for update;
+  select * into v_e from public._plan_efectivo(v_clinica);
+  select count(*) into v_activos
+    from public.perfiles p
+   where p.clinica_id = v_clinica and p.rol = 'VETERINARIO' and p.activo;
+
+  if v_activos >= v_e.miembros_max then
+    if v_e.plan in ('gratis', 'pro') and not v_pl.prueba_clinica_usada then
+      update public.clinica_planes cp
+         set prueba_clinica_hasta = public._hoy_bogota() + 30,
+             prueba_clinica_usada = true,
+             updated_at = now()
+       where cp.clinica_id = v_clinica;
+    else
+      raise exception 'Tu plan no tiene cupo para más veterinarios.'
+        using errcode = 'LP002', hint = 'LP002';
+    end if;
+  end if;
+
+  update public.clinica_invitaciones ci
+  set revocada = true
+  where ci.clinica_id = v_clinica
+    and ci.usada_por is null
+    and not ci.revocada
+    and ci.expira_en > now();
+
+  loop
+    v_intento := v_intento + 1;
+    v_bytes := decode(replace(gen_random_uuid()::text, '-', ''), 'hex');
+    v_codigo := '';
+    v_i := 0;
+    while length(v_codigo) < 8 loop
+      if v_i not in (6, 8) then
+        v_codigo := v_codigo || substr(v_alfabeto, (get_byte(v_bytes, v_i) % 31) + 1, 1);
+      end if;
+      v_i := v_i + 1;
+    end loop;
+    v_expira := now() + interval '72 hours';
+
+    begin
+      insert into public.clinica_invitaciones as ci (clinica_id, codigo, creada_por, expira_en)
+      values (v_clinica, v_codigo, auth.uid(), v_expira)
+      returning ci.id into v_id;
+      exit;
+    exception when unique_violation then
+      if v_intento >= 5 then
+        raise;
+      end if;
+    end;
+  end loop;
+
+  return query select v_id, v_codigo, v_expira;
+end;
+$$;
+
+revoke all on function public.generar_invitacion_clinica() from public, anon;
+grant execute on function public.generar_invitacion_clinica() to authenticated;
+
+create or replace function public.consumir_invitacion(p_codigo text, p_usuario uuid)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_codigo text := upper(regexp_replace(coalesce(p_codigo, ''), '[^A-Za-z0-9]', '', 'g'));
+  v_inv public.clinica_invitaciones;
+  v_e record;
+  v_activos int;
+begin
+  select * into v_inv from public.clinica_invitaciones where codigo = v_codigo for update;
+
+  if not found or v_inv.revocada then
+    raise exception 'Ese código no es válido. Revísalo e inténtalo de nuevo.' using errcode = 'P0001';
+  end if;
+
+  if v_inv.usada_por is not null then
+    raise exception 'Ese código ya fue utilizado. Pídele al administrador uno nuevo.' using errcode = 'P0001';
+  end if;
+
+  if v_inv.expira_en <= now() then
+    raise exception 'Ese código ya venció. Pídele al administrador uno nuevo.' using errcode = 'P0001';
+  end if;
+
+  -- Cupo (Fase 5.1): se re-verifica al consumir. Pitfall 6: en el signup este LP002 llega al
+  -- usuario como el 500 genérico de Auth; el administrador ve el error claro al generar el código.
+  insert into public.clinica_planes (clinica_id) values (v_inv.clinica_id) on conflict (clinica_id) do nothing;
+  perform 1 from public.clinica_planes cp where cp.clinica_id = v_inv.clinica_id for update;
+  select * into v_e from public._plan_efectivo(v_inv.clinica_id);
+  select count(*) into v_activos
+    from public.perfiles p
+   where p.clinica_id = v_inv.clinica_id and p.rol = 'VETERINARIO' and p.activo;
+  if v_activos >= v_e.miembros_max then
+    raise exception 'La clínica no tiene cupo para más veterinarios. Pídele al administrador que active un plan con más cupos.'
+      using errcode = 'LP002', hint = 'LP002';
+  end if;
+
+  update public.clinica_invitaciones
+  set usada_por = p_usuario, usada_en = now()
+  where id = v_inv.id;
+
+  return v_inv.clinica_id;
+end;
+$$;
+
+revoke execute on function public.consumir_invitacion(text, uuid) from public, anon, authenticated;
+
+-- 11. Carné (Fase 5.1, D-06): si el plan no permite logo, logo_path sale null aunque la ruta siga
+-- guardada; así los enlaces compartidos siguen funcionando y no se firma ningún logo (T-05.1-08).
+create or replace function public.carne_de_mascota(p_mascota_id uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+  v_mascota public.mascotas;
+  v_cliente public.clientes;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede ver el carné.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_mascota from public.mascotas
+  where id = p_mascota_id and clinica_id = v_clinica;
+  if not found then
+    raise exception 'La mascota no pertenece a tu clínica.' using errcode = 'insufficient_privilege';
+  end if;
+  select * into v_cliente from public.clientes where id = v_mascota.dueno_id;
+
+  return jsonb_build_object(
+    'hoy', v_hoy,
+    'mascota', jsonb_build_object(
+      'id', v_mascota.id, 'nombre', v_mascota.nombre, 'especie', v_mascota.especie,
+      'raza', v_mascota.raza, 'fecha_nacimiento', v_mascota.fecha_nacimiento,
+      'foto_path', v_mascota.foto_path
+    ),
+    'dueno', jsonb_build_object('nombre', v_cliente.nombre, 'telefono', v_cliente.telefono),
+    'clinica', (
+      select jsonb_build_object(
+        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono, 'logo_path', case when coalesce((select e.logo_permitido from public._plan_efectivo(cl.id) e), false) then cl.logo_path end
+      )
+      from public.clinicas cl where cl.id = v_clinica
+    ),
+    'biologicos', coalesce((
+      select jsonb_agg(to_jsonb(f) - 'mascota_id' order by f.biologico_nombre)
+      from public._carne_filas(v_clinica, p_mascota_id, v_hoy) f
+    ), '[]'::jsonb),
+    'dosis', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', d.id,
+          'codigo_protocolo', d.codigo_protocolo,
+          'biologico_nombre', d.biologico_nombre,
+          'tipo', d.tipo,
+          'fecha_aplicacion', d.fecha_aplicacion,
+          'etiqueta_dosis', po.etiqueta_dosis,
+          'es_ultima', coalesce(po.es_ultima, false),
+          'producto', d.producto,
+          'lote', d.lote,
+          'observaciones', d.observaciones,
+          'externa', d.externa,
+          'clinica_externa', d.clinica_externa,
+          'es_refuerzo', d.es_refuerzo,
+          'cita_id', d.cita_id,
+          'anulada', d.anulada,
+          'motivo_anulacion', d.motivo_anulacion,
+          'anulada_at', d.anulada_at,
+          'veterinario', jsonb_build_object(
+            'nombre', pf.nombre, 'matricula', pf.matricula, 'activo', pf.activo
+          )
+        )
+        order by d.fecha_aplicacion desc, d.created_at desc
+      )
+      from public.dosis_aplicadas d
+      left join public._dosis_posiciones(v_clinica, p_mascota_id) po on po.dosis_id = d.id
+      left join public.perfiles pf on pf.id = d.veterinario_id
+      where d.mascota_id = p_mascota_id and d.clinica_id = v_clinica
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+create or replace function public.carne_publico(p_token text)
+returns jsonb
+language plpgsql stable security definer set search_path = public
+as $$
+declare
+  v_hoy date := public._hoy_bogota();
+  v_enlace public.carne_enlaces;
+  v_mascota public.mascotas;
+  v_cliente public.clientes;
+begin
+  if p_token is null or p_token !~ '^[0-9a-f]{64}$' then
+    return null;
+  end if;
+
+  select * into v_enlace from public.carne_enlaces where token = p_token and activo;
+  if not found then
+    return null;
+  end if;
+
+  select * into v_mascota from public.mascotas
+  where id = v_enlace.mascota_id and clinica_id = v_enlace.clinica_id;
+  if not found then
+    return null;
+  end if;
+  select * into v_cliente from public.clientes where id = v_mascota.dueno_id;
+
+  return jsonb_build_object(
+    'hoy', v_hoy,
+    'mascota', jsonb_build_object(
+      'nombre', v_mascota.nombre, 'especie', v_mascota.especie, 'raza', v_mascota.raza,
+      'fecha_nacimiento', v_mascota.fecha_nacimiento, 'foto_path', v_mascota.foto_path
+    ),
+    'propietario', public._nombre_corto(v_cliente.nombre),
+    'clinica', (
+      select jsonb_build_object(
+        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono, 'logo_path', case when coalesce((select e.logo_permitido from public._plan_efectivo(cl.id) e), false) then cl.logo_path end
+      )
+      from public.clinicas cl where cl.id = v_enlace.clinica_id
+    ),
+    'biologicos', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'biologico_nombre', f.biologico_nombre,
+          'tipo', f.tipo,
+          'ultima_fecha', f.ultima_fecha,
+          'posicion', f.posicion,
+          'dosis_serie', f.dosis_serie,
+          'proxima_fecha', f.proxima_fecha,
+          'etiqueta_proxima', f.etiqueta_proxima,
+          'estado', f.estado
+        )
+        order by f.biologico_nombre
+      )
+      from public._carne_filas(v_enlace.clinica_id, v_enlace.mascota_id, v_hoy) f
+    ), '[]'::jsonb),
+    'dosis', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'biologico_nombre', d.biologico_nombre,
+          'tipo', d.tipo,
+          'fecha_aplicacion', d.fecha_aplicacion,
+          'etiqueta_dosis', po.etiqueta_dosis,
+          'es_ultima', po.es_ultima,
+          'producto', d.producto,
+          'lote', d.lote,
+          'externa', d.externa,
+          'clinica_externa', d.clinica_externa,
+          'veterinario', case
+            when d.externa then null
+            else jsonb_build_object('nombre', pf.nombre, 'matricula', pf.matricula)
+          end
+        )
+        order by d.fecha_aplicacion desc, d.created_at desc
+      )
+      from public.dosis_aplicadas d
+      join public._dosis_posiciones(v_enlace.clinica_id, v_enlace.mascota_id) po on po.dosis_id = d.id
+      left join public.perfiles pf on pf.id = d.veterinario_id
+      where d.mascota_id = v_enlace.mascota_id
+        and d.clinica_id = v_enlace.clinica_id
+        and not d.anulada
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.carne_publico(text) from public, anon, authenticated;
+grant execute on function public.carne_publico(text) to service_role;
+revoke all on function public.carne_de_mascota(uuid) from public, anon;
+grant execute on function public.carne_de_mascota(uuid) to authenticated;
+
+-- 12. Cierre del bloque: se re-afirman los grants de la superficie nueva.
+revoke all on function public.mi_plan() from public, anon;
+grant execute on function public.mi_plan() to authenticated;
+revoke all on function public.puede_escribir() from public, anon;
+grant execute on function public.puede_escribir() to authenticated;
+revoke all on function public.plan_permite_logo() from public, anon;
+grant execute on function public.plan_permite_logo() to authenticated;
+revoke all on function public.asignar_plan(uuid, text, int, date, boolean, date) from public, anon, authenticated;
+grant execute on function public.asignar_plan(uuid, text, int, date, boolean, date) to service_role;
 
 notify pgrst, 'reload schema';
