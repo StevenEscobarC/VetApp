@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/data/busqueda.dart';
+import '../../../../core/data/limite_plan_postgrest.dart';
+import '../../../../core/errors/limite_plan.dart';
 import '../../domain/cliente_failure.dart';
 import '../../domain/entities/cliente.dart';
 
@@ -48,7 +50,7 @@ class SupabaseClienteRepository {
           .map((row) => _fromRow(row as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
-      throw ClienteFailure(_messageFor(e));
+      throw ClienteFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const ClienteFailure(
         'No pudimos cargar la lista. Intenta de nuevo.',
@@ -67,7 +69,7 @@ class SupabaseClienteRepository {
           .single();
       return _fromRow(row);
     } on PostgrestException catch (e) {
-      throw ClienteFailure(_messageFor(e));
+      throw ClienteFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const ClienteFailure(
         'No pudimos cargar el cliente. Intenta de nuevo.',
@@ -98,7 +100,7 @@ class SupabaseClienteRepository {
           .single();
       return _fromRow(row);
     } on PostgrestException catch (e) {
-      throw ClienteFailure(_messageFor(e));
+      throw ClienteFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const ClienteFailure(
         'No pudimos guardar los datos. Intenta de nuevo.',
@@ -123,7 +125,7 @@ class SupabaseClienteRepository {
         reemplazoExpirado: row['reemplazo_expirado'] as bool,
       );
     } on PostgrestException catch (e) {
-      throw ClienteFailure(_messageFor(e));
+      throw ClienteFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const ClienteFailure(
         'No pudimos generar el código. Intenta de nuevo.',
@@ -159,6 +161,17 @@ class SupabaseClienteRepository {
   /// Traducciones centralizadas de `PostgrestException.code` a mensajes en
   /// español — agregar nuevos códigos aquí, nunca inline en un call site.
   String _messageFor(PostgrestException e) {
+    switch (limitePlanDe(e)) {
+      case LimitePlan.soloLectura:
+        return 'Tu cuenta está en solo lectura. Pide al administrador que '
+            'active el plan.';
+      case LimitePlan.pacientes:
+      case LimitePlan.miembros:
+      case LimitePlan.funcion:
+        return 'Esta acción no está incluida en tu plan.';
+      case null:
+        break;
+    }
     if (e.message.toLowerCase().contains('vinculada')) {
       return 'Este cliente ya tiene una cuenta vinculada.';
     }

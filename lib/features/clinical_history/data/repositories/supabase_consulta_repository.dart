@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/data/limite_plan_postgrest.dart';
+import '../../../../core/errors/limite_plan.dart';
 import '../../../../core/utils/formato.dart';
 import '../../domain/consulta_failure.dart';
 import '../../domain/entities/consulta.dart';
@@ -35,7 +37,7 @@ class SupabaseConsultaRepository {
           .map((row) => consultaDesdeFila(row as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
-      throw ConsultaFailure(_messageFor(e));
+      throw ConsultaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const ConsultaFailure(
         'No pudimos cargar la historia clínica. Intenta de nuevo.',
@@ -81,7 +83,7 @@ class SupabaseConsultaRepository {
       );
       return id as String;
     } on PostgrestException catch (e) {
-      throw ConsultaFailure(_messageFor(e));
+      throw ConsultaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const ConsultaFailure(
         'No pudimos guardar la consulta. Intenta de nuevo.',
@@ -96,6 +98,17 @@ class SupabaseConsultaRepository {
 /// español — agregar nuevos códigos aquí, nunca inline en un call site.
 @visibleForTesting
 String mensajeErrorConsulta(PostgrestException e) {
+  switch (limitePlanDe(e)) {
+    case LimitePlan.soloLectura:
+      return 'Tu cuenta está en solo lectura. Pide al administrador que '
+          'active el plan.';
+    case LimitePlan.pacientes:
+    case LimitePlan.miembros:
+    case LimitePlan.funcion:
+      return 'Esta acción no está incluida en tu plan.';
+    case null:
+      break;
+  }
   switch (e.code) {
     case '42501':
       return 'No tienes permiso para realizar esta acción.';

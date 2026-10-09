@@ -12,6 +12,7 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../../appointments/domain/entities/cita.dart';
 import '../../../appointments/presentation/providers/citas_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../domain/consulta_failure.dart';
 import '../providers/consultas_providers.dart';
 
@@ -173,6 +174,9 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
       ).showSnackBar(const SnackBar(content: Text('Consulta guardada')));
       context.pop();
     } on ConsultaFailure catch (e) {
+      // Respaldo del servidor (LP004 con bandera vencida): hoja explicativa,
+      // el formulario y lo escrito quedan intactos.
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);
