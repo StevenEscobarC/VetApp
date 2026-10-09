@@ -404,6 +404,25 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('en solo lectura "Agendar cita" muestra candado y abre la '
+        'hoja sin navegar', (tester) async {
+      await abrir(tester, planSoloLectura);
+
+      final boton = find.widgetWithText(AppButton, 'Agendar cita');
+      expect(
+        find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
+        findsOneWidget,
+      );
+      expect(tester.widget<AppButton>(boton).variant, AppButtonVariant.outline);
+
+      await tester.ensureVisible(boton);
+      await tester.tap(boton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.textContaining('nueva-cita'), findsNothing);
+    });
+
     testWidgets('en solo lectura "Guardar cambios" muestra candado, abre la '
         'hoja y no llama actualizar (aunque no haya cambios)', (tester) async {
       final semantics = tester.ensureSemantics();
@@ -492,7 +511,9 @@ void main() {
       expect(find.textContaining('Pide al administrador'), findsNothing);
       expect(
         tester
-            .widget<TextFormField>(find.byType(TextFormField).at(_campoTelefono))
+            .widget<TextFormField>(
+              find.byType(TextFormField).at(_campoTelefono),
+            )
             .controller!
             .text,
         '3005550000',

@@ -259,17 +259,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           _botonNuevaMascota(context),
           const SizedBox(height: AppSpacing.sm),
           // `go` (no push): el destino vive en la rama Agenda del shell (D-07).
-          AppButton(
-            label: 'Agendar cita',
-            icon: Icons.event_outlined,
-            variant: AppButtonVariant.outline,
-            onPressed: () => context.go(
-              Uri(
-                path: '/agenda/nueva',
-                queryParameters: {'clienteId': cliente.id},
-              ).toString(),
-            ),
-          ),
+          _botonAgendarCita(context),
           const SizedBox(height: AppSpacing.lg),
           _buildVinculacionRow(context, cliente),
         ],
@@ -298,6 +288,41 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
       label: 'Guardar cambios',
       onTap: explicar,
       child: boton,
+    );
+  }
+
+  /// "Agendar cita": en solo lectura conserva lugar, variante y tamaño con
+  /// candado y abre la hoja del plan en vez de ir al formulario (D-12).
+  Widget _botonAgendarCita(BuildContext context) {
+    final puedeEscribir = ref.watch(puedeEscribirProvider);
+
+    Future<void> abrir() async {
+      if (!await asegurarEscritura(
+        context,
+        ref,
+        plan: ref.read(miPlanProvider).value,
+      )) {
+        return;
+      }
+      if (!context.mounted) return;
+      context.go(
+        Uri(
+          path: '/agenda/nueva',
+          queryParameters: {'clienteId': widget.clienteId},
+        ).toString(),
+      );
+    }
+
+    return ControlEscritura(
+      puedeEscribir: puedeEscribir,
+      label: 'Agendar cita',
+      onTap: abrir,
+      child: AppButton(
+        label: 'Agendar cita',
+        icon: iconoEscritura(puedeEscribir, Icons.event_outlined),
+        variant: AppButtonVariant.outline,
+        onPressed: abrir,
+      ),
     );
   }
 

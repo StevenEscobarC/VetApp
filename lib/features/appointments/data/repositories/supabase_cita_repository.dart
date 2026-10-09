@@ -166,10 +166,7 @@ class SupabaseCitaRepository {
     } on CitaFailure {
       rethrow;
     } on PostgrestException catch (e) {
-      throw CitaFailure(
-        _messageFor(e, estado: true),
-        limite: limitePlanDe(e),
-      );
+      throw CitaFailure(_messageFor(e, estado: true), limite: limitePlanDe(e));
     } catch (_) {
       throw const CitaFailure(
         'No pudimos cambiar el estado. Intenta de nuevo.',

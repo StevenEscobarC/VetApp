@@ -15,6 +15,9 @@ import '../../../../core/widgets/chips/app_filter_chip.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../../team/presentation/providers/team_providers.dart';
 import '../../../vaccination/presentation/widgets/mascota_search_sheet.dart';
 
@@ -23,6 +26,7 @@ import '../../domain/entities/cita.dart';
 import '../../domain/filtro_agenda.dart';
 import '../../domain/whatsapp_recordatorio.dart';
 import '../providers/citas_providers.dart';
+import '../widgets/cita_acciones.dart';
 import '../widgets/cita_card.dart';
 import '../widgets/day_strip.dart';
 import '../widgets/notificaciones_banner.dart';
@@ -96,12 +100,34 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     });
   }
 
+  Future<void> _vacunar() async {
+    if (!await asegurarEscritura(
+      context,
+      ref,
+      plan: ref.read(miPlanProvider).value,
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    unawaited(showMascotaSearchSheet(context));
+  }
+
+  Future<void> _nuevaCita() => irSiPuedeEscribir(
+    context,
+    ref,
+    Uri(
+      path: '/agenda/nueva',
+      queryParameters: {'fecha': _yyyyMmDd(_dia)},
+    ).toString(),
+  );
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final ahora = ref.read(clockProvider)();
     final hoy = diaBogota(ahora);
     final citasAsync = ref.watch(agendaSemanaProvider(_lunes));
+    final puede = ref.watch(puedeEscribirProvider);
 
     final multiVet = ref.watch(esClinicaMultiVetProvider);
     final filtro = ref.watch(filtroAgendaProvider);
@@ -131,10 +157,15 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       appBar: AppTopBar(
         title: 'Agenda',
         actions: [
-          IconButton(
-            icon: const Icon(Icons.vaccines_outlined),
-            tooltip: 'Vacunar',
-            onPressed: () => showMascotaSearchSheet(context),
+          ControlEscritura(
+            puedeEscribir: puede,
+            label: 'Vacunar',
+            onTap: _vacunar,
+            child: IconButton(
+              icon: Icon(iconoEscritura(puede, Icons.vaccines_outlined)),
+              tooltip: 'Vacunar',
+              onPressed: _vacunar,
+            ),
           ),
         ],
       ),
@@ -211,14 +242,14 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: AppButton(
+              child: ControlEscritura(
+                puedeEscribir: puede,
                 label: 'Nueva cita',
-                icon: Icons.add,
-                onPressed: () => context.push(
-                  Uri(
-                    path: '/agenda/nueva',
-                    queryParameters: {'fecha': _yyyyMmDd(_dia)},
-                  ).toString(),
+                onTap: _nuevaCita,
+                child: AppButton(
+                  label: 'Nueva cita',
+                  icon: iconoEscritura(puede, Icons.add),
+                  onPressed: _nuevaCita,
                 ),
               ),
             ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,9 @@ import '../../../../core/utils/telefono_co.dart';
 import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../domain/cita_failure.dart';
 import '../../domain/entities/cita.dart';
 import '../../domain/whatsapp_recordatorio.dart';
@@ -34,9 +39,19 @@ Future<bool> cambiarEstadoConDeshacer(
   final actions = ref.read(citaActionsProvider);
   final messenger = ScaffoldMessenger.of(context);
   final anterior = cita.estado;
+  if (!await asegurarEscritura(
+    context,
+    ref,
+    plan: ref.read(miPlanProvider).value,
+  )) {
+    return false;
+  }
   try {
     await actions.cambiarEstado(cita.id, nuevo);
-  } on CitaFailure {
+  } on CitaFailure catch (e) {
+    if (context.mounted && await manejarLimitePlan(context, ref, e)) {
+      return false;
+    }
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(mensajeError)));
@@ -92,6 +107,25 @@ Future<bool> confirmarCancelacion(BuildContext context, Cita cita) async {
   return r ?? false;
 }
 
+/// Abre [ruta] solo si el plan permite escribir; si no, explica el solo
+/// lectura en la hoja del plan (D-12). Para editar, completar y registrar
+/// consultas pendientes de una cita.
+Future<void> irSiPuedeEscribir(
+  BuildContext context,
+  WidgetRef ref,
+  String ruta,
+) async {
+  if (!await asegurarEscritura(
+    context,
+    ref,
+    plan: ref.read(miPlanProvider).value,
+  )) {
+    return;
+  }
+  if (!context.mounted) return;
+  unawaited(context.push(ruta));
+}
+
 enum _Accion { pendiente, noAsistio, cancelar, editar }
 
 /// Hoja "Más acciones" de una cita no terminal.
@@ -100,6 +134,7 @@ Future<void> mostrarMasAcciones(
   WidgetRef ref,
   Cita cita,
 ) async {
+  final puede = ref.read(puedeEscribirProvider);
   final accion = await showModalBottomSheet<_Accion>(
     context: context,
     builder: (ctx) => SafeArea(
@@ -109,38 +144,58 @@ Future<void> mostrarMasAcciones(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (cita.estado == EstadoCita.confirmada) ...[
-              AppButton(
+              ControlEscritura(
+                puedeEscribir: puede,
                 label: 'Marcar como pendiente',
-                variant: AppButtonVariant.outline,
-                icon: Icons.schedule_outlined,
-                onPressed: () => Navigator.of(ctx).pop(_Accion.pendiente),
+                onTap: () => Navigator.of(ctx).pop(_Accion.pendiente),
+                child: AppButton(
+                  label: 'Marcar como pendiente',
+                  variant: AppButtonVariant.outline,
+                  icon: iconoEscritura(puede, Icons.schedule_outlined),
+                  onPressed: () => Navigator.of(ctx).pop(_Accion.pendiente),
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
             ],
-            AppButton(
+            ControlEscritura(
+              puedeEscribir: puede,
               label: 'No asistió',
-              variant: AppButtonVariant.outline,
-              icon: Icons.person_off_outlined,
-              onPressed: () => Navigator.of(ctx).pop(_Accion.noAsistio),
+              onTap: () => Navigator.of(ctx).pop(_Accion.noAsistio),
+              child: AppButton(
+                label: 'No asistió',
+                variant: AppButtonVariant.outline,
+                icon: iconoEscritura(puede, Icons.person_off_outlined),
+                onPressed: () => Navigator.of(ctx).pop(_Accion.noAsistio),
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             SizedBox(
               width: double.infinity,
-              child: TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.destructive,
+              child: ControlEscritura(
+                puedeEscribir: puede,
+                label: 'Cancelar cita',
+                onTap: () => Navigator.of(ctx).pop(_Accion.cancelar),
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.destructive,
+                  ),
+                  onPressed: () => Navigator.of(ctx).pop(_Accion.cancelar),
+                  icon: Icon(iconoEscritura(puede, Icons.cancel_outlined)),
+                  label: const Text('Cancelar cita'),
                 ),
-                onPressed: () => Navigator.of(ctx).pop(_Accion.cancelar),
-                icon: const Icon(Icons.cancel_outlined),
-                label: const Text('Cancelar cita'),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            AppButton(
+            ControlEscritura(
+              puedeEscribir: puede,
               label: 'Editar',
-              variant: AppButtonVariant.text,
-              icon: Icons.edit_outlined,
-              onPressed: () => Navigator.of(ctx).pop(_Accion.editar),
+              onTap: () => Navigator.of(ctx).pop(_Accion.editar),
+              child: AppButton(
+                label: 'Editar',
+                variant: AppButtonVariant.text,
+                icon: iconoEscritura(puede, Icons.edit_outlined),
+                onPressed: () => Navigator.of(ctx).pop(_Accion.editar),
+              ),
             ),
           ],
         ),
@@ -166,6 +221,14 @@ Future<void> mostrarMasAcciones(
         mensaje: 'Marcada como no asistió',
       );
     case _Accion.cancelar:
+      if (!await asegurarEscritura(
+        context,
+        ref,
+        plan: ref.read(miPlanProvider).value,
+      )) {
+        return;
+      }
+      if (!context.mounted) return;
       if (!await confirmarCancelacion(context, cita) || !context.mounted) {
         return;
       }
@@ -177,6 +240,14 @@ Future<void> mostrarMasAcciones(
         mensaje: 'Cita cancelada',
       );
     case _Accion.editar:
+      if (!await asegurarEscritura(
+        context,
+        ref,
+        plan: ref.read(miPlanProvider).value,
+      )) {
+        return;
+      }
+      if (!context.mounted) return;
       context.push('/agenda/${cita.id}/editar');
   }
 }

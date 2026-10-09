@@ -12,12 +12,16 @@ class FakeCitaRepository implements SupabaseCitaRepository {
     List<Cita> citas = const [],
     this.error,
     this.errorCrear,
+    this.errorEstado,
     this.idResultado = 'cita-nueva',
   }) : citas = List.of(citas);
 
   final List<Cita> citas;
   final Object? error;
   final String idResultado;
+
+  /// Si se establece, solo [cambiarEstado] lo lanza (p. ej. LP004 obsoleto).
+  final Object? errorEstado;
 
   /// Si se establece, solo [crear] lo lanza (la lectura sigue funcionando).
   final Object? errorCrear;
@@ -107,6 +111,7 @@ class FakeCitaRepository implements SupabaseCitaRepository {
 
   @override
   Future<void> cambiarEstado(String citaId, EstadoCita estado) async {
+    if (errorEstado != null) throw errorEstado!;
     if (error != null) throw error!;
     final i = _indice(citaId);
     estadosCambiados.add((citaId: citaId, estado: estado));
