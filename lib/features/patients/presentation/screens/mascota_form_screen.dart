@@ -12,6 +12,7 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/media/app_photo_picker.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../../clients/presentation/providers/clientes_providers.dart';
 import '../../../vaccination/presentation/providers/vacuna_providers.dart';
 import '../../domain/entities/mascota.dart';
@@ -189,6 +190,7 @@ class _MascotaFormScreenState extends ConsumerState<MascotaFormScreen> {
       ).showSnackBar(const SnackBar(content: Text('Mascota guardada')));
       context.pop();
     } on MascotaFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -275,6 +277,7 @@ class _MascotaFormScreenState extends ConsumerState<MascotaFormScreen> {
       ).showSnackBar(const SnackBar(content: Text('Cambios guardados')));
       context.pop();
     } on MascotaFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);

@@ -15,6 +15,7 @@ import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../../../core/widgets/media/app_photo_picker.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../../patients/domain/entities/mascota.dart';
 import '../../../patients/domain/mascota_failure.dart';
 import '../../../patients/presentation/providers/mascota_foto_providers.dart';
@@ -176,6 +177,7 @@ class _NuevoClienteMascotaScreenState
         context.pop();
       }
     } on MascotaFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);

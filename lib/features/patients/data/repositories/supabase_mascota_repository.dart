@@ -2,6 +2,8 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/data/busqueda.dart';
+import '../../../../core/data/limite_plan_postgrest.dart';
+import '../../../../core/errors/limite_plan.dart';
 import '../../domain/entities/mascota.dart';
 import '../../domain/entities/peso_registro.dart';
 import '../../domain/mascota_failure.dart';
@@ -76,7 +78,7 @@ class SupabaseMascotaRepository {
         mascotaId: row['mascota_id'] as String,
       );
     } on PostgrestException catch (e) {
-      throw MascotaFailure(_messageFor(e));
+      throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const MascotaFailure(
         'No pudimos guardar los datos. Intenta de nuevo.',
@@ -101,7 +103,7 @@ class SupabaseMascotaRepository {
               .limit(50);
           return (rows as List).map((row) => row['id'] as String).toList();
         } on PostgrestException catch (e) {
-          throw MascotaFailure(_messageFor(e));
+          throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
         } catch (_) {
           throw const MascotaFailure(
             'No pudimos cargar la lista. Intenta de nuevo.',
@@ -122,7 +124,7 @@ class SupabaseMascotaRepository {
               .map((row) => _fromRow(row as Map<String, dynamic>))
               .toList();
         } on PostgrestException catch (e) {
-          throw MascotaFailure(_messageFor(e));
+          throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
         } catch (_) {
           throw const MascotaFailure(
             'No pudimos cargar la lista. Intenta de nuevo.',
@@ -145,7 +147,7 @@ class SupabaseMascotaRepository {
           .map((row) => _fromRow(row as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
-      throw MascotaFailure(_messageFor(e));
+      throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const MascotaFailure(
         'No pudimos cargar la lista. Intenta de nuevo.',
@@ -179,7 +181,7 @@ class SupabaseMascotaRepository {
       final id = await _client.rpc('registrar_mascota', params: params);
       return id as String;
     } on PostgrestException catch (e) {
-      throw MascotaFailure(_messageFor(e));
+      throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const MascotaFailure(
         'No pudimos guardar los datos. Intenta de nuevo.',
@@ -208,7 +210,7 @@ class SupabaseMascotaRepository {
           .single();
       return _fromRow(row);
     } on PostgrestException catch (e) {
-      throw MascotaFailure(_messageFor(e));
+      throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const MascotaFailure(
         'No pudimos guardar los datos. Intenta de nuevo.',
@@ -227,7 +229,7 @@ class SupabaseMascotaRepository {
           .select('id')
           .single();
     } on PostgrestException catch (e) {
-      throw MascotaFailure(_messageFor(e));
+      throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const MascotaFailure(
         'No pudimos guardar los datos. Intenta de nuevo.',
@@ -246,7 +248,7 @@ class SupabaseMascotaRepository {
           .single();
       return _fromRow(row);
     } on PostgrestException catch (e) {
-      throw MascotaFailure(_messageFor(e));
+      throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const MascotaFailure(
         'No pudimos cargar la mascota. Intenta de nuevo.',
@@ -268,7 +270,7 @@ class SupabaseMascotaRepository {
           .map((row) => _pesoFromRow(row as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
-      throw MascotaFailure(_messageFor(e));
+      throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const MascotaFailure(
         'No pudimos cargar el historial de peso. Intenta de nuevo.',
@@ -286,7 +288,7 @@ class SupabaseMascotaRepository {
         'peso_kg': pesoKg,
       });
     } on PostgrestException catch (e) {
-      throw MascotaFailure(_messageFor(e));
+      throw MascotaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const MascotaFailure(
         'No pudimos guardar los datos. Intenta de nuevo.',
@@ -323,6 +325,19 @@ class SupabaseMascotaRepository {
   /// Traducciones centralizadas de `PostgrestException.code` a mensajes en
   /// español — agregar nuevos códigos aquí, nunca inline en un call site.
   String _messageFor(PostgrestException e) {
+    switch (limitePlanDe(e)) {
+      case LimitePlan.pacientes:
+        return 'Llegaste a los 50 pacientes del plan Gratis. Con Pro '
+            'registras pacientes ilimitados.';
+      case LimitePlan.soloLectura:
+        return 'Tu cuenta está en solo lectura. Pide al administrador que '
+            'active el plan.';
+      case LimitePlan.miembros:
+      case LimitePlan.funcion:
+        return 'Esta acción no está incluida en tu plan.';
+      case null:
+        break;
+    }
     switch (e.code) {
       case '42501':
         return 'No tienes permiso para realizar esta acción.';
