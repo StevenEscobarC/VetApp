@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/domain/auth_failure.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
@@ -190,5 +191,64 @@ void main() {
     await tester.pumpWidget(_appUnderTest(profile: vetProfile));
     await tester.pumpAndSettle();
     expect(find.text('Ver mi plan'), findsNothing);
+  });
+
+  group('solo lectura (colega sin plan vigente)', () {
+    testWidgets('"Vacunar" muestra candado y abre la hoja de solo lectura en '
+        'vez del buscador', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        _appUnderTest(profile: vetProfile, plan: planSoloLectura),
+      );
+      await tester.pumpAndSettle();
+
+      final boton = find.widgetWithText(AppButton, 'Vacunar');
+      expect(
+        find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.vaccines_outlined), findsNothing);
+      expect(
+        tester.getSemantics(boton).label,
+        contains('bloqueado, solo lectura'),
+      );
+      // Conserva el acento primario.
+      expect(tester.widget<AppButton>(boton).variant, AppButtonVariant.primary);
+
+      await tester.ensureVisible(boton);
+      await tester.tap(boton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿A quién vacuna?'), findsNothing);
+      // El aviso de Inicio y la hoja comparten el mismo título.
+      expect(find.text('Tu cuenta está en solo lectura'), findsNWidgets(2));
+      expect(find.text('Ahora no'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('el banner de solo lectura se muestra en Inicio', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _appUnderTest(profile: vetProfile, plan: planSoloLectura),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+    });
+
+    testWidgets('con plan Beta "Vacunar" conserva el ícono y abre el '
+        'buscador', (tester) async {
+      await tester.pumpWidget(
+        _appUnderTest(profile: vetProfile, plan: planBeta),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.lock_outline), findsNothing);
+      expect(find.byIcon(Icons.vaccines_outlined), findsWidgets);
+      await tester.tap(find.text('Vacunar'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿A quién vacuna?'), findsOneWidget);
+    });
   });
 }

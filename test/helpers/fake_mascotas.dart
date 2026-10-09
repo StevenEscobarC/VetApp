@@ -14,6 +14,8 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
     List<Mascota> mascotas = const [],
     Map<String, List<PesoRegistro>> pesosPorMascota = const {},
     this.error,
+    this.errorRegistrarPeso,
+    this.errorActualizarFoto,
     this.resultado = const (clienteId: 'c-nuevo', mascotaId: 'm-nuevo'),
   }) : mascotas = List.of(mascotas),
        pesosPorMascota = {
@@ -23,6 +25,12 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
 
   final List<Mascota> mascotas;
   final Object? error;
+
+  /// Si se establece, [registrarPeso] lo lanza (el resto sigue funcionando).
+  final Object? errorRegistrarPeso;
+
+  /// Si se establece, [actualizarFotoPath] lo lanza.
+  final Object? errorActualizarFoto;
   final ({String clienteId, String mascotaId}) resultado;
 
   /// mascotaId -> historial de peso seedeado (Plan 08) — deliberadamente NO
@@ -123,6 +131,7 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
   @override
   Future<void> actualizarFotoPath(String mascotaId, String fotoPath) async {
     if (error != null) throw error!;
+    if (errorActualizarFoto != null) throw errorActualizarFoto!;
     fotoPathsActualizados[mascotaId] = fotoPath;
   }
 
@@ -173,6 +182,7 @@ class FakeMascotaRepository implements SupabaseMascotaRepository {
   Future<void> registrarPeso(String mascotaId, double pesoKg) async {
     pesosRegistrados.add((mascotaId: mascotaId, pesoKg: pesoKg));
     if (error != null) throw error!;
+    if (errorRegistrarPeso != null) throw errorRegistrarPeso!;
     final lista = pesosPorMascota.putIfAbsent(mascotaId, () => []);
     lista.add(
       PesoRegistro(

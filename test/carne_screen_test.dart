@@ -6,12 +6,14 @@ import 'package:go_router/go_router.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/clinic/domain/clinica_failure.dart';
 import 'package:vetapp/features/clinic/presentation/providers/clinica_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
 import 'package:vetapp/features/vaccination/domain/entities/protocolo.dart';
 import 'package:vetapp/features/vaccination/domain/vacuna_failure.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 import 'package:vetapp/features/vaccination/presentation/screens/carne_screen.dart';
 
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
@@ -177,6 +179,7 @@ Widget _app({
   required FakeVacunaRepository repo,
   List<String>? ubicaciones,
   List<Override> extra = const [],
+  MiPlan? plan,
 }) {
   return routerHarness(
     initialLocation: '/pacientes/m-1/carne',
@@ -194,7 +197,11 @@ Widget _app({
         },
       ),
     ],
-    overrides: [vacunaRepositoryProvider.overrideWithValue(repo), ...extra],
+    overrides: [
+      ...planOverrides(plan: plan),
+      vacunaRepositoryProvider.overrideWithValue(repo),
+      ...extra,
+    ],
   );
 }
 
@@ -519,5 +526,90 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Reintentar'), findsOneWidget);
+  });
+
+  group('solo lectura (colega sin plan vigente)', () {
+    const hoja = 'Tu cuenta está en solo lectura';
+
+    testWidgets(
+      '"Registrar dosis" muestra candado, semántica bloqueada y abre la hoja '
+      'sin navegar',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        _pantallaAlta(tester);
+        final ubicaciones = <String>[];
+        final repo = FakeVacunaRepository(carnes: {'m-1': _carne()});
+        await tester.pumpWidget(
+          _app(repo: repo, ubicaciones: ubicaciones, plan: planSoloLectura),
+        );
+        await tester.pumpAndSettle();
+
+        final boton = find.widgetWithText(AppButton, 'Registrar dosis');
+        expect(
+          find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
+          findsOneWidget,
+        );
+        expect(find.byIcon(Icons.add), findsNothing);
+        expect(
+          tester.getSemantics(boton).label,
+          contains('bloqueado, solo lectura'),
+        );
+        // Conserva el acento: sigue siendo el CTA primario.
+        expect(tester.widget<AppButton>(boton).variant, AppButtonVariant.primary);
+
+        await tester.tap(boton);
+        await tester.pumpAndSettle();
+
+        expect(find.text(hoja), findsOneWidget);
+        expect(ubicaciones, isNot(contains('/dosis/nueva?mascotaId=m-1')));
+        semantics.dispose();
+      },
+    );
+
+    testWidgets('"Compartir carné" no cambia: sin candado y abre la hoja de '
+        'compartir', (tester) async {
+      _pantallaAlta(tester);
+      final repo = FakeVacunaRepository(carnes: {'m-1': _carne()});
+      await tester.pumpWidget(_app(repo: repo, plan: planSoloLectura));
+      await tester.pumpAndSettle();
+
+      final compartir = find.widgetWithText(AppButton, 'Compartir carné');
+      expect(
+        find.descendant(
+          of: compartir,
+          matching: find.byIcon(Icons.lock_outline),
+        ),
+        findsNothing,
+      );
+      expect(find.byIcon(Icons.share_outlined), findsOneWidget);
+
+      await tester.tap(compartir);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Compartir carné de Luna'), findsOneWidget);
+      expect(find.text(hoja), findsNothing);
+    });
+
+    testWidgets('el carné se lee completo en solo lectura', (tester) async {
+      _pantallaAlta(tester);
+      final repo = FakeVacunaRepository(carnes: {'m-1': _carne()});
+      await tester.pumpWidget(_app(repo: repo, plan: planSoloLectura));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Polivalente'), findsWidgets);
+      expect(find.text('Antirrábica'), findsWidgets);
+    });
+
+    testWidgets('con plan Beta "Registrar dosis" conserva el ícono +', (
+      tester,
+    ) async {
+      _pantallaAlta(tester);
+      final repo = FakeVacunaRepository(carnes: {'m-1': _carne()});
+      await tester.pumpWidget(_app(repo: repo, plan: planBeta));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.lock_outline), findsNothing);
+      expect(find.byIcon(Icons.add), findsOneWidget);
+    });
   });
 }
