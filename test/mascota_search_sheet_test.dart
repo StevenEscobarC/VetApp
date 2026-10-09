@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 import 'package:vetapp/features/vaccination/presentation/widgets/mascota_search_sheet.dart';
@@ -12,10 +13,11 @@ import 'package:vetapp/features/vaccination/presentation/widgets/mascota_search_
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
-Widget _app() {
+Widget _app({MiPlan? plan}) {
   return routerHarness(
     initialLocation: '/',
     routes: [
@@ -39,6 +41,7 @@ Widget _app() {
       ),
     ],
     overrides: [
+      ...planOverrides(plan: plan),
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
@@ -59,8 +62,8 @@ Widget _app() {
   );
 }
 
-Future<void> _abrir(WidgetTester tester) async {
-  await tester.pumpWidget(_app());
+Future<void> _abrir(WidgetTester tester, {MiPlan? plan}) async {
+  await tester.pumpWidget(_app(plan: plan));
   await tester.pumpAndSettle();
   await tester.tap(find.text('ABRIR'));
   await tester.pumpAndSettle();
@@ -93,5 +96,19 @@ void main() {
     await tester.tap(find.text('Registrar paciente nuevo'));
     await tester.pumpAndSettle();
     expect(find.text('NUEVO PACIENTE'), findsOneWidget);
+  });
+
+  testWidgets('Gratis con 50 pacientes: Registrar paciente nuevo abre la hoja '
+      'y no navega', (tester) async {
+    await _abrir(tester, plan: planGratisAlTope);
+    await tester.enterText(find.byType(TextFormField), 'zzz');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Registrar paciente nuevo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Llegaste a los 50 pacientes'), findsOneWidget);
+    expect(find.text('NUEVO PACIENTE'), findsNothing);
   });
 }

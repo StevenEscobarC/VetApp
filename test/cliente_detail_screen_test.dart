@@ -12,10 +12,12 @@ import 'package:vetapp/features/clients/presentation/providers/clientes_provider
 import 'package:vetapp/features/clients/presentation/screens/cliente_detail_screen.dart';
 import 'package:vetapp/features/clients/presentation/widgets/vinculacion_sheet.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/router_harness.dart';
 
 /// Field order rendered by [ClienteDetailScreen]: 'Nombre *' (0),
@@ -27,6 +29,7 @@ Widget _appUnderTest({
   String initialLocation = '/clientes/c-1',
   FakeClienteRepository? clienteRepo,
   FakeMascotaRepository? mascotaRepo,
+  MiPlan? plan,
 }) {
   return routerHarness(
     initialLocation: initialLocation,
@@ -39,6 +42,12 @@ Widget _appUnderTest({
             path: ':id',
             builder: (_, state) =>
                 ClienteDetailScreen(clienteId: state.pathParameters['id']!),
+            routes: [
+              GoRoute(
+                path: 'nueva-mascota',
+                builder: (_, _) => const Scaffold(body: Text('NUEVA MASCOTA')),
+              ),
+            ],
           ),
         ],
       ),
@@ -48,11 +57,13 @@ Widget _appUnderTest({
       ),
     ],
     overrides: [
+      ...planOverrides(plan: plan),
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
       clienteRepositoryProvider.overrideWithValue(
-        clienteRepo ?? FakeClienteRepository(clientes: [clienteRita, clientePedro]),
+        clienteRepo ??
+            FakeClienteRepository(clientes: [clienteRita, clientePedro]),
       ),
       mascotaRepositoryProvider.overrideWithValue(
         mascotaRepo ??
@@ -98,19 +109,18 @@ void main() {
     },
   );
 
-  testWidgets(
-    'muestra el nombre como encabezado y el teléfono precargado',
-    (tester) async {
-      await tester.pumpWidget(_appUnderTest());
-      await tester.pumpAndSettle();
+  testWidgets('muestra el nombre como encabezado y el teléfono precargado', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_appUnderTest());
+    await tester.pumpAndSettle();
 
-      expect(find.text('Rita Gómez'), findsWidgets);
-      final telefonoField = tester.widget<TextFormField>(
-        find.byType(TextFormField).at(_campoTelefono),
-      );
-      expect(telefonoField.controller!.text, '3001234567');
-    },
-  );
+    expect(find.text('Rita Gómez'), findsWidgets);
+    final telefonoField = tester.widget<TextFormField>(
+      find.byType(TextFormField).at(_campoTelefono),
+    );
+    expect(telefonoField.controller!.text, '3001234567');
+  });
 
   testWidgets(
     '"Guardar cambios" se habilita solo cuando algo cambia y los campos '
@@ -135,10 +145,7 @@ void main() {
       await tester.pump();
       expect(boton().onPressed, isNotNull);
 
-      await tester.enterText(
-        find.byType(TextFormField).at(_campoNombre),
-        '',
-      );
+      await tester.enterText(find.byType(TextFormField).at(_campoNombre), '');
       await tester.pump();
       expect(
         boton().onPressed,
@@ -163,27 +170,26 @@ void main() {
     },
   );
 
-  testWidgets(
-    'editar el teléfono a "+57 300 123 4567" guarda 573001234567',
-    (tester) async {
-      final clienteRepo = FakeClienteRepository(
-        clientes: [clienteRita, clientePedro],
-      );
-      await tester.pumpWidget(_appUnderTest(clienteRepo: clienteRepo));
-      await tester.pumpAndSettle();
+  testWidgets('editar el teléfono a "+57 300 123 4567" guarda 573001234567', (
+    tester,
+  ) async {
+    final clienteRepo = FakeClienteRepository(
+      clientes: [clienteRita, clientePedro],
+    );
+    await tester.pumpWidget(_appUnderTest(clienteRepo: clienteRepo));
+    await tester.pumpAndSettle();
 
-      await tester.enterText(
-        find.byType(TextFormField).at(_campoTelefono),
-        '+57 300 123 4567',
-      );
-      await tester.pump();
-      await tester.ensureVisible(find.text('Guardar cambios'));
-      await tester.tap(find.text('Guardar cambios'));
-      await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextFormField).at(_campoTelefono),
+      '+57 300 123 4567',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Guardar cambios'));
+    await tester.tap(find.text('Guardar cambios'));
+    await tester.pumpAndSettle();
 
-      expect(clienteRepo.actualizados.single.telefono, '573001234567');
-    },
-  );
+    expect(clienteRepo.actualizados.single.telefono, '573001234567');
+  });
 
   testWidgets(
     'un teléfono de 7 dígitos muestra el aviso suave tras salir del campo',
@@ -206,7 +212,9 @@ void main() {
       expect(find.text(kAvisoTelefono), findsOneWidget);
       expect(
         tester
-            .widget<AppButton>(find.widgetWithText(AppButton, 'Guardar cambios'))
+            .widget<AppButton>(
+              find.widgetWithText(AppButton, 'Guardar cambios'),
+            )
             .onPressed,
         isNotNull,
       );
@@ -226,22 +234,21 @@ void main() {
     },
   );
 
-  testWidgets(
-    'un cliente sin mascotas muestra el estado vacío',
-    (tester) async {
-      await tester.pumpWidget(_appUnderTest(initialLocation: '/clientes/c-2'));
-      await tester.pumpAndSettle();
+  testWidgets('un cliente sin mascotas muestra el estado vacío', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_appUnderTest(initialLocation: '/clientes/c-2'));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.text('Este cliente no tiene mascotas registradas'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Usa “Nueva mascota” para agregar la primera.'),
-        findsOneWidget,
-      );
-    },
-  );
+    expect(
+      find.text('Este cliente no tiene mascotas registradas'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Usa “Nueva mascota” para agregar la primera.'),
+      findsOneWidget,
+    );
+  });
 
   testWidgets(
     'tocar "Vincular cuenta" abre la hoja con el código, la vigencia y '
@@ -275,28 +282,27 @@ void main() {
     },
   );
 
-  testWidgets(
-    'reemplazoExpirado true muestra el aviso de código expirado',
-    (tester) async {
-      final clienteRepo = FakeClienteRepository(
-        clientes: [clienteRita, clientePedro],
-        codigoResultado: (
-          codigo: '482915',
-          expiraEn: DateTime.now().add(const Duration(hours: 24)),
-          reemplazoExpirado: true,
-        ),
-      );
-      await tester.pumpWidget(_appUnderTest(clienteRepo: clienteRepo));
-      await tester.pumpAndSettle();
+  testWidgets('reemplazoExpirado true muestra el aviso de código expirado', (
+    tester,
+  ) async {
+    final clienteRepo = FakeClienteRepository(
+      clientes: [clienteRita, clientePedro],
+      codigoResultado: (
+        codigo: '482915',
+        expiraEn: DateTime.now().add(const Duration(hours: 24)),
+        reemplazoExpirado: true,
+      ),
+    );
+    await tester.pumpWidget(_appUnderTest(clienteRepo: clienteRepo));
+    await tester.pumpAndSettle();
 
-      await _abrirVinculacion(tester);
+    await _abrirVinculacion(tester);
 
-      expect(
-        find.text('El código anterior expiró. Se generó uno nuevo.'),
-        findsOneWidget,
-      );
-    },
-  );
+    expect(
+      find.text('El código anterior expiró. Se generó uno nuevo.'),
+      findsOneWidget,
+    );
+  });
 
   testWidgets(
     'si generar el código falla, la hoja muestra el mensaje de error',
@@ -332,7 +338,10 @@ void main() {
       );
       final clienteRepo = FakeClienteRepository(clientes: [clienteVinculado]);
       await tester.pumpWidget(
-        _appUnderTest(initialLocation: '/clientes/c-3', clienteRepo: clienteRepo),
+        _appUnderTest(
+          initialLocation: '/clientes/c-3',
+          clienteRepo: clienteRepo,
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -340,6 +349,60 @@ void main() {
       expect(find.text('Vincular cuenta'), findsNothing);
     },
   );
+
+  group('límites del plan', () {
+    Future<void> abrir(WidgetTester tester, MiPlan plan) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_appUnderTest(plan: plan));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Nueva mascota'));
+    }
+
+    testWidgets('Gratis con 50 pacientes: "Nueva mascota" abre la hoja y no '
+        'navega', (tester) async {
+      await abrir(tester, planGratisAlTope);
+      await tester.tap(find.text('Nueva mascota'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Llegaste a los 50 pacientes'), findsOneWidget);
+      expect(find.text('NUEVA MASCOTA'), findsNothing);
+    });
+
+    testWidgets('con plan Beta navega al formulario de mascota', (
+      tester,
+    ) async {
+      await abrir(tester, planBeta);
+      await tester.tap(find.text('Nueva mascota'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('NUEVA MASCOTA'), findsOneWidget);
+    });
+
+    testWidgets('en solo lectura muestra candado, semántica bloqueada y la '
+        'hoja de solo lectura', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await abrir(tester, planSoloLectura);
+
+      final boton = find.widgetWithText(AppButton, 'Nueva mascota');
+      expect(
+        find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSemantics(boton).label,
+        contains('bloqueado, solo lectura'),
+      );
+
+      await tester.tap(find.text('Nueva mascota'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.text('NUEVA MASCOTA'), findsNothing);
+      semantics.dispose();
+    });
+  });
 
   group('textoVigencia', () {
     test('24 horas exactas -> "Válido por 24 horas"', () {
@@ -353,10 +416,7 @@ void main() {
     test('5h10m restantes -> "Válido por 6 horas más"', () {
       final ahora = DateTime(2026, 1, 1, 12, 0, 0);
       expect(
-        textoVigencia(
-          ahora.add(const Duration(hours: 5, minutes: 10)),
-          ahora,
-        ),
+        textoVigencia(ahora.add(const Duration(hours: 5, minutes: 10)), ahora),
         'Válido por 6 horas más',
       );
     });
