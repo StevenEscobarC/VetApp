@@ -60,7 +60,10 @@ void main() {
       _app(activar: () async {}, resultado: _Resultado()),
     );
     await _abrir(tester);
-    expect(find.text('Plan Clínica 30 días gratis, sin tarjeta'), findsOneWidget);
+    expect(
+      find.text('Plan Clínica 30 días gratis, sin tarjeta'),
+      findsOneWidget,
+    );
     expect(
       find.text(
         'Invita a tus colegas y trabajen juntos con pacientes, agenda y '
@@ -102,7 +105,9 @@ void main() {
   testWidgets('Activar calls activar once and returns true', (tester) async {
     var llamadas = 0;
     final r = _Resultado();
-    await tester.pumpWidget(_app(activar: () async => llamadas++, resultado: r));
+    await tester.pumpWidget(
+      _app(activar: () async => llamadas++, resultado: r),
+    );
     await _abrir(tester);
     await tester.tap(find.text('Activar y generar código'));
     await tester.pumpAndSettle();
@@ -115,7 +120,9 @@ void main() {
   testWidgets('Ahora no returns null without calling activar', (tester) async {
     var llamadas = 0;
     final r = _Resultado();
-    await tester.pumpWidget(_app(activar: () async => llamadas++, resultado: r));
+    await tester.pumpWidget(
+      _app(activar: () async => llamadas++, resultado: r),
+    );
     await _abrir(tester);
     await tester.tap(find.text('Ahora no'));
     await tester.pumpAndSettle();
@@ -129,7 +136,9 @@ void main() {
   ) async {
     final completer = Completer<void>();
     final r = _Resultado();
-    await tester.pumpWidget(_app(activar: () => completer.future, resultado: r));
+    await tester.pumpWidget(
+      _app(activar: () => completer.future, resultado: r),
+    );
     await _abrir(tester);
     await tester.tap(find.text('Activar y generar código'));
     await tester.pump();
@@ -203,13 +212,11 @@ void main() {
     });
 
     test('LP002 arriving only in the hint is also mapped', () {
-      const e = PostgrestException(
-        message: 'x',
-        code: 'P0001',
-        hint: 'LP002',
+      const e = PostgrestException(message: 'x', code: 'P0001', hint: 'LP002');
+      expect(
+        SupabaseTeamRepository.mensajeLimiteEquipo(e, unirse: false),
+        'Tu plan no tiene cupo para más veterinarios.',
       );
-      expect(SupabaseTeamRepository.mensajeLimiteEquipo(e, unirse: false),
-          'Tu plan no tiene cupo para más veterinarios.');
     });
 
     test('other errors return null so the substring rules apply', () {

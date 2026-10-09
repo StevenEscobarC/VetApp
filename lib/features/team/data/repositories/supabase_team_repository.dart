@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/data/limite_plan_postgrest.dart';
+import '../../../../core/errors/limite_plan.dart';
 import '../../domain/codigo_invitacion.dart';
 import '../../domain/invitacion.dart';
 import '../../domain/miembro.dart';
@@ -35,7 +38,7 @@ class SupabaseTeamRepository {
         );
       }).toList();
     } on PostgrestException catch (e) {
-      throw TeamFailure(_messageFor(e));
+      throw TeamFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const TeamFailure('No pudimos cargar el equipo. Intenta de nuevo.');
     }
@@ -58,7 +61,7 @@ class SupabaseTeamRepository {
       if (row == null) return null;
       return _invitacionDe(row);
     } on PostgrestException catch (e) {
-      throw TeamFailure(_messageFor(e));
+      throw TeamFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const TeamFailure('No pudimos cargar el equipo. Intenta de nuevo.');
     }
@@ -70,7 +73,10 @@ class SupabaseTeamRepository {
       final rows = await _client.rpc('generar_invitacion_clinica');
       return _invitacionDe((rows as List).first as Map<String, dynamic>);
     } on PostgrestException catch (e) {
-      throw TeamFailure(_messageFor(e, fallback: _fallbackGenerar));
+      throw TeamFailure(
+        _messageFor(e, fallback: _fallbackGenerar),
+        limite: limitePlanDe(e),
+      );
     } catch (_) {
       throw const TeamFailure(_fallbackGenerar);
     }
@@ -80,7 +86,10 @@ class SupabaseTeamRepository {
     try {
       await _client.rpc('revocar_invitacion', params: {'p_id': id});
     } on PostgrestException catch (e) {
-      throw TeamFailure(_messageFor(e, fallback: _fallbackRevocar));
+      throw TeamFailure(
+        _messageFor(e, fallback: _fallbackRevocar),
+        limite: limitePlanDe(e),
+      );
     } catch (_) {
       throw const TeamFailure(_fallbackRevocar);
     }
@@ -98,7 +107,10 @@ class SupabaseTeamRepository {
           .gte('fecha_hora', desde.toUtc().toIso8601String());
       return (rows as List).length;
     } on PostgrestException catch (e) {
-      throw TeamFailure(_messageFor(e, fallback: _fallbackCambio));
+      throw TeamFailure(
+        _messageFor(e, fallback: _fallbackCambio),
+        limite: limitePlanDe(e),
+      );
     } catch (_) {
       throw const TeamFailure(_fallbackCambio);
     }
@@ -113,7 +125,10 @@ class SupabaseTeamRepository {
       );
       return (res as num).toInt();
     } on PostgrestException catch (e) {
-      throw TeamFailure(_messageFor(e, fallback: _fallbackCambio));
+      throw TeamFailure(
+        _messageFor(e, fallback: _fallbackCambio),
+        limite: limitePlanDe(e),
+      );
     } catch (_) {
       throw const TeamFailure(_fallbackCambio);
     }
@@ -127,7 +142,10 @@ class SupabaseTeamRepository {
         params: {'p_miembro': miembroId, 'p_rol': rol},
       );
     } on PostgrestException catch (e) {
-      throw TeamFailure(_messageFor(e, fallback: _fallbackCambio));
+      throw TeamFailure(
+        _messageFor(e, fallback: _fallbackCambio),
+        limite: limitePlanDe(e),
+      );
     } catch (_) {
       throw const TeamFailure(_fallbackCambio);
     }
@@ -136,9 +154,15 @@ class SupabaseTeamRepository {
   /// Crea una clínica vacía para un veterinario sin clínica activa (D-05).
   Future<void> crearMiClinica(String nombre) async {
     try {
-      await _client.rpc('crear_mi_clinica', params: {'p_nombre': nombre.trim()});
+      await _client.rpc(
+        'crear_mi_clinica',
+        params: {'p_nombre': nombre.trim()},
+      );
     } on PostgrestException catch (e) {
-      throw TeamFailure(_messageFor(e, fallback: _fallbackCrear));
+      throw TeamFailure(
+        _messageFor(e, fallback: _fallbackCrear),
+        limite: limitePlanDe(e),
+      );
     } catch (_) {
       throw const TeamFailure(_fallbackCrear);
     }
@@ -152,7 +176,10 @@ class SupabaseTeamRepository {
         params: {'p_codigo': normalizarCodigoInvitacion(codigo)},
       );
     } on PostgrestException catch (e) {
-      throw TeamFailure(_messageFor(e, fallback: _fallbackUnirse));
+      throw TeamFailure(
+        _messageFor(e, fallback: _fallbackUnirse),
+        limite: limitePlanDe(e),
+      );
     } catch (_) {
       throw const TeamFailure(_fallbackUnirse);
     }
@@ -175,10 +202,31 @@ class SupabaseTeamRepository {
     expiraEn: DateTime.parse(row['expira_en'] as String).toUtc(),
   );
 
+  /// Mensaje en español de un `LP002` (sin cupo de veterinarios), o `null` si
+  /// [error] no es ese límite. El mensaje de quien se une es genérico a
+  /// propósito: no revela el plan ni los contadores de otra clínica.
+  @visibleForTesting
+  static String? mensajeLimiteEquipo(
+    PostgrestException error, {
+    required bool unirse,
+  }) {
+    if (limitePlanDe(error) != LimitePlan.miembros) return null;
+    return unirse
+        ? 'La clínica a la que intentas unirte no tiene cupo para más '
+              'veterinarios. Pídele al administrador que active un plan con '
+              'más cupos.'
+        : 'Tu plan no tiene cupo para más veterinarios.';
+  }
+
   String _messageFor(
     PostgrestException error, {
     String fallback = 'No pudimos cargar el equipo. Intenta de nuevo.',
   }) {
+    final cupo = mensajeLimiteEquipo(
+      error,
+      unirse: fallback == _fallbackUnirse,
+    );
+    if (cupo != null) return cupo;
     final msg = error.message.toLowerCase();
     if (msg.contains('al menos un administrador')) {
       return 'La clínica debe tener al menos un administrador.';
