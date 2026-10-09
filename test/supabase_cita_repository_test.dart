@@ -1,11 +1,46 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vetapp/core/data/limite_plan_postgrest.dart';
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/features/appointments/data/repositories/supabase_cita_repository.dart';
 
 PostgrestException _check(String mensaje) =>
     PostgrestException(message: mensaje, code: '23514');
 
 void main() {
+  group('mensajeErrorCita - límites del plan', () {
+    const soloLectura =
+        'Tu cuenta está en solo lectura. Pide al administrador que active el '
+        'plan.';
+    test('LP004 por code', () {
+      expect(
+        mensajeErrorCita(PostgrestException(message: 'x', code: 'LP004')),
+        soloLectura,
+      );
+    });
+    test('LP004 solo en hint', () {
+      expect(
+        mensajeErrorCita(
+          PostgrestException(message: 'x', code: 'P0001', hint: 'LP004'),
+          estado: true,
+        ),
+        soloLectura,
+      );
+    });
+    test('limitePlanDe detecta soloLectura', () {
+      expect(
+        limitePlanDe(PostgrestException(message: 'x', code: 'LP004')),
+        LimitePlan.soloLectura,
+      );
+    });
+    test('otros códigos conservan su mensaje', () {
+      expect(
+        mensajeErrorCita(PostgrestException(message: 'x', code: 'PGRST116')),
+        'Esta cita ya no existe.',
+      );
+    });
+  });
+
   group('mensajeErrorCita - reasignación', () {
     test('veterinario fuera de la clínica (23503)', () {
       expect(
