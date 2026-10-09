@@ -142,6 +142,20 @@ Alternativa equivalente sin archivo (pasando las variables inline):
 flutter run --dart-define=SUPABASE_URL=https://TU-PROYECTO.supabase.co --dart-define=SUPABASE_ANON_KEY=TU_CLAVE_PUBLICA
 ```
 
+**Soporte por WhatsApp (planes):** `SOPORTE_WHATSAPP` es el celular colombiano de soporte (por ejemplo `3001234567`) al que el administrador escribe desde Mas > Mi plan para activar o cambiar el plan. Se agrega a `dart_define.json` (gitignored) y al comando de build, junto a `CARNE_BASE_URL`. No tiene valor por defecto: vacío oculta el número y el botón. Para el build de Play Store se recomienda dejarlo vacío (RESEARCH A7), así la app no muestra ningún canal de contacto para pagar.
+
+```json
+{
+  "SOPORTE_WHATSAPP": "3001234567"
+}
+```
+
+**Antes de abrir el registro público:** fijar `beta_hasta` con `asignar_plan`, para que las clínicas Beta tengan fecha y vean el aviso de los últimos 7 días.
+
+```sql
+-- select public.asignar_plan('<clinica_id>', 'beta', null, null, false, date '2027-01-31');  -- fija beta_hasta
+```
+
 Otros comandos útiles:
 
 ```powershell

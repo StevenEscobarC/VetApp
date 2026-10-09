@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/config/soporte_config.dart';
 import '../../../../core/data/supabase_client_provider.dart';
+import '../../../../core/utils/telefono_co.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/repositories/supabase_plan_repository.dart';
 import '../../domain/mi_plan.dart';
@@ -35,4 +37,10 @@ final miPlanProvider = FutureProvider.autoDispose<MiPlan?>((ref) async {
 /// triggers rechazan la escritura de todos modos).
 final puedeEscribirProvider = Provider.autoDispose<bool>(
   (ref) => ref.watch(miPlanProvider).value?.puedeEscribir ?? true,
+);
+
+/// Número de soporte listo para `wa.me` (solo dígitos) o `null` si el build no
+/// lo trae o no es válido: entonces no se muestran número ni botón.
+final soporteWhatsappProvider = Provider<String?>(
+  (_) => numeroWhatsApp(kSoporteWhatsapp),
 );

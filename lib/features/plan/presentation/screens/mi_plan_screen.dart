@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/lanzador_externo.dart';
+import '../../../../core/utils/whatsapp_soporte.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
+import '../../../../core/widgets/chips/app_filter_chip.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/mi_plan.dart';
 import '../../domain/plan_failure.dart';
 import '../plan_textos.dart';
@@ -83,6 +87,8 @@ class _ContenidoPlan extends StatelessWidget {
         _Usos(plan: plan),
         const SizedBox(height: AppSpacing.lg),
         _QueIncluye(actual: plan.plan),
+        const SizedBox(height: AppSpacing.lg),
+        _Soporte(plan: plan),
       ],
     );
   }
@@ -413,6 +419,121 @@ class _FilaPlan extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+const String _errorWhatsApp = 'No pudimos abrir WhatsApp.';
+
+/// Contacto con soporte para activar o cambiar el plan (D-14, D-15). Solo el
+/// administrador ve número y botón, y solo si el build trae el número. Sin
+/// precios ni pagos: el cobro ocurre fuera de la app.
+class _Soporte extends ConsumerStatefulWidget {
+  const _Soporte({required this.plan});
+
+  final MiPlan plan;
+
+  @override
+  ConsumerState<_Soporte> createState() => _SoporteState();
+}
+
+class _SoporteState extends ConsumerState<_Soporte> {
+  late String _interes = widget.plan.plan == PlanTipo.clinica
+      ? 'Clínica'
+      : 'Pro';
+
+  Future<void> _escribir(String numero) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final lanzador = ref.read(lanzadorExternoProvider);
+    final uri = enlaceSoporte(
+      numero,
+      mensajeSoporte(clinica: widget.plan.clinicaNombre, planInteres: _interes),
+    );
+    var ok = await lanzador.abrirEnApp(uri);
+    if (!ok) ok = await lanzador.abrir(uri);
+    if (!ok) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text(_errorWhatsApp)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final esAdmin =
+        ref.watch(authProfileProvider).asData?.value?.esAdmin ?? false;
+    final numero = ref.watch(soporteWhatsappProvider);
+
+    final List<Widget> hijos;
+    if (!esAdmin) {
+      hijos = [
+        Text(
+          'Solo el administrador de tu clínica puede pedir cambios de plan. '
+          'Habla con él para activar o cambiar el plan.',
+          style: textTheme.bodyLarge?.copyWith(color: AppColors.textSecondary),
+        ),
+      ];
+    } else if (numero == null) {
+      hijos = [
+        Text(
+          'Para activar o cambiar tu plan, comunícate con soporte.',
+          style: textTheme.bodyLarge,
+        ),
+      ];
+    } else {
+      hijos = [
+        Text('Activa o cambia tu plan', style: textTheme.labelLarge),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Para activar o cambiar tu plan escríbenos por WhatsApp.',
+          style: textTheme.bodyLarge,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'Plan de interés',
+          style: textTheme.labelLarge?.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final opcion in const ['Pro', 'Clínica'])
+              AppFilterChip(
+                label: opcion,
+                selected: _interes == opcion,
+                onTap: () => setState(() => _interes = opcion),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'WhatsApp de soporte: ${formatearSoporte(numero)}',
+          style: textTheme.labelLarge?.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          label: 'Escribir por WhatsApp',
+          icon: Icons.chat_outlined,
+          onPressed: () => _escribir(numero),
+        ),
+      ];
+    }
+
+    return Container(
+      key: const ValueKey('soporte-bloque'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: hijos,
       ),
     );
   }
