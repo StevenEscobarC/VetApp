@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
+import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
+import 'package:vetapp/features/home/presentation/screens/mas_screen.dart';
+import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/plan/domain/mi_plan.dart';
@@ -10,6 +15,9 @@ import 'package:vetapp/features/plan/presentation/providers/plan_providers.dart'
 import 'package:vetapp/features/plan/presentation/screens/mi_plan_screen.dart';
 
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_citas.dart';
+import 'helpers/fake_recordatorios.dart';
+import 'helpers/fake_team.dart';
 import 'helpers/fake_plan.dart';
 import 'helpers/router_harness.dart';
 
@@ -222,5 +230,67 @@ void main() {
         );
       }
     }
+  });
+
+  group('Más row', () {
+    Widget mas(FakePlanRepository repo) {
+      SharedPreferences.setMockInitialValues({});
+      return routerHarness(
+        initialLocation: '/mas',
+        routes: [
+          GoRoute(
+            path: '/mas',
+            builder: (_, _) => const MasScreen(),
+            routes: [
+              GoRoute(path: 'plan', builder: (_, _) => const MiPlanScreen()),
+            ],
+          ),
+        ],
+        overrides: [
+          ..._overrides(repo),
+          teamRepositoryProvider.overrideWithValue(FakeTeamRepository()),
+          citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
+          recordatoriosServiceProvider.overrideWithValue(
+            FakeRecordatoriosService(),
+          ),
+        ],
+      );
+    }
+
+    testWidgets('shows the insignia and opens Mi plan on tap', (tester) async {
+      tester.view.physicalSize = const Size(800, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(mas(FakePlanRepository(plan: planClinicaTrial)));
+      await tester.pumpAndSettle();
+      expect(find.text('Mi plan'), findsOneWidget);
+      expect(find.text('Prueba Clínica · 12 días'), findsOneWidget);
+
+      await tester.tap(find.text('Mi plan'));
+      await tester.pumpAndSettle();
+      expect(find.text('Uso de tu clínica'), findsOneWidget);
+    });
+
+    testWidgets('read-only colleague sees Solo lectura', (tester) async {
+      tester.view.physicalSize = const Size(800, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(mas(FakePlanRepository(plan: planSoloLectura)));
+      await tester.pumpAndSettle();
+      expect(find.text('Solo lectura'), findsOneWidget);
+    });
+
+    testWidgets('on error the row stays without insignia', (tester) async {
+      tester.view.physicalSize = const Size(800, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        mas(FakePlanRepository(error: const PlanFailure('x'))),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Mi plan'), findsOneWidget);
+      expect(find.textContaining('Prueba'), findsNothing);
+      expect(find.textContaining('Plan '), findsNothing);
+    });
   });
 }

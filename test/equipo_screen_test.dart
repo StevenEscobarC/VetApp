@@ -20,6 +20,7 @@ import 'package:vetapp/features/team/presentation/screens/equipo_screen.dart';
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_recordatorios.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_team.dart';
 import 'helpers/router_harness.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
@@ -38,6 +39,7 @@ List<Override> _overrides(
     teamRepositoryProvider.overrideWithValue(repo),
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
+    ...planOverrides(),
   ];
 }
 

@@ -14,6 +14,7 @@ import '../../features/home/presentation/app_shell.dart';
 import '../../features/home/presentation/screens/inicio_screen.dart';
 import '../../features/home/presentation/screens/mas_screen.dart';
 import '../../features/patients/presentation/pacientes_routes.dart';
+import '../../features/plan/presentation/plan_routes.dart';
 import '../../features/team/presentation/equipo_routes.dart';
 import '../../features/team/presentation/screens/acceso_revocado_screen.dart';
 import '../../features/vaccination/presentation/vacunacion_routes.dart';
@@ -114,6 +115,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                   ...masTeamRoutes,
                   ...masProtocolosRoutes,
+                  ...masPlanRoutes,
                 ],
               ),
             ],
