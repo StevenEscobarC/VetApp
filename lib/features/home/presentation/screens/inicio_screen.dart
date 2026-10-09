@@ -6,6 +6,7 @@ import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/widgets/plan_banner.dart';
 import '../../../vaccination/presentation/widgets/mascota_search_sheet.dart';
 import '../../../vaccination/presentation/widgets/vacunas_pendientes_card.dart';
 
@@ -48,6 +49,7 @@ class InicioScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
+              const PlanBanner(),
               AppCard(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(

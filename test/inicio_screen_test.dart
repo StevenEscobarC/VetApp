@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/domain/auth_failure.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/home/presentation/screens/inicio_screen.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
@@ -14,6 +15,7 @@ import 'package:vetapp/features/vaccination/presentation/providers/vacuna_provid
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
@@ -21,6 +23,7 @@ Widget _appUnderTest({
   AuthProfile? profile,
   Object? error,
   FakeVacunaRepository? vacunas,
+  MiPlan? plan,
 }) {
   return routerHarness(
     initialLocation: '/',
@@ -37,6 +40,7 @@ Widget _appUnderTest({
       ),
     ],
     overrides: [
+      ...planOverrides(plan: plan),
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: profile, error: error),
       ),
@@ -163,5 +167,28 @@ void main() {
 
     expect(find.text('¿A quién vacuna?'), findsOneWidget);
     expect(find.text('Buscar mascota o dueño'), findsOneWidget);
+  });
+
+  testWidgets('el aviso de plan aparece arriba de la tarjeta Hola', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appUnderTest(profile: vetProfile, plan: planGratisAlTope),
+    );
+    await tester.pumpAndSettle();
+
+    final aviso = find.text('Llegaste a los 50 pacientes');
+    expect(aviso, findsOneWidget);
+    expect(find.text('Hola, Ana Ramírez'), findsOneWidget);
+    expect(
+      tester.getTopLeft(aviso).dy,
+      lessThan(tester.getTopLeft(find.text('Hola, Ana Ramírez')).dy),
+    );
+  });
+
+  testWidgets('sin aviso de plan Inicio queda igual', (tester) async {
+    await tester.pumpWidget(_appUnderTest(profile: vetProfile));
+    await tester.pumpAndSettle();
+    expect(find.text('Ver mi plan'), findsNothing);
   });
 }
