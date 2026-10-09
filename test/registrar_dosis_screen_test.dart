@@ -385,8 +385,12 @@ void main() {
   group('plan Gratis (Guardar en mi catálogo)', () {
     const titulo = 'Los protocolos propios son parte de Pro';
 
+    final interruptor = find.widgetWithText(
+      SwitchListTile,
+      'Guardar en mi catálogo',
+    );
     bool valorInterruptor(WidgetTester tester) =>
-        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value;
+        tester.widget<SwitchListTile>(interruptor).value;
 
     testWidgets('el interruptor arranca apagado, avisa y no se puede activar', (
       tester,
@@ -400,9 +404,9 @@ void main() {
 
       await tester.enterText(find.byType(TextFormField).first, 'Giardia');
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byType(SwitchListTile));
+      await tester.ensureVisible(interruptor);
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(interruptor);
       await tester.pumpAndSettle();
       expect(find.text(titulo), findsOneWidget);
       expect(valorInterruptor(tester), isFalse);
