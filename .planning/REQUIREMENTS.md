@@ -64,6 +64,15 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 - [x] **VAC-04**: El veterinario puede generar un link público de solo lectura con el carné de vacunación de una mascota (sin exponer historia clínica completa)
 - [x] **VAC-05**: El dueño puede ver el carné de vacunación compartido sin necesidad de cuenta
 
+### Planes y límites (PLAN)
+
+- [ ] **PLAN-01**: Cada clínica tiene un plan vigente (Gratis, Pro, Clínica por tramo, Beta, o prueba) calculado en el servidor con su vigencia ("pagado hasta", prueba, gracia), y ningún usuario puede cambiar su propio plan
+- [ ] **PLAN-02**: En Gratis la clínica puede tener hasta 50 pacientes; al llegar al tope solo se bloquea crear pacientes nuevos (todo lo existente se ve, atiende, vacuna y comparte)
+- [ ] **PLAN-03**: El número de veterinarios activos respeta el plan (1 en Gratis/Pro; 2/3/5 en Clínica); generar el primer código en Gratis/Pro abre una prueba Clínica de 30 días (una por clínica); al vencer, tras 15 días de gracia los colegas quedan en solo lectura
+- [ ] **PLAN-04**: El logo de la clínica y los protocolos propios solo se usan/crean en Pro y Clínica; al bajar a Gratis el logo se conserva oculto y los links compartidos siguen funcionando
+- [ ] **PLAN-05**: Clínica nueva recibe prueba Pro de 30 días; clínicas existentes al desplegar quedan en Beta; el dueño del producto activa/renueva planes (incl. Fundador) con una función de soporte solo para service_role
+- [ ] **PLAN-06**: Pantalla Mi plan (todos la ven, solo admin contacta por WhatsApp de soporte, sin precios ni pago en la app), contadores de uso, banner al 80 %/últimos 7 días, hoja explicativa al intentar una acción limitada e insignia del plan en Más
+
 ### Inventario (INV)
 
 - [ ] **INV-01**: El veterinario puede registrar un producto/insumo con nombre, cantidad y umbral de stock mínimo
@@ -148,6 +157,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | AGND-01..06 | Phase 4 — Agenda y Citas | Pending |
 | TEAM-01..05 | Phase 4.1 — Equipo de la clínica | Complete |
 | VAC-01..05 | Phase 5 — Vacunación y Desparasitación | Complete |
+| PLAN-01..06 | Phase 5.1 — Planes y límites | Pending |
 | INV-01..03 | Phase 6 — Inventario | Pending |
 | BILL-01..04 | Phase 7 — Facturación | Pending |
 | DASH-01..04 | Phase 8 — Dashboard y Diseño Visual | Pending |
@@ -155,8 +165,8 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | REV-01..05 | Phase 9 — Directorio de Veterinarias | Pending |
 
 **Coverage:**
-- v1 requirements: 58 total (41 originales + 10 de DIR/REV + CLI-05/DIR-06 de vinculación de cuenta, agregadas 2026-09-24 + TEAM-01..05, agregadas 2026-10-01)
-- Mapped to phases: 58/58 ✓
+- v1 requirements: 64 total (41 originales + 10 de DIR/REV + CLI-05/DIR-06 de vinculación de cuenta, agregadas 2026-09-24 + TEAM-01..05, agregadas 2026-10-01)
+- Mapped to phases: 64/64 ✓
 - Unmapped: 0 ✓
 
 ---

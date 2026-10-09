@@ -23,7 +23,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Agenda y Citas** - Calendario de citas con recordatorios locales y por WhatsApp (completed 2026-10-01)
 - [x] **Phase 4.1: Equipo de la clínica** (INSERTED) - Varios veterinarios por clínica: invitación por código, roles admin/veterinario, agenda por veterinario
  (completed 2026-10-02)
-- [x] **Phase 5: Vacunación y Desparasitación** - Carné digital con cálculo automático de próxima dosis y enlace compartible (completed 2026-10-03)
+- [x] **Phase 5: Vacunación y Desparasitación** - Carné digital con cálculo automático de próxima dosis y enlace compartible
+ (completed 2026-10-03)
 - [ ] **Phase 5.1: Planes y límites** (INSERTED) - Suscripción por clínica: límites de pacientes/miembros, pantalla Mi plan (sin pago en la app), oferta Clínica al invitar
 - [ ] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo
 - [ ] **Phase 7: Facturación** - Cotizaciones/facturas en PDF con descuento automático de inventario
@@ -284,9 +285,18 @@ Plans:
 ### Phase 05.1: Planes y límites (INSERTED)
 
 **Goal:** Cada clínica tiene un plan (Gratis / Pro / Clínica) que la app respeta — límite de pacientes en Gratis, límite de miembros según el plan, pantalla "Mi plan" sin botón de pago (cobro por fuera: Wompi / Mercado Pago, política de Google Play) y la oferta de 30 días del plan Clínica al generar el primer código de invitación — sin bloquear nunca la historia clínica existente. Estrategia de precios en `.planning/business/STRATEGY.md`.
-**Requirements**: TBD (definir en discuss-phase 5.1)
+**Mode:** mvp
+**Requirements**: PLAN-01, PLAN-02, PLAN-03, PLAN-04, PLAN-05, PLAN-06
+**Success Criteria** (what must be TRUE):
+
+  1. Una clínica en Gratis no puede crear el paciente 51 (bloqueo en servidor) pero sigue viendo, atendiendo, vacunando y compartiendo todo lo existente
+  2. Generar el primer código de invitación en Gratis/Pro abre una prueba Clínica de 30 días (una sola vez); tras vencer y 15 días de gracia, los colegas quedan en solo lectura (probado en `rls_smoke_test.sql`)
+  3. Logo y protocolos propios solo en Pro/Clínica; al bajar a Gratis el logo deja de mostrarse en carné/PDF/página pero los links siguen funcionando
+  4. Ningún usuario puede cambiar su plan; el dueño del producto activa/renueva planes con `asignar_plan` (solo service_role), incluido Fundador; clínicas existentes quedan en Beta
+  5. Mi plan muestra plan, vigencia y contadores, con contacto por WhatsApp de soporte solo para admin y sin precios ni pago; banners al 80 %/últimos 7 días y hojas explicativas al tocar una acción limitada
 **Depends on:** Phase 5
 **Plans:** 0 plans
+**UI hint**: yes
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 05.1 to break down)
