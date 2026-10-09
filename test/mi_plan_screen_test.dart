@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/core/utils/lanzador_externo.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/home/presentation/screens/mas_screen.dart';
@@ -18,6 +19,7 @@ import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_recordatorios.dart';
 import 'helpers/fake_team.dart';
+import 'helpers/fake_url_launcher.dart';
 import 'helpers/fake_plan.dart';
 import 'helpers/router_harness.dart';
 
@@ -230,6 +232,172 @@ void main() {
         );
       }
     }
+  });
+
+  group('Soporte por WhatsApp', () {
+    const numero = '573001234567';
+
+    Future<void> abrirSoporte(
+      WidgetTester tester,
+      MiPlan plan, {
+      AuthProfile perfil = vetAdminProfile,
+      String? soporte = numero,
+      FakeLanzadorExterno? lanzador,
+    }) async {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        routerHarness(
+          initialLocation: '/mas/plan',
+          routes: [
+            GoRoute(path: '/mas/plan', builder: (_, _) => const MiPlanScreen()),
+          ],
+          overrides: [
+            ..._overrides(FakePlanRepository(plan: plan), perfil: perfil),
+            soporteWhatsappProvider.overrideWithValue(soporte),
+            if (lanzador != null)
+              lanzadorExternoProvider.overrideWithValue(lanzador),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('admin with number sees the full block', (tester) async {
+      await abrirSoporte(tester, planClinicaTrial);
+      expect(find.text('Activa o cambia tu plan'), findsOneWidget);
+      expect(
+        find.text('Para activar o cambiar tu plan escríbenos por WhatsApp.'),
+        findsOneWidget,
+      );
+      expect(find.text('Plan de interés'), findsOneWidget);
+      expect(find.text('Pro'), findsOneWidget);
+      expect(find.text('Clínica'), findsOneWidget);
+      expect(
+        find.text('WhatsApp de soporte: +57 300 123 4567'),
+        findsOneWidget,
+      );
+      expect(find.text('Escribir por WhatsApp'), findsOneWidget);
+    });
+
+    testWidgets('chip is preselected to Clínica on a Clínica plan', (
+      tester,
+    ) async {
+      final lanzador = FakeLanzadorExterno();
+      await abrirSoporte(tester, planClinicaTrial, lanzador: lanzador);
+      await tester.tap(find.text('Escribir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(
+        lanzador.abiertos.single.toString(),
+        contains('Plan%20Cl%C3%ADnica'),
+      );
+    });
+
+    testWidgets('chip is preselected to Pro on any other plan', (tester) async {
+      final lanzador = FakeLanzadorExterno();
+      await abrirSoporte(tester, planGratis, lanzador: lanzador);
+      await tester.tap(find.text('Escribir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(lanzador.abiertos.single.toString(), contains('Plan%20Pro'));
+    });
+
+    testWidgets('tap opens wa.me with the encoded clinic and chosen plan', (
+      tester,
+    ) async {
+      final lanzador = FakeLanzadorExterno();
+      await abrirSoporte(tester, planGratis, lanzador: lanzador);
+      await tester.tap(find.text('Clínica'));
+      await tester.pump();
+      await tester.tap(find.text('Escribir por WhatsApp'));
+      await tester.pumpAndSettle();
+      final uri = lanzador.abiertos.single;
+      expect(lanzador.metodos, ['abrirEnApp']);
+      expect(uri.host, 'wa.me');
+      expect(uri.path, '/$numero');
+      expect(uri.toString(), contains('%22Cl%C3%ADnica%20Patitas%22'));
+      expect(uri.toString(), contains('Plan%20Cl%C3%ADnica'));
+      expect(uri.toString(), isNot(contains('+')));
+    });
+
+    testWidgets('falls back to abrir when the app cannot open it', (
+      tester,
+    ) async {
+      final lanzador = FakeLanzadorExterno()
+        ..resultadoApp = false
+        ..resultado = true;
+      await abrirSoporte(tester, planGratis, lanzador: lanzador);
+      await tester.tap(find.text('Escribir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(lanzador.metodos, ['abrirEnApp', 'abrir']);
+      expect(find.text('No pudimos abrir WhatsApp.'), findsNothing);
+    });
+
+    testWidgets('both failing shows the snackbar', (tester) async {
+      final lanzador = FakeLanzadorExterno()..resultado = false;
+      await abrirSoporte(tester, planGratis, lanzador: lanzador);
+      await tester.tap(find.text('Escribir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(lanzador.metodos, ['abrirEnApp', 'abrir']);
+      expect(find.text('No pudimos abrir WhatsApp.'), findsOneWidget);
+    });
+
+    testWidgets('admin without number sees only the fallback text', (
+      tester,
+    ) async {
+      await abrirSoporte(tester, planGratis, soporte: null);
+      expect(
+        find.text('Para activar o cambiar tu plan, comunícate con soporte.'),
+        findsOneWidget,
+      );
+      expect(find.text('Escribir por WhatsApp'), findsNothing);
+      expect(find.textContaining('WhatsApp de soporte'), findsNothing);
+      expect(find.text('Plan de interés'), findsNothing);
+    });
+
+    testWidgets('non-admin sees no number and no button', (tester) async {
+      await abrirSoporte(tester, planGratis, perfil: vetColegaProfile);
+      expect(
+        find.text(
+          'Solo el administrador de tu clínica puede pedir cambios de plan. '
+          'Habla con él para activar o cambiar el plan.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Escribir por WhatsApp'), findsNothing);
+      expect(find.textContaining('WhatsApp de soporte'), findsNothing);
+      expect(find.text('Activa o cambia tu plan'), findsNothing);
+    });
+
+    testWidgets('no money wording in any support variant', (tester) async {
+      final variantes = <(MiPlan, AuthProfile, String?)>[
+        (planGratis, vetAdminProfile, numero),
+        (planClinicaTrial, vetAdminProfile, numero),
+        (planGratis, vetAdminProfile, null),
+        (planGratis, vetColegaProfile, numero),
+      ];
+      for (final (plan, perfil, soporte) in variantes) {
+        await abrirSoporte(tester, plan, perfil: perfil, soporte: soporte);
+        for (final prohibida in [
+          'precio',
+          'pagar',
+          'pago',
+          'COP',
+          r'$',
+          'factura',
+          'tarjeta',
+        ]) {
+          expect(
+            find.descendant(
+              of: find.byKey(const ValueKey('soporte-bloque')),
+              matching: find.textContaining(prohibida),
+            ),
+            findsNothing,
+            reason: '${plan.plan}/$soporte/${perfil.rolClinica}: $prohibida',
+          );
+        }
+      }
+    });
   });
 
   group('Más row', () {
