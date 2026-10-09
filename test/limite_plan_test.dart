@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vetapp/core/data/limite_plan_postgrest.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
+import 'package:vetapp/features/patients/domain/mascota_failure.dart';
 
 class _Fallo implements Exception, ConLimitePlan {
   const _Fallo(this.limite);
@@ -61,6 +62,14 @@ void main() {
         limiteDe(const _Fallo(LimitePlan.pacientes)),
         LimitePlan.pacientes,
       );
+    });
+
+    test('lee el límite de un MascotaFailure', () {
+      expect(
+        limiteDe(const MascotaFailure('x', limite: LimitePlan.pacientes)),
+        LimitePlan.pacientes,
+      );
+      expect(limiteDe(const MascotaFailure('x')), isNull);
     });
 
     test('devuelve null para otros errores o sin límite', () {

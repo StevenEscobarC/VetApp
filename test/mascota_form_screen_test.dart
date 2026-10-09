@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
@@ -14,6 +15,7 @@ import 'package:vetapp/features/patients/domain/mascota_failure.dart';
 import 'package:vetapp/features/patients/presentation/pacientes_routes.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 
@@ -22,6 +24,7 @@ import 'helpers/fake_clientes.dart';
 import 'helpers/fake_consultas.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
@@ -36,11 +39,13 @@ Widget _appUnderTest({
   FakeMascotaFotoDatasource? fotoDatasource,
   Uint8List? fotoCapturada,
   FakeVacunaRepository? vacunaRepo,
+  MiPlan? plan,
 }) {
   return routerHarness(
     initialLocation: initialLocation,
     routes: [clientesRoute, pacientesRoute],
     overrides: [
+      ...planOverrides(plan: plan),
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
@@ -318,6 +323,44 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(cargasCarne(), 2);
+    },
+  );
+
+  testWidgets(
+    'un MascotaFailure con límite de solo lectura abre la hoja y conserva '
+    'lo escrito en el formulario',
+    (tester) async {
+      const falla = MascotaFailure(
+        'Tu cuenta está en solo lectura. Pide al administrador que active el plan.',
+        limite: LimitePlan.soloLectura,
+      );
+      final repo = FakeMascotaRepository(error: falla);
+      await tester.pumpWidget(
+        _appUnderTest(
+          initialLocation: '/clientes/c-1/nueva-mascota',
+          mascotaRepo: repo,
+          plan: planSoloLectura,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField).first, 'Toby');
+      await tester.ensureVisible(find.text('Perro'));
+      await tester.tap(find.text('Perro'));
+      await tester.pump();
+      await tester.ensureVisible(
+        find.widgetWithText(AppButton, 'Nueva mascota'),
+      );
+      await tester.tap(find.widgetWithText(AppButton, 'Nueva mascota'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+
+      await tester.tap(find.text('Ahora no'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppButton, 'Nueva mascota'), findsOneWidget);
+      expect(find.text('Toby'), findsOneWidget);
     },
   );
 }
