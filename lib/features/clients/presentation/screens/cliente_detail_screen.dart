@@ -11,6 +11,8 @@ import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../../patients/domain/entities/mascota.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../domain/cliente_failure.dart';
 import '../../domain/entities/cliente.dart';
 import '../providers/clientes_providers.dart';
@@ -248,13 +250,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           const SizedBox(height: AppSpacing.md),
           _buildMascotas(mascotasAsync, textTheme),
           const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: 'Nueva mascota',
-            icon: Icons.add,
-            variant: AppButtonVariant.outline,
-            onPressed: () =>
-                context.push('/clientes/${widget.clienteId}/nueva-mascota'),
-          ),
+          _botonNuevaMascota(context),
           const SizedBox(height: AppSpacing.sm),
           // `go` (no push): el destino vive en la rama Agenda del shell (D-07).
           AppButton(
@@ -272,6 +268,38 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           _buildVinculacionRow(context, cliente),
         ],
       ),
+    );
+  }
+
+  /// "Nueva mascota": pre-verifica el plan (50 pacientes en Gratis, solo
+  /// lectura) antes de abrir el formulario. En solo lectura conserva lugar,
+  /// variante y tamaño; solo cambia el ícono y la semántica (D-12).
+  Widget _botonNuevaMascota(BuildContext context) {
+    final puedeEscribir = ref.watch(puedeEscribirProvider);
+
+    Future<void> abrir() async {
+      final ok = await asegurarNuevoPaciente(
+        context,
+        ref,
+        plan: ref.read(miPlanProvider).value,
+      );
+      if (!ok || !context.mounted) return;
+      context.push('/clientes/${widget.clienteId}/nueva-mascota');
+    }
+
+    final boton = AppButton(
+      label: 'Nueva mascota',
+      icon: iconoEscritura(puedeEscribir, Icons.add),
+      variant: AppButtonVariant.outline,
+      onPressed: abrir,
+    );
+    if (puedeEscribir) return boton;
+    return Semantics(
+      button: true,
+      label: semanticaEscritura(puedeEscribir, 'Nueva mascota'),
+      onTap: abrir,
+      excludeSemantics: true,
+      child: boton,
     );
   }
 

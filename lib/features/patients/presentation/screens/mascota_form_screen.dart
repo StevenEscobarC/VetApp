@@ -13,6 +13,7 @@ import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/media/app_photo_picker.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../../clients/presentation/providers/clientes_providers.dart';
 import '../../../vaccination/presentation/providers/vacuna_providers.dart';
 import '../../domain/entities/mascota.dart';
@@ -181,6 +182,8 @@ class _MascotaFormScreenState extends ConsumerState<MascotaFormScreen> {
       }
 
       if (!mounted) return;
+      // Un paciente más: el contador del plan (tope de Gratis) cambió.
+      ref.invalidate(miPlanProvider);
       ref.invalidate(mascotasDeClienteProvider(clienteId));
       ref.invalidate(clienteProvider(clienteId));
       ref.read(clientesProvider.notifier).refrescar();
