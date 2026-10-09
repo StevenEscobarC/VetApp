@@ -6,6 +6,10 @@ import 'package:vetapp/core/utils/lanzador_externo.dart';
 import 'helpers/fake_compartir.dart';
 import 'helpers/fake_url_launcher.dart';
 import 'package:flutter_riverpod/misc.dart';
+import 'package:vetapp/core/errors/limite_plan.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
+import 'package:vetapp/features/plan/presentation/providers/plan_providers.dart';
+import 'package:vetapp/features/team/domain/invitacion.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
@@ -30,6 +34,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 List<Override> _overrides(
   FakeTeamRepository repo, {
   AuthProfile perfil = vetAdminProfile,
+  FakePlanRepository? planRepo,
 }) {
   SharedPreferences.setMockInitialValues({});
   return [
@@ -39,16 +44,18 @@ List<Override> _overrides(
     teamRepositoryProvider.overrideWithValue(repo),
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
-    ...planOverrides(),
+    planRepositoryProvider.overrideWithValue(planRepo ?? FakePlanRepository()),
   ];
 }
 
-Widget _equipo(FakeTeamRepository repo, {AuthProfile perfil = vetAdminProfile}) =>
-    routerHarness(
-      initialLocation: '/equipo',
-      routes: [GoRoute(path: '/equipo', builder: (_, _) => const EquipoScreen())],
-      overrides: _overrides(repo, perfil: perfil),
-    );
+Widget _equipo(
+  FakeTeamRepository repo, {
+  AuthProfile perfil = vetAdminProfile,
+}) => routerHarness(
+  initialLocation: '/equipo',
+  routes: [GoRoute(path: '/equipo', builder: (_, _) => const EquipoScreen())],
+  overrides: _overrides(repo, perfil: perfil),
+);
 
 void main() {
   group('unirme a otra clínica', () {
@@ -73,7 +80,9 @@ void main() {
     });
 
     testWidgets('entry absent with 2+ members', (tester) async {
-      final repo = FakeTeamRepository(miembrosFixture: [miembroAna, miembroLuis]);
+      final repo = FakeTeamRepository(
+        miembrosFixture: [miembroAna, miembroLuis],
+      );
       await tester.pumpWidget(_equipo(repo));
       await tester.pumpAndSettle();
       expect(find.textContaining('Unirme a otra clínica'), findsNothing);
@@ -83,7 +92,9 @@ void main() {
   testWidgets('admin in single-vet clinic sees own tile and solo copy', (
     tester,
   ) async {
-    await tester.pumpWidget(_equipo(FakeTeamRepository(miembrosFixture: [miembroAna])));
+    await tester.pumpWidget(
+      _equipo(FakeTeamRepository(miembrosFixture: [miembroAna])),
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('(Tú)'), findsOneWidget);
     expect(find.text('Administrador'), findsOneWidget);
@@ -123,7 +134,9 @@ void main() {
     expect(find.text('Retirado'), findsOneWidget);
   });
 
-  testWidgets('non-admin sees read-only footer and no chevrons', (tester) async {
+  testWidgets('non-admin sees read-only footer and no chevrons', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _equipo(
         FakeTeamRepository(miembrosFixture: [miembroAna, miembroLuis]),
@@ -143,7 +156,9 @@ void main() {
   testWidgets('error shows message and Reintentar refetches', (tester) async {
     final repo = FakeTeamRepository(
       miembrosFixture: [miembroAna],
-      error: const TeamFailure('No pudimos cargar el equipo. Intenta de nuevo.'),
+      error: const TeamFailure(
+        'No pudimos cargar el equipo. Intenta de nuevo.',
+      ),
     );
     await tester.pumpWidget(_equipo(repo));
     await tester.pumpAndSettle();
@@ -174,7 +189,9 @@ void main() {
   testWidgets('Más shows singular count and navigates to Equipo', (
     tester,
   ) async {
-    await tester.pumpWidget(mas(FakeTeamRepository(miembrosFixture: [miembroAna])));
+    await tester.pumpWidget(
+      mas(FakeTeamRepository(miembrosFixture: [miembroAna])),
+    );
     await tester.pumpAndSettle();
     expect(find.text('1 miembro'), findsOneWidget);
     await tester.tap(find.text('Equipo'));
@@ -191,7 +208,9 @@ void main() {
       createdAt: DateTime(2026, 4, 1),
     );
     await tester.pumpWidget(
-      mas(FakeTeamRepository(miembrosFixture: [miembroAna, miembroLuis, extra])),
+      mas(
+        FakeTeamRepository(miembrosFixture: [miembroAna, miembroLuis, extra]),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text('3 miembros'), findsOneWidget);
@@ -228,7 +247,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Invitaciones'), findsOneWidget);
       expect(
-        find.text('No hay códigos activos. Genera uno para invitar a un colega.'),
+        find.text(
+          'No hay códigos activos. Genera uno para invitar a un colega.',
+        ),
         findsOneWidget,
       );
       await tester.tap(find.text('Invitar veterinario'));
@@ -248,7 +269,10 @@ void main() {
       await tester.tap(find.text('Generar código nuevo'));
       await tester.pumpAndSettle();
       expect(find.text('¿Generar un código nuevo?'), findsOneWidget);
-      expect(find.text('El código actual dejará de funcionar.'), findsOneWidget);
+      expect(
+        find.text('El código actual dejará de funcionar.'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Volver'));
       await tester.pumpAndSettle();
       expect(repo.generadas, 0);
@@ -333,7 +357,10 @@ void main() {
       await tester.tap(find.text('Revocar código'));
       await tester.pumpAndSettle();
       expect(find.text('¿Revocar este código?'), findsOneWidget);
-      expect(find.text('Nadie podrá usar el código K7MQ-4P2X.'), findsOneWidget);
+      expect(
+        find.text('Nadie podrá usar el código K7MQ-4P2X.'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Revocar'));
       await tester.pumpAndSettle();
       expect(repo.revocadas, ['inv-1']);
@@ -356,13 +383,219 @@ void main() {
     });
 
     testWidgets('no admin no ve invitaciones ni CTA', (tester) async {
-      final repo = FakeTeamRepository(miembrosFixture: [miembroAna, miembroLuis])
-        ..invitacion = invitacionFixture;
+      final repo = FakeTeamRepository(
+        miembrosFixture: [miembroAna, miembroLuis],
+      )..invitacion = invitacionFixture;
       await tester.pumpWidget(pantalla(repo, perfil: vetColegaProfile));
       await tester.pumpAndSettle();
       expect(find.text('Invitaciones'), findsNothing);
       expect(find.text('Invitar veterinario'), findsNothing);
       expect(find.text('K7MQ-4P2X'), findsNothing);
+    });
+  });
+
+  group('plan, prueba Clínica y cupos', () {
+    final ahora = DateTime.utc(2026, 10, 8, 15);
+
+    Widget pantalla(
+      FakeTeamRepository repo,
+      FakePlanRepository planRepo, {
+      List<Override> extra = const [],
+    }) => routerHarness(
+      initialLocation: '/equipo',
+      routes: [
+        GoRoute(path: '/equipo', builder: (_, _) => const EquipoScreen()),
+      ],
+      overrides: [
+        ..._overrides(repo, planRepo: planRepo),
+        clockProvider.overrideWithValue(() => ahora),
+        ...extra,
+      ],
+    );
+
+    testWidgets('trial offer: activating generates the code in one flow', (
+      tester,
+    ) async {
+      final planRepo = FakePlanRepository(plan: planProTrial);
+      final repo = _EquipoConPrueba(planRepo, miembrosFixture: [miembroAna]);
+      await tester.pumpWidget(pantalla(repo, planRepo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Plan Clínica 30 días gratis, sin tarjeta'),
+        findsOneWidget,
+      );
+      expect(repo.generadas, 0);
+      await tester.tap(find.text('Activar y generar código'));
+      await tester.pumpAndSettle();
+      expect(repo.generadas, 1);
+      expect(
+        find.text('Plan Clínica 30 días gratis, sin tarjeta'),
+        findsNothing,
+      );
+      expect(find.text('K7MQ-4P2X'), findsOneWidget);
+      expect(
+        find.text('Prueba Clínica activa hasta el 07/11/2026'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Ahora no generates nothing', (tester) async {
+      final planRepo = FakePlanRepository(plan: planProTrial);
+      final repo = _EquipoConPrueba(planRepo, miembrosFixture: [miembroAna]);
+      await tester.pumpWidget(pantalla(repo, planRepo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ahora no'));
+      await tester.pumpAndSettle();
+      expect(repo.generadas, 0);
+      expect(find.text('Código generado'), findsNothing);
+    });
+
+    testWidgets('plan not available in the provider: reads the repository '
+        'and still shows the offer', (tester) async {
+      final planRepo = FakePlanRepository(plan: planProTrial);
+      final repo = _EquipoConPrueba(planRepo, miembrosFixture: [miembroAna]);
+      await tester.pumpWidget(
+        pantalla(
+          repo,
+          planRepo,
+          extra: [miPlanProvider.overrideWith((ref) async => null)],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Plan Clínica 30 días gratis, sin tarjeta'),
+        findsOneWidget,
+      );
+      expect(repo.generadas, 0);
+    });
+
+    testWidgets('unreadable plan fails closed: nothing is generated', (
+      tester,
+    ) async {
+      final planRepo = FakePlanRepository(error: Exception('sin red'));
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna]);
+      await tester.pumpWidget(pantalla(repo, planRepo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No pudimos verificar tu plan. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+      expect(repo.generadas, 0);
+    });
+
+    testWidgets('full Clínica plan shows the members sheet', (tester) async {
+      final planRepo = FakePlanRepository(
+        plan: planClinicaTrial.copyWith(
+          origen: OrigenPlan.pagado,
+          miembrosMax: 3,
+          veterinariosActivos: 3,
+        ),
+      );
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna]);
+      await tester.pumpWidget(pantalla(repo, planRepo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Tu plan no tiene cupo para más veterinarios'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'Tu plan Clínica ya tiene sus 3 veterinarios activos.',
+        ),
+        findsOneWidget,
+      );
+      expect(repo.generadas, 0);
+    });
+
+    testWidgets('seat counter under the button with 2+ seats, normal flow', (
+      tester,
+    ) async {
+      final planRepo = FakePlanRepository(plan: planClinicaTrial);
+      final repo = FakeTeamRepository(
+        miembrosFixture: [miembroAna, miembroLuis],
+      );
+      await tester.pumpWidget(pantalla(repo, planRepo));
+      await tester.pumpAndSettle();
+      expect(find.text('2 de 5 veterinarios'), findsOneWidget);
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      expect(repo.generadas, 1);
+      expect(find.text('Código generado'), findsOneWidget);
+    });
+
+    testWidgets('no counter without a seat cap or with a single seat', (
+      tester,
+    ) async {
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna]);
+      await tester.pumpWidget(
+        pantalla(repo, FakePlanRepository(plan: planBeta)),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining(RegExp(r'\d+ de \d+ veterinarios')),
+        findsNothing,
+      );
+      await tester.pumpWidget(
+        pantalla(repo, FakePlanRepository(plan: planGratis)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('veterinarios activos'), findsNothing);
+      expect(find.text('1 de 1 veterinarios'), findsNothing);
+    });
+
+    testWidgets('server LP002 in the normal flow opens the members sheet', (
+      tester,
+    ) async {
+      final planRepo = FakePlanRepository(plan: planClinicaTrial);
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna])
+        ..errorInvitacion = const TeamFailure(
+          'Mensaje crudo del servidor.',
+          limite: LimitePlan.miembros,
+        );
+      await tester.pumpWidget(pantalla(repo, planRepo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Tu plan no tiene cupo para más veterinarios'),
+        findsOneWidget,
+      );
+      expect(find.text('Mensaje crudo del servidor.'), findsNothing);
+    });
+
+    testWidgets('server LP002 while activating the trial opens the members '
+        'sheet', (tester) async {
+      final planRepo = FakePlanRepository(plan: planProTrial);
+      final repo = FakeTeamRepository(miembrosFixture: [miembroAna])
+        ..errorInvitacion = const TeamFailure(
+          'Mensaje crudo del servidor.',
+          limite: LimitePlan.miembros,
+        );
+      await tester.pumpWidget(pantalla(repo, planRepo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar veterinario'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Activar y generar código'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Plan Clínica 30 días gratis, sin tarjeta'),
+        findsNothing,
+      );
+      expect(
+        find.text('Tu plan no tiene cupo para más veterinarios'),
+        findsOneWidget,
+      );
+      expect(find.text('Mensaje crudo del servidor.'), findsNothing);
     });
   });
 
@@ -564,4 +797,21 @@ void main() {
       );
     });
   });
+}
+
+/// Equipo falso que, al generar, simula que el servidor abrió la prueba
+/// Clínica: el plan que lee la app pasa a Clínica con vigencia al 07/11/2026.
+class _EquipoConPrueba extends FakeTeamRepository {
+  _EquipoConPrueba(this._planRepo, {super.miembrosFixture});
+
+  final FakePlanRepository _planRepo;
+
+  @override
+  Future<Invitacion> generarInvitacion() async {
+    final inv = await super.generarInvitacion();
+    _planRepo.plan = planClinicaTrial.copyWith(
+      vigenteHasta: DateTime.utc(2026, 11, 7),
+    );
+    return inv;
+  }
 }
