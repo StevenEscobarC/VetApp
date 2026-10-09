@@ -2,8 +2,10 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/errors/limite_plan.dart';
 import '../../../../core/utils/recorte_cuadrado.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../../vaccination/presentation/providers/vacuna_providers.dart';
 import '../../domain/clinica.dart';
 import '../../domain/clinica_failure.dart';
@@ -43,6 +45,13 @@ class GuardarDatosClinica {
     if (nuevoLogo != null && nuevoLogo.length > kMaxBytesLogo) {
       throw const ClinicaFailure(
         'El logo es muy pesado. Prueba con otra imagen.',
+      );
+    }
+    if (nuevoLogo != null && await _logoBloqueadoPorPlan()) {
+      // El bucket también lo rechaza, pero con un 403 que no se puede mapear.
+      throw const ClinicaFailure(
+        'El logo es parte de Pro y Clínica.',
+        limite: LimitePlan.funcion,
       );
     }
     final logos = _ref.read(clinicaLogoDatasourceProvider);
@@ -85,6 +94,17 @@ class GuardarDatosClinica {
     // El nombre de la clínica se usa en Inicio y en las firmas de WhatsApp.
     await _ref.read(authProfileProvider.notifier).refrescar();
     return actualizada;
+  }
+
+  /// Verificación previa con el plan fresco; ante cualquier error en leerlo
+  /// se permite (el servidor es la autoridad).
+  Future<bool> _logoBloqueadoPorPlan() async {
+    try {
+      final plan = await _ref.read(planRepositoryProvider).miPlan();
+      return !plan.logoPermitido;
+    } catch (_) {
+      return false;
+    }
   }
 }
 

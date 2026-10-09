@@ -265,26 +265,30 @@ void main() {
   });
 
   group('plan Gratis (logo)', () {
-    testWidgets('muestra la pista y Elegir de galería abre la hoja sin selector', (
-      tester,
-    ) async {
-      var llamadas = 0;
-      await _abrir(
-        tester,
-        FakeClinicaRepository(),
-        FakeClinicaLogoDatasource(),
-        plan: planGratis,
-        capturador: (_, _) async {
-          llamadas++;
-          return kFotoPrueba;
-        },
-      );
-      expect(find.text('El logo se muestra en Pro y Clínica.'), findsOneWidget);
-      await _tocar(tester, find.text('Elegir de galería'));
-      expect(find.text('El logo es parte de Pro'), findsOneWidget);
-      expect(llamadas, 0);
-      expect(find.byKey(const Key('logo-clinica')), findsNothing);
-    });
+    testWidgets(
+      'muestra la pista y Elegir de galería abre la hoja sin selector',
+      (tester) async {
+        var llamadas = 0;
+        await _abrir(
+          tester,
+          FakeClinicaRepository(),
+          FakeClinicaLogoDatasource(),
+          plan: planGratis,
+          capturador: (_, _) async {
+            llamadas++;
+            return kFotoPrueba;
+          },
+        );
+        expect(
+          find.text('El logo se muestra en Pro y Clínica.'),
+          findsOneWidget,
+        );
+        await _tocar(tester, find.text('Elegir de galería'));
+        expect(find.text('El logo es parte de Pro'), findsOneWidget);
+        expect(llamadas, 0);
+        expect(find.byKey(const Key('logo-clinica')), findsNothing);
+      },
+    );
 
     testWidgets('Tomar foto también abre la hoja y no el selector', (
       tester,
@@ -349,12 +353,7 @@ void main() {
       tester,
     ) async {
       final repo = FakeClinicaRepository();
-      await _abrir(
-        tester,
-        repo,
-        FakeClinicaLogoDatasource(),
-        plan: planGratis,
-      );
+      await _abrir(tester, repo, FakeClinicaLogoDatasource(), plan: planGratis);
       await _tocar(tester, find.text('Guardar cambios'));
       expect(find.text('El logo es parte de Pro'), findsNothing);
       expect(repo.llamadasActualizar, hasLength(1));

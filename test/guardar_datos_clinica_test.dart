@@ -28,7 +28,12 @@ const _conLogo = Clinica(
   FakeClinicaRepository repo,
   FakeClinicaLogoDatasource logos,
 })
-_armar(Clinica clinica, {ClinicaFailure? error, Object? errorPlan, MiPlan? planActual}) {
+_armar(
+  Clinica clinica, {
+  ClinicaFailure? error,
+  Object? errorPlan,
+  MiPlan? planActual,
+}) {
   final repo = FakeClinicaRepository(clinica: clinica, error: error);
   final logos = FakeClinicaLogoDatasource();
   final c = ProviderContainer(

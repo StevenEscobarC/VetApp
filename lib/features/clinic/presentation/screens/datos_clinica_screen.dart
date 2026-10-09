@@ -11,6 +11,9 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../../patients/presentation/providers/mascota_foto_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/limite_plan_sheet.dart';
 import '../../domain/clinica.dart';
 import '../../domain/clinica_failure.dart';
 import '../providers/clinica_providers.dart';
@@ -182,6 +185,15 @@ class _FormularioState extends ConsumerState<_Formulario> {
   }
 
   Future<void> _elegir(FuenteFoto fuente) async {
+    if (!await asegurarFuncionPro(
+      context,
+      ref,
+      FuncionPro.logo,
+      plan: ref.read(miPlanProvider).value,
+    )) {
+      return;
+    }
+    if (!mounted) return;
     final bytes = await ref.read(capturadorFotoProvider)(context, fuente);
     if (bytes == null || !mounted) return;
     try {
@@ -234,6 +246,11 @@ class _FormularioState extends ConsumerState<_Formulario> {
         _guardando = false;
       });
     } on ClinicaFailure catch (e) {
+      if (mounted &&
+          await manejarLimitePlan(context, ref, e, funcion: FuncionPro.logo)) {
+        if (mounted) setState(() => _guardando = false);
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _error = e.message;
@@ -246,6 +263,13 @@ class _FormularioState extends ConsumerState<_Formulario> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final hayLogo = _preview != null || (!_quitar && _actual.logoPath != null);
+    final logoPermitido =
+        ref.watch(miPlanProvider).value?.logoPermitido ?? true;
+    final logoGuardadoOculto =
+        !logoPermitido &&
+        _preview == null &&
+        !_quitar &&
+        _actual.logoPath != null;
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
@@ -261,7 +285,9 @@ class _FormularioState extends ConsumerState<_Formulario> {
                     size: 96,
                   )
                 : _AgregarLogo(
-                    onTap: _guardando ? null : () => _elegir(FuenteFoto.galeria),
+                    onTap: _guardando
+                        ? null
+                        : () => _elegir(FuenteFoto.galeria),
                   ),
           ),
         ),
@@ -270,6 +296,17 @@ class _FormularioState extends ConsumerState<_Formulario> {
           'Aparece en el carné de vacunación que compartes con los dueños.',
           style: textTheme.labelLarge?.copyWith(color: AppColors.textMuted),
         ),
+        if (!logoPermitido) ...[
+          const SizedBox(height: AppSpacing.xs),
+          const _PistaPlan(texto: 'El logo se muestra en Pro y Clínica.'),
+        ],
+        if (logoGuardadoOculto) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Guardado. Se mostrará cuando actives Pro o Clínica.',
+            style: textTheme.labelLarge?.copyWith(color: AppColors.textMuted),
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         Wrap(
           spacing: AppSpacing.sm,
@@ -347,6 +384,30 @@ class _FormularioState extends ConsumerState<_Formulario> {
       ],
     );
   }
+}
+
+/// Fila de pista del plan: candado + texto discreto.
+class _PistaPlan extends StatelessWidget {
+  const _PistaPlan({required this.texto});
+
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Icon(Icons.lock_outline, size: 16, color: AppColors.textMuted),
+      const SizedBox(width: AppSpacing.xs),
+      Expanded(
+        child: Text(
+          texto,
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(color: AppColors.textMuted),
+        ),
+      ),
+    ],
+  );
 }
 
 class _AgregarLogo extends StatelessWidget {
