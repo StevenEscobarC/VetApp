@@ -19,6 +19,7 @@ import '../../../clients/domain/entities/cliente.dart';
 import '../../../clients/presentation/providers/clientes_providers.dart';
 import '../../../patients/domain/entities/mascota.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../../team/presentation/providers/team_providers.dart';
 import '../../domain/cita_failure.dart';
 import '../../domain/cita_solapes.dart';
@@ -235,6 +236,8 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   }
 
   Future<void> _nuevoClienteYMascota() async {
+    if (!await asegurarNuevoPaciente(context, ref)) return;
+    if (!mounted) return;
     final r = await context.push<({String clienteId, String mascotaId})>(
       '${widget.rutaBase}/cliente',
     );
@@ -249,6 +252,8 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
   }
 
   Future<void> _agregarMascota(String clienteId) async {
+    if (!await asegurarNuevoPaciente(context, ref)) return;
+    if (!mounted) return;
     await context.push('${widget.rutaBase}/mascota?clienteId=$clienteId');
     if (!mounted) return;
     ref.invalidate(mascotasDeClienteProvider(clienteId));
@@ -418,6 +423,7 @@ class _CitaFormScreenState extends ConsumerState<CitaFormScreen> {
         ).toString(),
       );
     } on CitaFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);
