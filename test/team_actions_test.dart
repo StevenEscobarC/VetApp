@@ -2,10 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/plan/presentation/providers/plan_providers.dart';
 import 'package:vetapp/features/team/domain/team_failure.dart';
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_team.dart';
 
 (ProviderContainer, FakeTeamRepository) _setup() {
@@ -89,18 +91,21 @@ void main() {
     expect(cambios, greaterThan(0));
   });
 
-  test('unirseAClinica normalizes the code and refreshes the profile', () async {
-    final (c, repo) = _setup();
-    var cambios = 0;
-    final sub = c.listen(authProfileProvider, (_, _) => cambios++);
-    addTearDown(sub.close);
-    await c.read(authProfileProvider.future);
-    cambios = 0;
-    await c.read(teamActionsProvider).unirseAClinica('k7mq-4p2x');
-    await c.read(authProfileProvider.future);
-    expect(repo.codigosUsados, ['K7MQ4P2X']);
-    expect(cambios, greaterThan(0));
-  });
+  test(
+    'unirseAClinica normalizes the code and refreshes the profile',
+    () async {
+      final (c, repo) = _setup();
+      var cambios = 0;
+      final sub = c.listen(authProfileProvider, (_, _) => cambios++);
+      addTearDown(sub.close);
+      await c.read(authProfileProvider.future);
+      cambios = 0;
+      await c.read(teamActionsProvider).unirseAClinica('k7mq-4p2x');
+      await c.read(authProfileProvider.future);
+      expect(repo.codigosUsados, ['K7MQ4P2X']);
+      expect(cambios, greaterThan(0));
+    },
+  );
 
   test('crearMiClinica trims name and surfaces failures', () async {
     final (c, repo) = _setup();
@@ -117,5 +122,52 @@ void main() {
     final (c, repo) = _setup();
     repo.citasAbiertas = 2;
     expect(await c.read(teamActionsProvider).contarCitasAbiertas('vet-2'), 2);
+  });
+
+  group('refresca el plan al cambiar los cupos', () {
+    (ProviderContainer, FakePlanRepository) setupPlan() {
+      final planRepo = FakePlanRepository(plan: planClinicaTrial);
+      final c = ProviderContainer(
+        retry: (retryCount, error) => null,
+        overrides: [
+          authProfileProvider.overrideWith(
+            () => FakeAuthProfileNotifier(profile: vetAdminProfile),
+          ),
+          teamRepositoryProvider.overrideWithValue(
+            FakeTeamRepository(miembrosFixture: [miembroAna, miembroLuis]),
+          ),
+          planRepositoryProvider.overrideWithValue(planRepo),
+        ],
+      );
+      addTearDown(c.dispose);
+      return (c, planRepo);
+    }
+
+    Future<void> verifica(
+      Future<void> Function(ProviderContainer c) accion,
+    ) async {
+      final (c, planRepo) = setupPlan();
+      final sub = c.listen(miPlanProvider, (_, _) {});
+      addTearDown(sub.close);
+      await c.read(miPlanProvider.future);
+      final antes = planRepo.llamadas;
+      await accion(c);
+      await c.read(miPlanProvider.future);
+      expect(planRepo.llamadas, greaterThan(antes));
+    }
+
+    test('generarInvitacion invalidates miPlanProvider', () async {
+      await verifica((c) => c.read(teamActionsProvider).generarInvitacion());
+    });
+
+    test('retirar invalidates miPlanProvider', () async {
+      await verifica((c) => c.read(teamActionsProvider).retirar('vet-2'));
+    });
+
+    test('unirseAClinica invalidates miPlanProvider', () async {
+      await verifica(
+        (c) => c.read(teamActionsProvider).unirseAClinica('K7MQ4P2X'),
+      );
+    });
   });
 }
