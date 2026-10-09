@@ -12,6 +12,9 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/status/app_status_chip.dart';
 import '../../../../core/widgets/status/vet_avatar.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../../team/presentation/providers/team_providers.dart';
 import '../../domain/cita_failure.dart';
 import '../../domain/entities/cita.dart';
@@ -35,16 +38,27 @@ class CitaDetailScreen extends ConsumerWidget {
     final async = ref.watch(citaProvider(citaId));
     final cita = async.asData?.value;
     final editable = cita != null && !cita.estado.esTerminal;
+    final puede = ref.watch(puedeEscribirProvider);
 
     return Scaffold(
       appBar: AppTopBar(
         title: 'Cita',
         actions: editable
             ? [
-                IconButton(
-                  tooltip: 'Editar cita',
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: () => context.push('/agenda/$citaId/editar'),
+                ControlEscritura(
+                  puedeEscribir: puede,
+                  label: 'Editar cita',
+                  onTap: () =>
+                      irSiPuedeEscribir(context, ref, '/agenda/$citaId/editar'),
+                  child: IconButton(
+                    tooltip: 'Editar cita',
+                    icon: Icon(iconoEscritura(puede, Icons.edit_outlined)),
+                    onPressed: () => irSiPuedeEscribir(
+                      context,
+                      ref,
+                      '/agenda/$citaId/editar',
+                    ),
+                  ),
                 ),
               ]
             : null,
@@ -122,6 +136,7 @@ class _Contenido extends ConsumerWidget {
     final yoId = ref.watch(authProfileProvider).value?.id ?? '';
     final indices = ref.watch(indicesColorVetProvider);
     final nombreVet = cita.veterinarioNombre ?? '';
+    final puede = ref.watch(puedeEscribirProvider);
 
     Widget dato(String etiqueta, Widget valor) => Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -201,12 +216,17 @@ class _Contenido extends ConsumerWidget {
             if (!cita.estado.esTerminal)
               Align(
                 alignment: Alignment.centerLeft,
-                child: AppButton(
+                child: ControlEscritura(
+                  puedeEscribir: puede,
                   label: 'Reasignar cita',
-                  variant: AppButtonVariant.text,
-                  icon: Icons.swap_horiz,
-                  expand: false,
-                  onPressed: () => _reasignar(context, ref, yoId, indices),
+                  onTap: () => _reasignar(context, ref, yoId, indices),
+                  child: AppButton(
+                    label: 'Reasignar cita',
+                    variant: AppButtonVariant.text,
+                    icon: iconoEscritura(puede, Icons.swap_horiz),
+                    expand: false,
+                    onPressed: () => _reasignar(context, ref, yoId, indices),
+                  ),
                 ),
               ),
             const SizedBox(height: AppSpacing.md),
@@ -292,7 +312,7 @@ class _Contenido extends ConsumerWidget {
               ),
             ),
           const SizedBox(height: AppSpacing.lg),
-          ..._acciones(context, ref),
+          ..._acciones(context, ref, puede),
         ],
       ),
     );
@@ -308,6 +328,14 @@ class _Contenido extends ConsumerWidget {
   ) async {
     final actions = ref.read(citaActionsProvider);
     final messenger = ScaffoldMessenger.of(context);
+    if (!await asegurarEscritura(
+      context,
+      ref,
+      plan: ref.read(miPlanProvider).value,
+    )) {
+      return;
+    }
+    if (!context.mounted) return;
     final elegido = await elegirVeterinario(
       context,
       activos: ref.read(miembrosActivosProvider),
@@ -320,6 +348,9 @@ class _Contenido extends ConsumerWidget {
     try {
       await actions.reasignar(cita.id, elegido.id);
     } on CitaFailure catch (e) {
+      if (context.mounted && await manejarLimitePlan(context, ref, e)) {
+        return;
+      }
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(e.message)));
@@ -345,39 +376,86 @@ class _Contenido extends ConsumerWidget {
       );
   }
 
-  List<Widget> _acciones(BuildContext context, WidgetRef ref) {
+  List<Widget> _acciones(BuildContext context, WidgetRef ref, bool puede) {
     const gap = SizedBox(height: AppSpacing.sm);
 
-    Widget cancelar() => SizedBox(
-      width: double.infinity,
-      child: AppButton(
-        label: 'Cancelar cita',
-        variant: AppButtonVariant.destructive,
-        onPressed: () async {
-          if (!await confirmarCancelacion(context, cita) || !context.mounted) {
-            return;
-          }
-          await cambiarEstadoConDeshacer(
-            context,
-            ref,
-            cita: cita,
-            nuevo: EstadoCita.cancelada,
-            mensaje: 'Cita cancelada',
-          );
-        },
-      ),
-    );
+    /// Mismo control, con semántica de bloqueado en solo lectura.
+    Widget lock(String label, VoidCallback onTap, Widget child) =>
+        ControlEscritura(
+          puedeEscribir: puede,
+          label: label,
+          onTap: onTap,
+          child: child,
+        );
 
-    Widget noAsistio() => AppButton(
-      label: 'No asistió',
-      variant: AppButtonVariant.outline,
-      onPressed: () => cambiarEstadoConDeshacer(
+    Future<void> cancelarCita() async {
+      if (!await asegurarEscritura(
+        context,
+        ref,
+        plan: ref.read(miPlanProvider).value,
+      )) {
+        return;
+      }
+      if (!context.mounted) return;
+      if (!await confirmarCancelacion(context, cita) || !context.mounted) {
+        return;
+      }
+      await cambiarEstadoConDeshacer(
         context,
         ref,
         cita: cita,
-        nuevo: EstadoCita.noAsistio,
-        mensaje: 'Marcada como no asistió',
+        nuevo: EstadoCita.cancelada,
+        mensaje: 'Cita cancelada',
+      );
+    }
+
+    Widget cancelar() => SizedBox(
+      width: double.infinity,
+      child: lock(
+        'Cancelar cita',
+        cancelarCita,
+        AppButton(
+          label: 'Cancelar cita',
+          variant: AppButtonVariant.destructive,
+          icon: puede ? null : iconoEscritura(puede, Icons.cancel_outlined),
+          onPressed: cancelarCita,
+        ),
       ),
+    );
+
+    Future<void> marcarNoAsistio() => cambiarEstadoConDeshacer(
+      context,
+      ref,
+      cita: cita,
+      nuevo: EstadoCita.noAsistio,
+      mensaje: 'Marcada como no asistió',
+    );
+
+    Widget noAsistio() => lock(
+      'No asistió',
+      marcarNoAsistio,
+      AppButton(
+        label: 'No asistió',
+        variant: AppButtonVariant.outline,
+        icon: puede ? null : iconoEscritura(puede, Icons.person_off_outlined),
+        onPressed: marcarNoAsistio,
+      ),
+    );
+
+    Future<void> confirmar() => cambiarEstadoConDeshacer(
+      context,
+      ref,
+      cita: cita,
+      nuevo: EstadoCita.confirmada,
+      mensaje: 'Cita confirmada',
+    );
+
+    Future<void> reabrir() => cambiarEstadoConDeshacer(
+      context,
+      ref,
+      cita: cita,
+      nuevo: EstadoCita.pendiente,
+      mensaje: 'Cita reabierta',
     );
 
     List<Widget> contacto() => [
@@ -402,10 +480,17 @@ class _Contenido extends ConsumerWidget {
       ],
     ];
 
-    Widget completar() => AppButton(
-      label: 'Completar cita',
-      icon: Icons.task_alt_outlined,
-      onPressed: () => context.push('/agenda/${cita.id}/completar'),
+    Future<void> irACompletar() =>
+        irSiPuedeEscribir(context, ref, '/agenda/${cita.id}/completar');
+
+    Widget completar() => lock(
+      'Completar cita',
+      irACompletar,
+      AppButton(
+        label: 'Completar cita',
+        icon: iconoEscritura(puede, Icons.task_alt_outlined),
+        onPressed: irACompletar,
+      ),
     );
 
     switch (cita.estado) {
@@ -413,16 +498,14 @@ class _Contenido extends ConsumerWidget {
         return [
           completar(),
           gap,
-          AppButton(
-            label: 'Confirmar',
-            variant: AppButtonVariant.outline,
-            icon: Icons.check_circle_outline,
-            onPressed: () => cambiarEstadoConDeshacer(
-              context,
-              ref,
-              cita: cita,
-              nuevo: EstadoCita.confirmada,
-              mensaje: 'Cita confirmada',
+          lock(
+            'Confirmar',
+            confirmar,
+            AppButton(
+              label: 'Confirmar',
+              variant: AppButtonVariant.outline,
+              icon: iconoEscritura(puede, Icons.check_circle_outline),
+              onPressed: confirmar,
             ),
           ),
           gap,
@@ -438,10 +521,15 @@ class _Contenido extends ConsumerWidget {
           if (cita.mascotas.any(
             (m) => !cita.mascotasConConsulta.contains(m.id),
           )) ...[
-            AppButton(
-              label: 'Registrar consulta pendiente',
-              variant: AppButtonVariant.outline,
-              onPressed: () => context.push('/agenda/${cita.id}/completar'),
+            lock(
+              'Registrar consulta pendiente',
+              irACompletar,
+              AppButton(
+                label: 'Registrar consulta pendiente',
+                variant: AppButtonVariant.outline,
+                icon: puede ? null : iconoEscritura(puede, Icons.add),
+                onPressed: irACompletar,
+              ),
             ),
             gap,
           ],
@@ -456,15 +544,14 @@ class _Contenido extends ConsumerWidget {
       case EstadoCita.cancelada:
       case EstadoCita.noAsistio:
         return [
-          AppButton(
-            label: 'Reabrir cita',
-            variant: AppButtonVariant.outline,
-            onPressed: () => cambiarEstadoConDeshacer(
-              context,
-              ref,
-              cita: cita,
-              nuevo: EstadoCita.pendiente,
-              mensaje: 'Cita reabierta',
+          lock(
+            'Reabrir cita',
+            reabrir,
+            AppButton(
+              label: 'Reabrir cita',
+              variant: AppButtonVariant.outline,
+              icon: puede ? null : iconoEscritura(puede, Icons.replay),
+              onPressed: reabrir,
             ),
           ),
         ];

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/data/limite_plan_postgrest.dart';
+import '../../../../core/errors/limite_plan.dart';
 import '../../domain/cita_failure.dart';
 import '../../domain/entities/cita.dart';
 
@@ -33,7 +35,7 @@ class SupabaseCitaRepository {
           .map((row) => citaDesdeFila(row as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
-      throw CitaFailure(_messageFor(e));
+      throw CitaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const CitaFailure('No pudimos cargar la agenda. Intenta de nuevo.');
     }
@@ -49,7 +51,7 @@ class SupabaseCitaRepository {
           .single();
       return citaDesdeFila(row);
     } on PostgrestException catch (e) {
-      throw CitaFailure(_messageFor(e));
+      throw CitaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const CitaFailure('No pudimos cargar la cita. Intenta de nuevo.');
     }
@@ -89,7 +91,7 @@ class SupabaseCitaRepository {
       );
       return id as String;
     } on PostgrestException catch (e) {
-      throw CitaFailure(_messageFor(e));
+      throw CitaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const CitaFailure('No pudimos guardar la cita. Intenta de nuevo.');
     }
@@ -126,7 +128,7 @@ class SupabaseCitaRepository {
         },
       );
     } on PostgrestException catch (e) {
-      throw CitaFailure(_messageFor(e));
+      throw CitaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const CitaFailure('No pudimos guardar la cita. Intenta de nuevo.');
     }
@@ -164,7 +166,7 @@ class SupabaseCitaRepository {
     } on CitaFailure {
       rethrow;
     } on PostgrestException catch (e) {
-      throw CitaFailure(_messageFor(e, estado: true));
+      throw CitaFailure(_messageFor(e, estado: true), limite: limitePlanDe(e));
     } catch (_) {
       throw const CitaFailure(
         'No pudimos cambiar el estado. Intenta de nuevo.',
@@ -230,6 +232,17 @@ Cita citaDesdeFila(Map<String, dynamic> row) {
 /// primero porque pueden llegar desde cualquier escritura.
 @visibleForTesting
 String mensajeErrorCita(PostgrestException e, {bool estado = false}) {
+  switch (limitePlanDe(e)) {
+    case LimitePlan.soloLectura:
+      return 'Tu cuenta está en solo lectura. Pide al administrador que '
+          'active el plan.';
+    case LimitePlan.pacientes:
+    case LimitePlan.miembros:
+    case LimitePlan.funcion:
+      return 'Esta acción no está incluida en tu plan.';
+    case null:
+      break;
+  }
   switch (e.code) {
     case 'PGRST116':
       return 'Esta cita ya no existe.';

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:vetapp/core/data/clock_provider.dart';
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/utils/zona_bogota.dart';
 import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
 import 'package:vetapp/features/appointments/domain/cita_failure.dart';
@@ -16,6 +17,7 @@ import 'package:vetapp/features/appointments/presentation/screens/cita_form_scre
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clients/domain/entities/cliente.dart';
 import 'package:vetapp/features/clients/presentation/providers/clientes_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/team/domain/miembro.dart';
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 import 'package:vetapp/features/patients/domain/entities/mascota.dart';
@@ -25,6 +27,7 @@ import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_recordatorios.dart';
 import 'helpers/fake_team.dart';
 import 'helpers/router_harness.dart';
@@ -87,7 +90,9 @@ List<Override> _overrides(
   FakeMascotaRepository mascotas, {
   bool multi = false,
   bool equipoError = false,
+  MiPlan? plan,
 }) => [
+  ...planOverrides(plan: plan ?? planBeta),
   citaRepositoryProvider.overrideWithValue(repo),
   clienteRepositoryProvider.overrideWithValue(
     FakeClienteRepository(clientes: [_maria, _nuevo]),
@@ -120,6 +125,7 @@ Widget _app({
   List<RouteBase>? routes,
   bool multi = false,
   bool equipoError = false,
+  MiPlan? plan,
 }) => routerHarness(
   locale: const Locale('es', 'CO'),
   initialLocation: initial,
@@ -129,6 +135,7 @@ Widget _app({
     mascotas ?? FakeMascotaRepository(mascotas: [_luna]),
     multi: multi,
     equipoError: equipoError,
+    plan: plan,
   ),
 );
 
@@ -397,6 +404,28 @@ void main() {
       expect(repo.creadas, isEmpty);
     });
 
+    testWidgets('LP004 al guardar abre la hoja y conserva el formulario', (
+      tester,
+    ) async {
+      _grande(tester);
+      final repo = FakeCitaRepository(
+        citas: citasSemanaFixture,
+        errorCrear: const CitaFailure(
+          'Tu cuenta está en solo lectura.',
+          limite: LimitePlan.soloLectura,
+        ),
+      );
+      await tester.pumpWidget(_app(repo: repo, initial: _conFicha));
+      await tester.pumpAndSettle();
+
+      await _tocarGuardar(tester);
+
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.text('Tu cuenta está en solo lectura.'), findsNothing);
+      expect(find.byType(CitaFormScreen), findsOneWidget);
+      expect(find.text('Luna'), findsWidgets);
+    });
+
     testWidgets('abierta desde una ficha preselecciona cliente y mascota', (
       tester,
     ) async {
@@ -656,6 +685,47 @@ void main() {
       expect(repo.creadas.single.clienteId, 'c-nuevo');
       expect(repo.creadas.single.mascotaIds, ['m-nuevo']);
       expect(repo.creadas.single.motivo, 'Vacunación');
+    });
+
+    testWidgets('al tope de pacientes, Agregar mascota abre la hoja', (
+      tester,
+    ) async {
+      _grande(tester);
+      await tester.pumpWidget(
+        _app(
+          repo: FakeCitaRepository(),
+          routes: rutas(),
+          initial: '/agenda/nueva?clienteId=c-maria',
+          plan: planGratisAlTope,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('+ Agregar mascota'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Llegaste a los 50 pacientes'), findsOneWidget);
+      expect(find.text('Volver stub'), findsNothing);
+    });
+
+    testWidgets('al tope de pacientes, Nuevo cliente y mascota abre la hoja', (
+      tester,
+    ) async {
+      _grande(tester);
+      await tester.pumpWidget(
+        _app(
+          repo: FakeCitaRepository(),
+          routes: rutas(),
+          plan: planGratisAlTope,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('+ Nuevo cliente y mascota'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Llegaste a los 50 pacientes'), findsOneWidget);
+      expect(find.text('Guardar stub'), findsNothing);
     });
 
     testWidgets('Agregar mascota refresca la lista al volver', (tester) async {

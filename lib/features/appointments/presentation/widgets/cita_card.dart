@@ -10,6 +10,9 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/status/app_status_chip.dart';
 import '../../../../core/widgets/status/vet_avatar.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../../team/presentation/providers/team_providers.dart';
 import '../../domain/entities/cita.dart';
 import '../../domain/filtro_agenda.dart';
@@ -29,9 +32,19 @@ class CitaCard extends ConsumerWidget {
   final String? cruceCon;
   final VoidCallback? onTap;
 
+  Future<void> _confirmar(BuildContext context, WidgetRef ref) =>
+      cambiarEstadoConDeshacer(
+        context,
+        ref,
+        cita: cita,
+        nuevo: EstadoCita.confirmada,
+        mensaje: 'Cita confirmada',
+      );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
+    final puede = ref.watch(puedeEscribirProvider);
     final apagada =
         cita.estado == EstadoCita.cancelada ||
         cita.estado == EstadoCita.noAsistio;
@@ -197,25 +210,37 @@ class CitaCard extends ConsumerWidget {
                     cita,
                     variant: AppButtonVariant.text,
                   ),
-                AppButton(
+                ControlEscritura(
+                  puedeEscribir: puede,
                   label: 'Completar',
-                  variant: AppButtonVariant.outline,
-                  icon: Icons.task_alt_outlined,
-                  expand: false,
-                  onPressed: () => context.push('/agenda/${cita.id}/completar'),
-                ),
-                if (cita.estado == EstadoCita.pendiente)
-                  AppButton(
-                    label: 'Confirmar',
-                    variant: AppButtonVariant.text,
-                    icon: Icons.check_circle_outline,
+                  onTap: () => irSiPuedeEscribir(
+                    context,
+                    ref,
+                    '/agenda/${cita.id}/completar',
+                  ),
+                  child: AppButton(
+                    label: 'Completar',
+                    variant: AppButtonVariant.outline,
+                    icon: iconoEscritura(puede, Icons.task_alt_outlined),
                     expand: false,
-                    onPressed: () => cambiarEstadoConDeshacer(
+                    onPressed: () => irSiPuedeEscribir(
                       context,
                       ref,
-                      cita: cita,
-                      nuevo: EstadoCita.confirmada,
-                      mensaje: 'Cita confirmada',
+                      '/agenda/${cita.id}/completar',
+                    ),
+                  ),
+                ),
+                if (cita.estado == EstadoCita.pendiente)
+                  ControlEscritura(
+                    puedeEscribir: puede,
+                    label: 'Confirmar',
+                    onTap: () => _confirmar(context, ref),
+                    child: AppButton(
+                      label: 'Confirmar',
+                      variant: AppButtonVariant.text,
+                      icon: iconoEscritura(puede, Icons.check_circle_outline),
+                      expand: false,
+                      onPressed: () => _confirmar(context, ref),
                     ),
                   ),
                 IconButton(
