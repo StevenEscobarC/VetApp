@@ -28,6 +28,12 @@ class ProtocolosScreen extends ConsumerStatefulWidget {
 class _ProtocolosScreenState extends ConsumerState<ProtocolosScreen> {
   String _especie = 'perro';
 
+  Future<void> _nuevoBiologico() async {
+    if (!await asegurarFuncionPro(context, ref, FuncionPro.protocolos)) return;
+    if (!mounted) return;
+    await showProtocoloEditSheet(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -150,18 +156,7 @@ class _ProtocolosScreenState extends ConsumerState<ProtocolosScreen> {
                   ? AppButton(
                       label: 'Nuevo biológico',
                       icon: Icons.add,
-                      onPressed: () async {
-                        if (!await asegurarFuncionPro(
-                          context,
-                          ref,
-                          FuncionPro.protocolos,
-                          plan: plan,
-                        )) {
-                          return;
-                        }
-                        if (!context.mounted) return;
-                        await showProtocoloEditSheet(context);
-                      },
+                      onPressed: _nuevoBiologico,
                     )
                   : Text(
                       'Solo los administradores pueden cambiar los '

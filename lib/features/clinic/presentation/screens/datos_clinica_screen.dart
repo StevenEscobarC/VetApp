@@ -185,15 +185,9 @@ class _FormularioState extends ConsumerState<_Formulario> {
   }
 
   Future<void> _elegir(FuenteFoto fuente) async {
-    if (!await asegurarFuncionPro(
-      context,
-      ref,
-      FuncionPro.logo,
-      plan: ref.read(miPlanProvider).value,
-    )) {
-      return;
-    }
-    if (!mounted) return;
+    final p = ref.read(miPlanProvider).value;
+    final ok = await asegurarFuncionPro(context, ref, FuncionPro.logo, plan: p);
+    if (!ok || !mounted) return;
     final bytes = await ref.read(capturadorFotoProvider)(context, fuente);
     if (bytes == null || !mounted) return;
     try {
