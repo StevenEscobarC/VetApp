@@ -207,7 +207,13 @@ void main() {
         find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
         findsOneWidget,
       );
-      expect(find.byIcon(Icons.vaccines_outlined), findsNothing);
+      expect(
+        find.descendant(
+          of: boton,
+          matching: find.byIcon(Icons.vaccines_outlined),
+        ),
+        findsNothing,
+      );
       expect(
         tester.getSemantics(boton).label,
         contains('bloqueado, solo lectura'),
@@ -244,8 +250,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byIcon(Icons.lock_outline), findsNothing);
-      expect(find.byIcon(Icons.vaccines_outlined), findsWidgets);
+      final boton = find.widgetWithText(AppButton, 'Vacunar');
+      expect(
+        find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: boton,
+          matching: find.byIcon(Icons.vaccines_outlined),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Vacunar'));
       await tester.pumpAndSettle();
       expect(find.text('¿A quién vacuna?'), findsOneWidget);

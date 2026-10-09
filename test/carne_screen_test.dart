@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
+import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clinic/domain/clinica_failure.dart';
 import 'package:vetapp/features/clinic/presentation/providers/clinica_providers.dart';
 import 'package:vetapp/features/plan/domain/mi_plan.dart';
@@ -13,6 +14,7 @@ import 'package:vetapp/features/vaccination/domain/vacuna_failure.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 import 'package:vetapp/features/vaccination/presentation/screens/carne_screen.dart';
 
+import 'helpers/fake_auth.dart';
 import 'helpers/fake_plan.dart';
 import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
@@ -199,6 +201,9 @@ Widget _app({
     ],
     overrides: [
       ...planOverrides(plan: plan),
+      authProfileProvider.overrideWith(
+        () => FakeAuthProfileNotifier(profile: vetProfile),
+      ),
       vacunaRepositoryProvider.overrideWithValue(repo),
       ...extra,
     ],

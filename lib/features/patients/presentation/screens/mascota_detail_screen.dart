@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +17,9 @@ import '../../../clinical_history/presentation/providers/consultas_providers.dar
 import '../../../clinical_history/presentation/providers/historia_clinica_pdf_providers.dart';
 import '../../../clinical_history/presentation/widgets/historia_clinica_timeline.dart';
 import '../../../vaccination/presentation/widgets/carne_resumen_section.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../domain/entities/mascota.dart';
 import '../../domain/entities/peso_registro.dart';
 import '../../domain/mascota_failure.dart';
@@ -105,6 +110,15 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
   /// vet. Sin diálogo de confirmación: reemplazar no es destructivo
   /// (UI-SPEC).
   Future<void> _cambiarFoto(Mascota mascota, FuenteFoto fuente) async {
+    // Solo lectura: la hoja explicativa en vez de la captura (D-12).
+    if (!await asegurarEscritura(
+      context,
+      ref,
+      plan: ref.read(miPlanProvider).value,
+    )) {
+      return;
+    }
+    if (!mounted) return;
     final capturador = ref.read(capturadorFotoProvider);
     final bytes = await capturador(context, fuente);
     if (bytes == null || !mounted) return;
@@ -134,7 +148,8 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
 
       ref.invalidate(mascotaProvider(widget.mascotaId));
       ref.read(mascotasProvider.notifier).refrescar();
-    } on MascotaFailure {
+    } on MascotaFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -147,7 +162,15 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
     }
   }
 
-  void _abrirRegistrarPeso() {
+  Future<void> _abrirRegistrarPeso() async {
+    if (!await asegurarEscritura(
+      context,
+      ref,
+      plan: ref.read(miPlanProvider).value,
+    )) {
+      return;
+    }
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -194,6 +217,10 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
     final fechaNacimiento = mascota.fechaNacimiento;
     final raza = mascota.raza;
     final rutaBase = widget.rutaBase;
+    // Solo lectura (servidor): los controles de escritura conservan lugar,
+    // variante y tamaño; solo cambian el ícono por el candado y la semántica.
+    // Lo de lectura (historia, PDF, carné, compartir) no se toca (D-02).
+    final puedeEscribir = ref.watch(puedeEscribirProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -207,6 +234,7 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
               isUploading: _subiendoFoto,
               onTomarFoto: () => _cambiarFoto(mascota, FuenteFoto.camara),
               onElegirGaleria: () => _cambiarFoto(mascota, FuenteFoto.galeria),
+              bloqueado: !puedeEscribir,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -219,11 +247,22 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
           ),
           CarneBadge(mascotaId: widget.mascotaId, rutaBase: rutaBase),
           const SizedBox(height: AppSpacing.lg),
-          AppButton(
+          _controlEscritura(
+            puedeEscribir: puedeEscribir,
             label: 'Editar',
-            icon: Icons.edit_outlined,
-            variant: AppButtonVariant.outline,
-            onPressed: () => context.push('$rutaBase/editar'),
+            icono: Icons.edit_outlined,
+            variante: AppButtonVariant.outline,
+            accion: () async {
+              if (!await asegurarEscritura(
+                context,
+                ref,
+                plan: ref.read(miPlanProvider).value,
+              )) {
+                return;
+              }
+              if (!context.mounted) return;
+              unawaited(context.push('$rutaBase/editar'));
+            },
           ),
           const SizedBox(height: AppSpacing.lg),
           _FichaRow(label: 'Especie', valor: mascota.especie.etiqueta),
@@ -250,43 +289,93 @@ class _MascotaDetailScreenState extends ConsumerState<MascotaDetailScreen> {
           const SizedBox(height: AppSpacing.md),
           _HistorialPeso(mascotaId: widget.mascotaId),
           const SizedBox(height: AppSpacing.sm),
-          AppButton(
+          _controlEscritura(
+            puedeEscribir: puedeEscribir,
             label: 'Registrar peso',
-            icon: Icons.add,
-            variant: AppButtonVariant.text,
+            icono: Icons.add,
+            variante: AppButtonVariant.text,
             expand: false,
-            onPressed: _abrirRegistrarPeso,
+            accion: _abrirRegistrarPeso,
           ),
           const SizedBox(height: AppSpacing.lg),
           Text('Historia clínica', style: textTheme.titleLarge),
           const SizedBox(height: AppSpacing.md),
           HistoriaClinicaTimeline(mascotaId: widget.mascotaId),
           const SizedBox(height: AppSpacing.md),
-          AppButton(
+          _controlEscritura(
+            puedeEscribir: puedeEscribir,
             label: 'Nueva consulta',
-            icon: Icons.add,
-            onPressed: () => context.push('$rutaBase/consultas/nueva'),
+            icono: Icons.add,
+            accion: () async {
+              if (!await asegurarEscritura(
+                context,
+                ref,
+                plan: ref.read(miPlanProvider).value,
+              )) {
+                return;
+              }
+              if (!context.mounted) return;
+              unawaited(context.push('$rutaBase/consultas/nueva'));
+            },
           ),
           const SizedBox(height: AppSpacing.lg),
           CarneResumenSection(mascotaId: widget.mascotaId, rutaBase: rutaBase),
           const SizedBox(height: AppSpacing.sm),
           // `go` (no push): el destino vive en la rama Agenda del shell y,
           // al guardar, el formulario regresa a la AgendaScreen (D-07).
-          AppButton(
+          _controlEscritura(
+            puedeEscribir: puedeEscribir,
             label: 'Agendar cita',
-            icon: Icons.event_outlined,
-            variant: AppButtonVariant.outline,
-            onPressed: () => context.go(
-              Uri(
-                path: '/agenda/nueva',
-                queryParameters: {
-                  'clienteId': mascota.duenoId,
-                  'mascotaId': mascota.id,
-                },
-              ).toString(),
-            ),
+            icono: Icons.event_outlined,
+            variante: AppButtonVariant.outline,
+            accion: () async {
+              if (!await asegurarEscritura(
+                context,
+                ref,
+                plan: ref.read(miPlanProvider).value,
+              )) {
+                return;
+              }
+              if (!context.mounted) return;
+              context.go(
+                Uri(
+                  path: '/agenda/nueva',
+                  queryParameters: {
+                    'clienteId': mascota.duenoId,
+                    'mascotaId': mascota.id,
+                  },
+                ).toString(),
+              );
+            },
           ),
         ],
+      ),
+    );
+  }
+
+  /// Botón de escritura de la ficha: mismo widget, variante y tamaño de
+  /// siempre; en solo lectura solo cambia el ícono por el candado y la
+  /// semántica anuncia "bloqueado, solo lectura" (UI-SPEC §6, sin atenuar).
+  /// El toque siempre llama a [accion], que pre-verifica con
+  /// `asegurarEscritura` y abre la hoja explicativa en vez de la acción.
+  Widget _controlEscritura({
+    required bool puedeEscribir,
+    required String label,
+    required IconData icono,
+    required Future<void> Function() accion,
+    AppButtonVariant variante = AppButtonVariant.primary,
+    bool expand = true,
+  }) {
+    return ControlEscritura(
+      puedeEscribir: puedeEscribir,
+      label: label,
+      onTap: accion,
+      child: AppButton(
+        label: label,
+        icon: iconoEscritura(puedeEscribir, icono),
+        variant: variante,
+        expand: expand,
+        onPressed: accion,
       ),
     );
   }
@@ -457,6 +546,9 @@ class _RegistrarPesoSheetState extends ConsumerState<_RegistrarPesoSheet> {
         context,
       ).showSnackBar(const SnackBar(content: Text('Peso registrado')));
     } on MascotaFailure catch (e) {
+      // Respaldo del servidor (LP004 con bandera vencida): la hoja explica y
+      // el peso escrito queda en el campo.
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _guardando = false);

@@ -28,6 +28,7 @@ class AppPhotoPicker extends StatelessWidget {
     this.isUploading = false,
     this.onTomarFoto,
     this.onElegirGaleria,
+    this.bloqueado = false,
   });
 
   final String? fotoPath;
@@ -37,6 +38,12 @@ class AppPhotoPicker extends StatelessWidget {
   final bool isUploading;
   final VoidCallback? onTomarFoto;
   final VoidCallback? onElegirGaleria;
+
+  /// `true` cuando el usuario está en solo lectura: el badge de cámara y el
+  /// botón de galería cambian su ícono por el candado y la accesibilidad lo
+  /// anuncia; las acciones se siguen llamando (quien las pasa abre la hoja
+  /// explicativa). No atenúa nada.
+  final bool bloqueado;
 
   /// Construye la imagen de red cacheada correctamente — [cacheKey] SIEMPRE
   /// debe ser la ruta estable del objeto (`foto_path`), nunca [url] (la URL
@@ -109,7 +116,9 @@ class AppPhotoPicker extends StatelessWidget {
             bottom: 0,
             right: 0,
             child: Semantics(
-              label: 'Tomar foto',
+              label: bloqueado
+                  ? 'Tomar foto, bloqueado, solo lectura'
+                  : 'Tomar foto',
               child: Container(
                 width: size * 0.32,
                 height: size * 0.32,
@@ -118,7 +127,7 @@ class AppPhotoPicker extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.camera_alt_outlined,
+                  bloqueado ? Icons.lock_outline : Icons.camera_alt_outlined,
                   color: AppColors.onPrimary,
                   size: size * 0.18,
                 ),
@@ -146,7 +155,9 @@ class AppPhotoPicker extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           AppButton(
             label: 'Elegir de galería',
-            icon: Icons.photo_library_outlined,
+            icon: bloqueado
+                ? Icons.lock_outline
+                : Icons.photo_library_outlined,
             onPressed: onElegirGaleria,
             variant: AppButtonVariant.text,
             expand: false,

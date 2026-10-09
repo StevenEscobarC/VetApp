@@ -7,6 +7,9 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/status/dosis_estado_chip.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../domain/entities/carne.dart';
 import '../../domain/estado_dosis_ui.dart';
 import '../providers/registrar_dosis_providers.dart';
@@ -53,6 +56,17 @@ class _CarneScreenState extends ConsumerState<CarneScreen> {
       showCompartirCarneSheet(context, mascotaId: widget.mascotaId);
 
   Future<void> _registrar() async {
+    // Solo lectura: la hoja explicativa en vez del formulario (D-12). Es la
+    // única acción de escritura del carné; compartir y las alertas nunca se
+    // bloquean (D-02).
+    if (!await asegurarEscritura(
+      context,
+      ref,
+      plan: ref.read(miPlanProvider).value,
+    )) {
+      return;
+    }
+    if (!mounted) return;
     final r = await context.push<DosisRegistrada>(
       rutaRegistrarDosis(mascotaId: widget.mascotaId),
     );
@@ -78,6 +92,7 @@ class _CarneScreenState extends ConsumerState<CarneScreen> {
   @override
   Widget build(BuildContext context) {
     final carneAsync = ref.watch(carneProvider(widget.mascotaId));
+    final puedeEscribir = ref.watch(puedeEscribirProvider);
     final activas = carneAsync.maybeWhen(
       data: (c) => c.dosis.where((d) => !d.anulada).length,
       orElse: () => 0,
@@ -143,10 +158,15 @@ class _CarneScreenState extends ConsumerState<CarneScreen> {
                     onPressed: () => _compartirDesdeBoton(activas),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  AppButton(
+                  ControlEscritura(
+                    puedeEscribir: puedeEscribir,
                     label: 'Registrar dosis',
-                    icon: Icons.add,
-                    onPressed: _registrar,
+                    onTap: _registrar,
+                    child: AppButton(
+                      label: 'Registrar dosis',
+                      icon: iconoEscritura(puedeEscribir, Icons.add),
+                      onPressed: _registrar,
+                    ),
                   ),
                 ],
               ),
