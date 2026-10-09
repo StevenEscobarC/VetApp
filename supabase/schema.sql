@@ -1168,6 +1168,7 @@ revoke all on public.clinica_invitaciones from anon;
 
 -- 5. Consumo de un código (solo lo llaman el trigger de signup y unirse_a_clinica; T10).
 -- `for update` serializa el uso concurrente del mismo código (T3).
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 create or replace function public.consumir_invitacion(p_codigo text, p_usuario uuid)
 returns uuid
 language plpgsql
@@ -1257,6 +1258,7 @@ for each row execute procedure public.crear_perfil_nuevo_usuario();
 -- Un solo código vigente por clínica: genera uno nuevo y revoca el anterior.
 -- Código de 8 caracteres de un alfabeto de 31 símbolos (sin I, L, O, 0, 1) derivado de
 -- bytes de gen_random_uuid() (CSPRNG); se saltan los bytes 6 y 8 (bits fijos de versión/variante).
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 create or replace function public.generar_invitacion_clinica()
 returns table (id uuid, codigo text, expira_en timestamptz)
 language plpgsql
@@ -2723,6 +2725,7 @@ $$;
 -- 11. Carné completo de una mascota (veterinario). Todo valor derivado sale de _carne_filas
 -- / _dosis_posiciones.
 drop function if exists public.carne_de_mascota(uuid);
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 create or replace function public.carne_de_mascota(p_mascota_id uuid)
 returns jsonb
 language plpgsql stable security definer set search_path = public
@@ -3035,6 +3038,7 @@ $$;
 -- nunca (D-25). Token malformado/desconocido/inactivo => null indistinguible. Salida limitada
 -- a D-15/D-20/D-23: sin ids, sin contacto del dueño, sin anuladas ni notas internas.
 drop function if exists public.carne_publico(text);
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 create or replace function public.carne_publico(p_token text)
 returns jsonb
 language plpgsql stable security definer set search_path = public
@@ -3857,5 +3861,315 @@ using (
   and public.puede_escribir()
   and (storage.foldername(name))[1] = public.mi_clinica_id()::text
 );
+
+-- 10. Invitaciones con cupo (Fase 5.1). Se redefinen con create or replace: mismas firmas y
+-- mismos grants que en la Fase 4.1; consumir_invitacion conserva sus tres errores P0001 idénticos
+-- porque el repositorio Dart del equipo compara sus textos.
+create or replace function public.generar_invitacion_clinica()
+returns table (id uuid, codigo text, expira_en timestamptz)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_alfabeto constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  v_codigo text;
+  v_bytes bytea;
+  v_i integer;
+  v_expira timestamptz;
+  v_id uuid;
+  v_intento integer := 0;
+  v_pl public.clinica_planes;
+  v_e record;
+  v_activos int;
+begin
+  if not public.es_admin_clinica() or v_clinica is null then
+    raise exception 'Solo un administrador puede hacer esto.' using errcode = '42501';
+  end if;
+
+  -- D-11: el primer código en Gratis/Pro sin cupo abre la prueba Clínica (5 cupos, una vez por
+  -- clínica) en la misma transacción que genera el código. `for update` serializa el cupo (T-05.1-07).
+  insert into public.clinica_planes (clinica_id) values (v_clinica) on conflict (clinica_id) do nothing;
+  select * into v_pl from public.clinica_planes cp where cp.clinica_id = v_clinica for update;
+  select * into v_e from public._plan_efectivo(v_clinica);
+  select count(*) into v_activos
+    from public.perfiles p
+   where p.clinica_id = v_clinica and p.rol = 'VETERINARIO' and p.activo;
+
+  if v_activos >= v_e.miembros_max then
+    if v_e.plan in ('gratis', 'pro') and not v_pl.prueba_clinica_usada then
+      update public.clinica_planes cp
+         set prueba_clinica_hasta = public._hoy_bogota() + 30,
+             prueba_clinica_usada = true,
+             updated_at = now()
+       where cp.clinica_id = v_clinica;
+    else
+      raise exception 'Tu plan no tiene cupo para más veterinarios.'
+        using errcode = 'LP002', hint = 'LP002';
+    end if;
+  end if;
+
+  update public.clinica_invitaciones ci
+  set revocada = true
+  where ci.clinica_id = v_clinica
+    and ci.usada_por is null
+    and not ci.revocada
+    and ci.expira_en > now();
+
+  loop
+    v_intento := v_intento + 1;
+    v_bytes := decode(replace(gen_random_uuid()::text, '-', ''), 'hex');
+    v_codigo := '';
+    v_i := 0;
+    while length(v_codigo) < 8 loop
+      if v_i not in (6, 8) then
+        v_codigo := v_codigo || substr(v_alfabeto, (get_byte(v_bytes, v_i) % 31) + 1, 1);
+      end if;
+      v_i := v_i + 1;
+    end loop;
+    v_expira := now() + interval '72 hours';
+
+    begin
+      insert into public.clinica_invitaciones as ci (clinica_id, codigo, creada_por, expira_en)
+      values (v_clinica, v_codigo, auth.uid(), v_expira)
+      returning ci.id into v_id;
+      exit;
+    exception when unique_violation then
+      if v_intento >= 5 then
+        raise;
+      end if;
+    end;
+  end loop;
+
+  return query select v_id, v_codigo, v_expira;
+end;
+$$;
+
+revoke all on function public.generar_invitacion_clinica() from public, anon;
+grant execute on function public.generar_invitacion_clinica() to authenticated;
+
+create or replace function public.consumir_invitacion(p_codigo text, p_usuario uuid)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_codigo text := upper(regexp_replace(coalesce(p_codigo, ''), '[^A-Za-z0-9]', '', 'g'));
+  v_inv public.clinica_invitaciones;
+  v_e record;
+  v_activos int;
+begin
+  select * into v_inv from public.clinica_invitaciones where codigo = v_codigo for update;
+
+  if not found or v_inv.revocada then
+    raise exception 'Ese código no es válido. Revísalo e inténtalo de nuevo.' using errcode = 'P0001';
+  end if;
+
+  if v_inv.usada_por is not null then
+    raise exception 'Ese código ya fue utilizado. Pídele al administrador uno nuevo.' using errcode = 'P0001';
+  end if;
+
+  if v_inv.expira_en <= now() then
+    raise exception 'Ese código ya venció. Pídele al administrador uno nuevo.' using errcode = 'P0001';
+  end if;
+
+  -- Cupo (Fase 5.1): se re-verifica al consumir. Pitfall 6: en el signup este LP002 llega al
+  -- usuario como el 500 genérico de Auth; el administrador ve el error claro al generar el código.
+  insert into public.clinica_planes (clinica_id) values (v_inv.clinica_id) on conflict (clinica_id) do nothing;
+  perform 1 from public.clinica_planes cp where cp.clinica_id = v_inv.clinica_id for update;
+  select * into v_e from public._plan_efectivo(v_inv.clinica_id);
+  select count(*) into v_activos
+    from public.perfiles p
+   where p.clinica_id = v_inv.clinica_id and p.rol = 'VETERINARIO' and p.activo;
+  if v_activos >= v_e.miembros_max then
+    raise exception 'La clínica no tiene cupo para más veterinarios. Pídele al administrador que active un plan con más cupos.'
+      using errcode = 'LP002', hint = 'LP002';
+  end if;
+
+  update public.clinica_invitaciones
+  set usada_por = p_usuario, usada_en = now()
+  where id = v_inv.id;
+
+  return v_inv.clinica_id;
+end;
+$$;
+
+revoke execute on function public.consumir_invitacion(text, uuid) from public, anon, authenticated;
+
+-- 11. Carné (Fase 5.1, D-06): si el plan no permite logo, logo_path sale null aunque la ruta siga
+-- guardada; así los enlaces compartidos siguen funcionando y no se firma ningún logo (T-05.1-08).
+create or replace function public.carne_de_mascota(p_mascota_id uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+  v_mascota public.mascotas;
+  v_cliente public.clientes;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario puede ver el carné.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_mascota from public.mascotas
+  where id = p_mascota_id and clinica_id = v_clinica;
+  if not found then
+    raise exception 'La mascota no pertenece a tu clínica.' using errcode = 'insufficient_privilege';
+  end if;
+  select * into v_cliente from public.clientes where id = v_mascota.dueno_id;
+
+  return jsonb_build_object(
+    'hoy', v_hoy,
+    'mascota', jsonb_build_object(
+      'id', v_mascota.id, 'nombre', v_mascota.nombre, 'especie', v_mascota.especie,
+      'raza', v_mascota.raza, 'fecha_nacimiento', v_mascota.fecha_nacimiento,
+      'foto_path', v_mascota.foto_path
+    ),
+    'dueno', jsonb_build_object('nombre', v_cliente.nombre, 'telefono', v_cliente.telefono),
+    'clinica', (
+      select jsonb_build_object(
+        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono, 'logo_path', case when coalesce((select e.logo_permitido from public._plan_efectivo(cl.id) e), false) then cl.logo_path end
+      )
+      from public.clinicas cl where cl.id = v_clinica
+    ),
+    'biologicos', coalesce((
+      select jsonb_agg(to_jsonb(f) - 'mascota_id' order by f.biologico_nombre)
+      from public._carne_filas(v_clinica, p_mascota_id, v_hoy) f
+    ), '[]'::jsonb),
+    'dosis', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', d.id,
+          'codigo_protocolo', d.codigo_protocolo,
+          'biologico_nombre', d.biologico_nombre,
+          'tipo', d.tipo,
+          'fecha_aplicacion', d.fecha_aplicacion,
+          'etiqueta_dosis', po.etiqueta_dosis,
+          'es_ultima', coalesce(po.es_ultima, false),
+          'producto', d.producto,
+          'lote', d.lote,
+          'observaciones', d.observaciones,
+          'externa', d.externa,
+          'clinica_externa', d.clinica_externa,
+          'es_refuerzo', d.es_refuerzo,
+          'cita_id', d.cita_id,
+          'anulada', d.anulada,
+          'motivo_anulacion', d.motivo_anulacion,
+          'anulada_at', d.anulada_at,
+          'veterinario', jsonb_build_object(
+            'nombre', pf.nombre, 'matricula', pf.matricula, 'activo', pf.activo
+          )
+        )
+        order by d.fecha_aplicacion desc, d.created_at desc
+      )
+      from public.dosis_aplicadas d
+      left join public._dosis_posiciones(v_clinica, p_mascota_id) po on po.dosis_id = d.id
+      left join public.perfiles pf on pf.id = d.veterinario_id
+      where d.mascota_id = p_mascota_id and d.clinica_id = v_clinica
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+create or replace function public.carne_publico(p_token text)
+returns jsonb
+language plpgsql stable security definer set search_path = public
+as $$
+declare
+  v_hoy date := public._hoy_bogota();
+  v_enlace public.carne_enlaces;
+  v_mascota public.mascotas;
+  v_cliente public.clientes;
+begin
+  if p_token is null or p_token !~ '^[0-9a-f]{64}$' then
+    return null;
+  end if;
+
+  select * into v_enlace from public.carne_enlaces where token = p_token and activo;
+  if not found then
+    return null;
+  end if;
+
+  select * into v_mascota from public.mascotas
+  where id = v_enlace.mascota_id and clinica_id = v_enlace.clinica_id;
+  if not found then
+    return null;
+  end if;
+  select * into v_cliente from public.clientes where id = v_mascota.dueno_id;
+
+  return jsonb_build_object(
+    'hoy', v_hoy,
+    'mascota', jsonb_build_object(
+      'nombre', v_mascota.nombre, 'especie', v_mascota.especie, 'raza', v_mascota.raza,
+      'fecha_nacimiento', v_mascota.fecha_nacimiento, 'foto_path', v_mascota.foto_path
+    ),
+    'propietario', public._nombre_corto(v_cliente.nombre),
+    'clinica', (
+      select jsonb_build_object(
+        'nombre', cl.nombre, 'ciudad', cl.ciudad, 'direccion', cl.direccion, 'telefono', cl.telefono, 'logo_path', case when coalesce((select e.logo_permitido from public._plan_efectivo(cl.id) e), false) then cl.logo_path end
+      )
+      from public.clinicas cl where cl.id = v_enlace.clinica_id
+    ),
+    'biologicos', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'biologico_nombre', f.biologico_nombre,
+          'tipo', f.tipo,
+          'ultima_fecha', f.ultima_fecha,
+          'posicion', f.posicion,
+          'dosis_serie', f.dosis_serie,
+          'proxima_fecha', f.proxima_fecha,
+          'etiqueta_proxima', f.etiqueta_proxima,
+          'estado', f.estado
+        )
+        order by f.biologico_nombre
+      )
+      from public._carne_filas(v_enlace.clinica_id, v_enlace.mascota_id, v_hoy) f
+    ), '[]'::jsonb),
+    'dosis', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'biologico_nombre', d.biologico_nombre,
+          'tipo', d.tipo,
+          'fecha_aplicacion', d.fecha_aplicacion,
+          'etiqueta_dosis', po.etiqueta_dosis,
+          'es_ultima', po.es_ultima,
+          'producto', d.producto,
+          'lote', d.lote,
+          'externa', d.externa,
+          'clinica_externa', d.clinica_externa,
+          'veterinario', case
+            when d.externa then null
+            else jsonb_build_object('nombre', pf.nombre, 'matricula', pf.matricula)
+          end
+        )
+        order by d.fecha_aplicacion desc, d.created_at desc
+      )
+      from public.dosis_aplicadas d
+      join public._dosis_posiciones(v_enlace.clinica_id, v_enlace.mascota_id) po on po.dosis_id = d.id
+      left join public.perfiles pf on pf.id = d.veterinario_id
+      where d.mascota_id = v_enlace.mascota_id
+        and d.clinica_id = v_enlace.clinica_id
+        and not d.anulada
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.carne_publico(text) from public, anon, authenticated;
+grant execute on function public.carne_publico(text) to service_role;
+revoke all on function public.carne_de_mascota(uuid) from public, anon;
+grant execute on function public.carne_de_mascota(uuid) to authenticated;
+
+-- 12. Cierre del bloque: se re-afirman los grants de la superficie nueva.
+revoke all on function public.mi_plan() from public, anon;
+grant execute on function public.mi_plan() to authenticated;
+revoke all on function public.puede_escribir() from public, anon;
+grant execute on function public.puede_escribir() to authenticated;
+revoke all on function public.plan_permite_logo() from public, anon;
+grant execute on function public.plan_permite_logo() to authenticated;
+revoke all on function public.asignar_plan(uuid, text, int, date, boolean, date) from public, anon, authenticated;
+grant execute on function public.asignar_plan(uuid, text, int, date, boolean, date) to service_role;
 
 notify pgrst, 'reload schema';
