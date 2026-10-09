@@ -3316,7 +3316,7 @@ create table if not exists public.clinica_planes (
 do $$ begin
   alter table public.clinica_planes
     add constraint clinica_planes_pagado_requerido
-    check (plan in ('gratis', 'beta') or pagado_hasta is not null or fundador);
+    check (plan in ('gratis', 'beta') or pagado_hasta is not null);
 exception when duplicate_object then null;
 end $$;
 
@@ -3351,7 +3351,7 @@ insert into public.clinica_planes (clinica_id, plan) select c.id, 'beta' from pu
 -- 3. ÚNICA fuente del plan vigente (PLAN-01): triggers, RPC y mi_plan llaman aquí.
 -- p_hoy es parámetro para pruebas deterministas. Candidatos combinables; gana el de mayor rango
 -- (Beta > Clínica > Pro > Gratis); a igual rango, un plan pagado (vigente o en gracia) gana a una
--- prueba. Gracia de 15 días solo para planes pagados y la prueba Clínica; Fundador no vence.
+-- prueba. Gracia de 15 días solo para planes pagados y la prueba Clínica; Fundador es solo una marca de precio y vence igual.
 -- "Sin fin" se representa con null (nunca con un valor centinela).
 create or replace function public._plan_efectivo(p_clinica uuid, p_hoy date default public._hoy_bogota())
 returns table (
@@ -3376,12 +3376,12 @@ as $$
   ),
   cand as (
     select 3 as rango, 'beta'::text as plan, 'beta'::text as origen, 999 as miembros,
-           (case when f.fundador then null else f.beta_hasta end)::date as hasta, 0 as gracia
+           f.beta_hasta::date as hasta, 0 as gracia
       from fila f where f.plan = 'beta'
     union all
     select (case when f.plan = 'clinica' then 2 else 1 end), f.plan, 'pagado'::text,
            (case when f.plan = 'clinica' then f.miembros_max else 1 end),
-           (case when f.fundador then null else f.pagado_hasta end)::date, 15
+           f.pagado_hasta::date, 15
       from fila f where f.plan in ('pro', 'clinica')
     union all
     select 2, 'clinica'::text, 'prueba_clinica'::text, 5, f.prueba_clinica_hasta, 15
@@ -3562,8 +3562,8 @@ grant execute on function public.mi_plan() to authenticated;
 -- Ejemplos (solo comentarios):
 --   -- Renovar Pro hasta una fecha:
 --   --   select public.asignar_plan('<clinica_id>', 'pro', null, date '2027-01-31');
---   -- Clínica tramo 3, Fundador (sin vencimiento):
---   --   select public.asignar_plan('<clinica_id>', 'clinica', 3, null, true);
+--   -- Clínica tramo 3, Fundador (marca de precio; igual requiere pagado_hasta):
+--   --   select public.asignar_plan('<clinica_id>', 'clinica', 3, date '2027-01-31', true);
 create or replace function public.asignar_plan(
   p_clinica uuid,
   p_plan text,
@@ -3597,8 +3597,8 @@ begin
   end if;
 
   if p_plan = 'pro' then
-    if p_pagado_hasta is null and not v_fundador then
-      raise exception 'Pro requiere pagado_hasta o fundador.' using errcode = 'check_violation';
+    if p_pagado_hasta is null then
+      raise exception 'Pro requiere pagado_hasta.' using errcode = 'check_violation';
     end if;
     v_miembros := 1;
     v_pagado := p_pagado_hasta;
@@ -3606,8 +3606,8 @@ begin
     if p_miembros_max is null or p_miembros_max not in (2, 3, 5) then
       raise exception 'El plan Clínica solo admite tramos de 2, 3 o 5 veterinarios.' using errcode = 'check_violation';
     end if;
-    if p_pagado_hasta is null and not v_fundador then
-      raise exception 'Clínica requiere pagado_hasta o fundador.' using errcode = 'check_violation';
+    if p_pagado_hasta is null then
+      raise exception 'Clínica requiere pagado_hasta.' using errcode = 'check_violation';
     end if;
     v_miembros := p_miembros_max;
     v_pagado := p_pagado_hasta;
