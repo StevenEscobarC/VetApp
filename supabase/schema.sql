@@ -3281,4 +3281,360 @@ $$;
 revoke all on function public.actualizar_clinica(text, text, text, text, text) from public, anon;
 grant execute on function public.actualizar_clinica(text, text, text, text, text) to authenticated;
 
+-- ===== Fase 5.1: Planes y límites (delta idempotente) =====
+-- Se puede re-ejecutar el archivo completo. Este bloque va DESPUÉS de la Fase 5 a propósito:
+-- sus redefiniciones (generar_invitacion_clinica, consumir_invitacion, carne_de_mascota,
+-- carne_publico, policies de storage) ganan en cada re-pegado (Pitfall 4).
+-- Orden obligatorio: tabla -> backfill Beta -> trigger de prueba Pro (Runtime State Inventory).
+-- Convención de fechas: pagado_hasta = último día incluido (hora de Bogotá).
+-- El plan solo lo cambia soporte con asignar_plan (D-07); ningún usuario de la app escribe aquí.
+
+-- 1. Una fila por clínica: plan base fijado por soporte; las pruebas quedan como historial.
+create table if not exists public.clinica_planes (
+  clinica_id uuid primary key references public.clinicas(id) on delete cascade,
+  plan text not null default 'gratis' check (plan in ('gratis', 'pro', 'clinica', 'beta')),
+  miembros_max int not null default 1 check (miembros_max between 1 and 50),
+  fundador boolean not null default false,
+  pagado_hasta date null,
+  prueba_pro_hasta date null,
+  prueba_clinica_hasta date null,
+  prueba_clinica_usada boolean not null default false,
+  beta_hasta date null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+do $$ begin
+  alter table public.clinica_planes
+    add constraint clinica_planes_pagado_requerido
+    check (plan in ('gratis', 'beta') or pagado_hasta is not null or fundador);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter table public.clinica_planes
+    add constraint clinica_planes_tramo
+    check (plan <> 'clinica' or miembros_max in (2, 3, 5));
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter table public.clinica_planes
+    add constraint clinica_planes_prueba_consistente
+    check (prueba_clinica_hasta is null or prueba_clinica_usada);
+exception when duplicate_object then null;
+end $$;
+
+alter table public.clinica_planes enable row level security;
+
+drop policy if exists clinica_planes_select on public.clinica_planes;
+create policy clinica_planes_select on public.clinica_planes for select to authenticated
+using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+-- Sin políticas de escritura: solo triggers/RPC definer y asignar_plan (D-07).
+revoke all on table public.clinica_planes from anon;
+revoke insert, update, delete, truncate on table public.clinica_planes from authenticated;
+
+-- 2. D-13: las clínicas que ya existen quedan en Beta sin fecha de fin hasta que soporte la fije
+-- con asignar_plan. Solo corre con la tabla vacía (primer despliegue); en re-ejecuciones no hace nada.
+insert into public.clinica_planes (clinica_id, plan) select c.id, 'beta' from public.clinicas c where not exists (select 1 from public.clinica_planes);
+
+-- 3. ÚNICA fuente del plan vigente (PLAN-01): triggers, RPC y mi_plan llaman aquí.
+-- p_hoy es parámetro para pruebas deterministas. Candidatos combinables; gana el de mayor rango
+-- (Beta > Clínica > Pro > Gratis); a igual rango, un plan pagado (vigente o en gracia) gana a una
+-- prueba. Gracia de 15 días solo para planes pagados y la prueba Clínica; Fundador no vence.
+-- "Sin fin" se representa con null (nunca con un valor centinela).
+create or replace function public._plan_efectivo(p_clinica uuid, p_hoy date default public._hoy_bogota())
+returns table (
+  plan text,
+  origen text,
+  estado text,
+  fundador boolean,
+  vigente_hasta date,
+  gracia_hasta date,
+  dias_restantes int,
+  miembros_max int,
+  pacientes_max int,
+  logo_permitido boolean,
+  protocolos_propios_permitidos boolean,
+  ultimo_vencimiento date,
+  ultimo_origen text
+)
+language sql stable security definer set search_path = public
+as $$
+  with fila as (
+    select cp.* from public.clinica_planes cp where cp.clinica_id = p_clinica
+  ),
+  cand as (
+    select 3 as rango, 'beta'::text as plan, 'beta'::text as origen, 999 as miembros,
+           (case when f.fundador then null else f.beta_hasta end)::date as hasta, 0 as gracia
+      from fila f where f.plan = 'beta'
+    union all
+    select (case when f.plan = 'clinica' then 2 else 1 end), f.plan, 'pagado'::text,
+           (case when f.plan = 'clinica' then f.miembros_max else 1 end),
+           (case when f.fundador then null else f.pagado_hasta end)::date, 15
+      from fila f where f.plan in ('pro', 'clinica')
+    union all
+    select 2, 'clinica'::text, 'prueba_clinica'::text, 5, f.prueba_clinica_hasta, 15
+      from fila f where f.prueba_clinica_hasta is not null
+    union all
+    select 1, 'pro'::text, 'prueba_pro'::text, 1, f.prueba_pro_hasta, 0
+      from fila f where f.prueba_pro_hasta is not null
+    union all
+    select 0, 'gratis'::text, 'gratis'::text, 1, null::date, 0
+  ),
+  elegido as (
+    select c.*
+      from cand c
+     where c.hasta is null or p_hoy <= c.hasta + c.gracia
+     order by c.rango desc,
+              (c.origen = 'pagado') desc,
+              (c.hasta is null or p_hoy <= c.hasta) desc,
+              c.hasta desc nulls first
+     limit 1
+  ),
+  ultimo as (
+    select u.hasta, u.origen
+      from cand u
+     where u.origen <> 'gratis' and u.hasta is not null and p_hoy > u.hasta + u.gracia
+     order by u.hasta desc
+     limit 1
+  )
+  select
+    e.plan,
+    e.origen,
+    case
+      when e.hasta is null then 'sin_vencimiento'
+      when p_hoy <= e.hasta then 'vigente'
+      else 'gracia'
+    end,
+    coalesce((select f.fundador from fila f), false),
+    e.hasta,
+    case when e.gracia > 0 and e.hasta is not null then e.hasta + e.gracia end,
+    case
+      when e.hasta is null then null
+      when p_hoy <= e.hasta then e.hasta - p_hoy
+      else e.hasta + e.gracia - p_hoy
+    end,
+    e.miembros,
+    case when e.plan = 'gratis' then 50 end,
+    e.plan <> 'gratis',
+    e.plan <> 'gratis',
+    case when e.plan = 'gratis' then u.hasta end,
+    case when e.plan = 'gratis' then u.origen end
+  from elegido e
+  left join ultimo u on true
+$$;
+
+revoke all on function public._plan_efectivo(uuid, date) from public, anon, authenticated;
+
+-- 4. D-10: toda clínica nueva (signup o crear_mi_clinica) arranca con 30 días de Pro de prueba.
+-- AFTER INSERT para que la fila de la clínica ya exista. Va después del backfill (T-05.1-10).
+create or replace function public.clinicas_crear_plan()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.clinica_planes (clinica_id, plan, prueba_pro_hasta)
+  values (new.id, 'gratis', public._hoy_bogota() + 30)
+  on conflict (clinica_id) do nothing;
+  return new;
+end;
+$$;
+
+revoke all on function public.clinicas_crear_plan() from public, anon, authenticated;
+
+drop trigger if exists clinicas_crear_plan on public.clinicas;
+create trigger clinicas_crear_plan after insert on public.clinicas for each row execute function public.clinicas_crear_plan();
+
+-- 5. Helpers para RLS/storage y triggers. puede_escribir(): el veterinario cuya posición
+-- (admin primero, luego antigüedad) excede los cupos del plan queda en solo lectura (D-02/D-12).
+-- Sin sesión (service_role, jobs) o sin clínica no se bloquea nada.
+create or replace function public.puede_escribir()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select case
+    when auth.uid() is null or not public.es_veterinario() or public.mi_clinica_id() is null then true
+    else coalesce((
+      select r.pos <= (select e.miembros_max from public._plan_efectivo(public.mi_clinica_id()) e)
+        from (
+          select p.id,
+                 row_number() over (
+                   order by coalesce(p.rol_clinica = 'admin', false) desc, p.created_at, p.id
+                 ) as pos
+            from public.perfiles p
+           where p.clinica_id = public.mi_clinica_id() and p.rol = 'VETERINARIO' and p.activo
+        ) r
+       where r.id = auth.uid()
+    ), true)
+  end
+$$;
+
+create or replace function public.plan_permite_logo()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select coalesce((select e.logo_permitido from public._plan_efectivo(public.mi_clinica_id()) e), false)
+$$;
+
+revoke all on function public.puede_escribir() from public, anon;
+grant execute on function public.puede_escribir() to authenticated;
+revoke all on function public.plan_permite_logo() from public, anon;
+grant execute on function public.plan_permite_logo() to authenticated;
+
+-- 6. mi_plan(): una sola llamada con todo lo que la app necesita. La clínica sale SIEMPRE de
+-- mi_clinica_id() (nunca de un parámetro). miembros_max null = Beta sin tope.
+create or replace function public.mi_plan()
+returns jsonb
+language plpgsql stable
+security definer set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_e record;
+  v_usada boolean;
+  v_activos int;
+  v_pacientes int;
+  v_nombre text;
+  v_logo text;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'No tienes acceso a este recurso.' using errcode = '42501';
+  end if;
+
+  select * into v_e from public._plan_efectivo(v_clinica);
+
+  select coalesce(cp.prueba_clinica_usada, false) into v_usada
+    from public.clinica_planes cp where cp.clinica_id = v_clinica;
+  v_usada := coalesce(v_usada, false);
+
+  select count(*) into v_activos
+    from public.perfiles p
+   where p.clinica_id = v_clinica and p.rol = 'VETERINARIO' and p.activo;
+
+  select count(*) into v_pacientes from public.mascotas m where m.clinica_id = v_clinica;
+
+  select cl.nombre, cl.logo_path into v_nombre, v_logo from public.clinicas cl where cl.id = v_clinica;
+
+  return jsonb_build_object(
+    'plan', v_e.plan,
+    'origen', v_e.origen,
+    'estado', v_e.estado,
+    'fundador', v_e.fundador,
+    'vigente_hasta', v_e.vigente_hasta,
+    'gracia_hasta', v_e.gracia_hasta,
+    'dias_restantes', v_e.dias_restantes,
+    'ultimo_vencimiento', v_e.ultimo_vencimiento,
+    'ultimo_origen', v_e.ultimo_origen,
+    'pacientes_count', v_pacientes,
+    'pacientes_max', v_e.pacientes_max,
+    'veterinarios_activos', v_activos,
+    'miembros_max', case when v_e.plan = 'beta' then null else v_e.miembros_max end,
+    'logo_permitido', v_e.logo_permitido,
+    'logo_guardado', v_logo is not null,
+    'protocolos_propios_permitidos', v_e.protocolos_propios_permitidos,
+    'puede_escribir', public.puede_escribir(),
+    'prueba_clinica_disponible', (v_e.plan in ('gratis', 'pro') and not v_usada and v_activos >= v_e.miembros_max),
+    'prueba_clinica_miembros', 5,
+    'hay_colegas', v_activos > 1,
+    'clinica_nombre', v_nombre
+  );
+end;
+$$;
+
+revoke all on function public.mi_plan() from public, anon;
+grant execute on function public.mi_plan() to authenticated;
+
+-- 7. Soporte: única vía para cambiar un plan (D-07). Solo service_role / postgres desde el SQL
+-- Editor o el MCP; cualquier llamada con sesión de app se rechaza (defensa en profundidad).
+-- pagado_hasta = último día incluido (hora de Bogotá). Las pruebas de la clínica no se modifican.
+-- Ejemplos (solo comentarios):
+--   -- Renovar Pro hasta una fecha:
+--   --   select public.asignar_plan('<clinica_id>', 'pro', null, date '2027-01-31');
+--   -- Clínica tramo 3, Fundador (sin vencimiento):
+--   --   select public.asignar_plan('<clinica_id>', 'clinica', 3, null, true);
+create or replace function public.asignar_plan(
+  p_clinica uuid,
+  p_plan text,
+  p_miembros_max int default null,
+  p_pagado_hasta date default null,
+  p_fundador boolean default false,
+  p_beta_hasta date default null
+)
+returns jsonb
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_fundador boolean := coalesce(p_fundador, false);
+  v_miembros int;
+  v_pagado date;
+  v_beta date;
+  v_activos int;
+  v_resultado jsonb;
+begin
+  if auth.uid() is not null then
+    raise exception 'Operación reservada a soporte.' using errcode = '42501';
+  end if;
+
+  if p_plan is null or p_plan not in ('gratis', 'pro', 'clinica', 'beta') then
+    raise exception 'Plan no válido: usa gratis, pro, clinica o beta.' using errcode = 'check_violation';
+  end if;
+
+  if not exists (select 1 from public.clinicas c where c.id = p_clinica) then
+    raise exception 'La clínica no existe.' using errcode = 'foreign_key_violation';
+  end if;
+
+  if p_plan = 'pro' then
+    if p_pagado_hasta is null and not v_fundador then
+      raise exception 'Pro requiere pagado_hasta o fundador.' using errcode = 'check_violation';
+    end if;
+    v_miembros := 1;
+    v_pagado := p_pagado_hasta;
+  elsif p_plan = 'clinica' then
+    if p_miembros_max is null or p_miembros_max not in (2, 3, 5) then
+      raise exception 'El plan Clínica solo admite tramos de 2, 3 o 5 veterinarios.' using errcode = 'check_violation';
+    end if;
+    if p_pagado_hasta is null and not v_fundador then
+      raise exception 'Clínica requiere pagado_hasta o fundador.' using errcode = 'check_violation';
+    end if;
+    v_miembros := p_miembros_max;
+    v_pagado := p_pagado_hasta;
+  elsif p_plan = 'beta' then
+    v_miembros := 5;
+    v_beta := p_beta_hasta;
+  else
+    v_miembros := coalesce(p_miembros_max, 1);
+  end if;
+
+  insert into public.clinica_planes as cp (clinica_id, plan, miembros_max, fundador, pagado_hasta, beta_hasta, updated_at)
+  values (p_clinica, p_plan, v_miembros, v_fundador, v_pagado, v_beta, now())
+  on conflict (clinica_id) do update
+    set plan = excluded.plan,
+        miembros_max = excluded.miembros_max,
+        fundador = excluded.fundador,
+        pagado_hasta = excluded.pagado_hasta,
+        beta_hasta = excluded.beta_hasta,
+        updated_at = now();
+
+  select to_jsonb(e) into v_resultado from public._plan_efectivo(p_clinica) e;
+
+  -- Pitfall 10: avisar si el nuevo plan deja a la clínica con más veterinarios activos que cupos.
+  select count(*) into v_activos
+    from public.perfiles p
+   where p.clinica_id = p_clinica and p.rol = 'VETERINARIO' and p.activo;
+  if v_activos > coalesce((v_resultado->>'miembros_max')::int, 999) then
+    raise notice 'La clínica tiene % veterinarios activos y el plan resultante solo incluye %.',
+      v_activos, v_resultado->>'miembros_max';
+  end if;
+
+  return v_resultado;
+end;
+$$;
+
+revoke all on function public.asignar_plan(uuid, text, int, date, boolean, date) from public, anon, authenticated;
+grant execute on function public.asignar_plan(uuid, text, int, date, boolean, date) to service_role;
+
 notify pgrst, 'reload schema';
