@@ -11,6 +11,7 @@ import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../../../core/widgets/status/dosis_estado_chip.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../patients/domain/entities/mascota.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../../patients/presentation/widgets/mascota_foto_avatar.dart';
 import '../../domain/estado_dosis_ui.dart';
@@ -81,6 +82,16 @@ class _MascotaSearchSheetState extends ConsumerState<MascotaSearchSheet> {
     _buscar('');
   }
 
+  /// Verifica el plan (50 pacientes en Gratis, solo lectura) antes de salir
+  /// hacia el alta. Sin `watch`: esta hoja se abre desde Inicio y Agenda y no
+  /// debe suscribirse al plan; si se bloquea, la hoja del límite queda encima
+  /// y la búsqueda sigue disponible.
+  Future<void> _registrarNuevo() async {
+    final ok = await asegurarNuevoPaciente(context, ref);
+    if (!ok || !mounted) return;
+    Navigator.of(context).pop(const _Eleccion.nuevo());
+  }
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -144,8 +155,7 @@ class _MascotaSearchSheetState extends ConsumerState<MascotaSearchSheet> {
               AppButton(
                 label: 'Registrar paciente nuevo',
                 variant: AppButtonVariant.outline,
-                onPressed: () =>
-                    Navigator.of(context).pop(const _Eleccion.nuevo()),
+                onPressed: _registrarNuevo,
               ),
             ],
           ),

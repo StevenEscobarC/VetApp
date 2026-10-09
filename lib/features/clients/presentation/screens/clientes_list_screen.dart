@@ -7,6 +7,8 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../domain/entities/cliente.dart';
 import '../providers/clientes_providers.dart';
 
@@ -17,8 +19,7 @@ class ClientesListScreen extends ConsumerStatefulWidget {
   const ClientesListScreen({super.key});
 
   @override
-  ConsumerState<ClientesListScreen> createState() =>
-      _ClientesListScreenState();
+  ConsumerState<ClientesListScreen> createState() => _ClientesListScreenState();
 }
 
 class _ClientesListScreenState extends ConsumerState<ClientesListScreen> {
@@ -34,6 +35,7 @@ class _ClientesListScreenState extends ConsumerState<ClientesListScreen> {
   Widget build(BuildContext context) {
     final clientesAsync = ref.watch(clientesProvider);
     final query = _searchController.text.trim();
+    final puedeEscribir = ref.watch(puedeEscribirProvider);
 
     return Scaffold(
       appBar: const AppTopBar(title: 'Clientes'),
@@ -64,11 +66,36 @@ class _ClientesListScreenState extends ConsumerState<ClientesListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/clientes/nuevo'),
-        icon: const Icon(Icons.add),
-        label: const Text('Nuevo cliente'),
-      ),
+      floatingActionButton: _botonNuevoCliente(puedeEscribir),
+    );
+  }
+
+  /// "Nuevo cliente": pre-verifica el plan (50 pacientes en Gratis, solo
+  /// lectura) antes de abrir el formulario. En solo lectura conserva lugar,
+  /// variante y tamaño; solo cambia el ícono y la semántica (D-12).
+  Widget _botonNuevoCliente(bool puedeEscribir) {
+    Future<void> abrir() async {
+      final ok = await asegurarNuevoPaciente(
+        context,
+        ref,
+        plan: ref.read(miPlanProvider).value,
+      );
+      if (!ok || !mounted) return;
+      context.push('/clientes/nuevo');
+    }
+
+    final boton = FloatingActionButton.extended(
+      onPressed: abrir,
+      icon: Icon(iconoEscritura(puedeEscribir, Icons.add)),
+      label: const Text('Nuevo cliente'),
+    );
+    if (puedeEscribir) return boton;
+    return Semantics(
+      button: true,
+      label: semanticaEscritura(puedeEscribir, 'Nuevo cliente'),
+      onTap: abrir,
+      excludeSemantics: true,
+      child: boton,
     );
   }
 }

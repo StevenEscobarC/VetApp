@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/utils/telefono_co.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
@@ -14,7 +15,9 @@ import 'package:vetapp/features/patients/domain/entities/mascota.dart';
 import 'package:vetapp/features/patients/domain/mascota_failure.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/fake_fotos.dart';
@@ -34,6 +37,7 @@ Widget _appUnderTest({
   FakeClienteRepository? clienteRepo,
   FakeMascotaFotoDatasource? fotoDatasource,
   Uint8List? fotoCapturada,
+  MiPlan? plan,
 }) {
   return routerHarness(
     initialLocation: '/clientes/nuevo',
@@ -50,6 +54,7 @@ Widget _appUnderTest({
       ),
     ],
     overrides: [
+      ...planOverrides(plan: plan),
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
@@ -60,9 +65,7 @@ Widget _appUnderTest({
       mascotaFotoDatasourceProvider.overrideWithValue(
         fotoDatasource ?? FakeMascotaFotoDatasource(),
       ),
-      capturadorFotoProvider.overrideWithValue(
-        capturadorFalso(fotoCapturada),
-      ),
+      capturadorFotoProvider.overrideWithValue(capturadorFalso(fotoCapturada)),
     ],
   );
 }
@@ -446,9 +449,7 @@ void main() {
                 body: TextButton(
                   onPressed: () async {
                     recibido = await context
-                        .push<({String clienteId, String mascotaId})>(
-                          '/hijo',
-                        );
+                        .push<({String clienteId, String mascotaId})>('/hijo');
                   },
                   child: const Text('ABRIR'),
                 ),
@@ -461,6 +462,7 @@ void main() {
             ),
           ],
           overrides: [
+            ...planOverrides(),
             authProfileProvider.overrideWith(
               () => FakeAuthProfileNotifier(profile: vetProfile),
             ),
@@ -505,43 +507,74 @@ void main() {
     expect(find.text('LISTA'), findsOneWidget);
   });
 
+  testWidgets('si subir la foto falla se muestra el snackbar y de todos modos '
+      'regresa a la lista porque los registros ya se guardaron', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final repo = FakeMascotaRepository();
+    const falla = MascotaFailure('No pudimos subir la foto. Intenta de nuevo.');
+    final fotos = FakeMascotaFotoDatasource(error: falla);
+    await tester.pumpWidget(
+      _appUnderTest(
+        mascotaRepo: repo,
+        fotoDatasource: fotos,
+        fotoCapturada: kFotoPrueba,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byIcon(Icons.camera_alt_outlined));
+    await tester.tap(find.byIcon(Icons.camera_alt_outlined));
+    await tester.pumpAndSettle();
+
+    await _llenarCamposRequeridos(tester);
+
+    await tester.ensureVisible(find.text('Guardar cliente y mascota'));
+    await tester.tap(find.text('Guardar cliente y mascota'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('No pudimos subir la foto. Intenta de nuevo.'),
+      findsOneWidget,
+    );
+    expect(find.text('LISTA'), findsOneWidget);
+  });
+
   testWidgets(
-    'si subir la foto falla se muestra el snackbar y de todos modos '
-    'regresa a la lista porque los registros ya se guardaron',
+    'un MascotaFailure con límite de pacientes abre la hoja explicativa, '
+    'conserva lo escrito y no muestra el mensaje crudo',
     (tester) async {
-      tester.view.physicalSize = const Size(800, 2000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      final repo = FakeMascotaRepository();
       const falla = MascotaFailure(
-        'No pudimos subir la foto. Intenta de nuevo.',
+        'Llegaste a los 50 pacientes del plan Gratis.',
+        limite: LimitePlan.pacientes,
       );
-      final fotos = FakeMascotaFotoDatasource(error: falla);
+      final repo = FakeMascotaRepository(error: falla);
       await tester.pumpWidget(
-        _appUnderTest(
-          mascotaRepo: repo,
-          fotoDatasource: fotos,
-          fotoCapturada: kFotoPrueba,
-        ),
+        _appUnderTest(mascotaRepo: repo, plan: planGratisAlTope),
       );
-      await tester.pumpAndSettle();
-
-      await tester.ensureVisible(find.byIcon(Icons.camera_alt_outlined));
-      await tester.tap(find.byIcon(Icons.camera_alt_outlined));
       await tester.pumpAndSettle();
 
       await _llenarCamposRequeridos(tester);
-
       await tester.ensureVisible(find.text('Guardar cliente y mascota'));
       await tester.tap(find.text('Guardar cliente y mascota'));
       await tester.pumpAndSettle();
 
+      expect(find.text('Llegaste a los 50 pacientes'), findsOneWidget);
+      expect(find.text('50 de 50 pacientes'), findsOneWidget);
       expect(
-        find.text('No pudimos subir la foto. Intenta de nuevo.'),
-        findsOneWidget,
+        find.text('Llegaste a los 50 pacientes del plan Gratis.'),
+        findsNothing,
       );
-      expect(find.text('LISTA'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+
+      await tester.tap(find.text('Ahora no'));
+      await tester.pumpAndSettle();
+      expect(find.text('Datos del dueño'), findsOneWidget);
+      expect(find.text('Rita Gómez'), findsOneWidget);
     },
   );
 }

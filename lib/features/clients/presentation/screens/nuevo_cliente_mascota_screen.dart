@@ -15,6 +15,8 @@ import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../../../core/widgets/media/app_photo_picker.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../../patients/domain/entities/mascota.dart';
 import '../../../patients/domain/mascota_failure.dart';
 import '../../../patients/presentation/providers/mascota_foto_providers.dart';
@@ -162,6 +164,8 @@ class _NuevoClienteMascotaScreenState
       }
 
       if (!mounted) return;
+      // Un paciente más: el contador del plan (tope de Gratis) cambió.
+      ref.invalidate(miPlanProvider);
       ref.read(clientesProvider.notifier).refrescar();
       ref.read(mascotasProvider.notifier).refrescar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -176,6 +180,7 @@ class _NuevoClienteMascotaScreenState
         context.pop();
       }
     } on MascotaFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);
