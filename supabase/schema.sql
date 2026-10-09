@@ -3569,7 +3569,7 @@ create or replace function public.asignar_plan(
   p_plan text,
   p_miembros_max int default null,
   p_pagado_hasta date default null,
-  p_fundador boolean default false,
+  p_fundador boolean default null,
   p_beta_hasta date default null
 )
 returns jsonb
@@ -3623,7 +3623,7 @@ begin
   on conflict (clinica_id) do update
     set plan = excluded.plan,
         miembros_max = excluded.miembros_max,
-        fundador = excluded.fundador,
+        fundador = coalesce(p_fundador, cp.fundador),
         pagado_hasta = excluded.pagado_hasta,
         beta_hasta = excluded.beta_hasta,
         updated_at = now();
