@@ -34,6 +34,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 List<Override> _overrides(
   FakeTeamRepository repo, {
   AuthProfile perfil = vetAdminProfile,
+  FakePlanRepository? planRepo,
 }) {
   SharedPreferences.setMockInitialValues({});
   return [
@@ -43,7 +44,7 @@ List<Override> _overrides(
     teamRepositoryProvider.overrideWithValue(repo),
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
-    ...planOverrides(),
+    planRepositoryProvider.overrideWithValue(planRepo ?? FakePlanRepository()),
   ];
 }
 
@@ -406,8 +407,7 @@ void main() {
         GoRoute(path: '/equipo', builder: (_, _) => const EquipoScreen()),
       ],
       overrides: [
-        ..._overrides(repo),
-        planRepositoryProvider.overrideWithValue(planRepo),
+        ..._overrides(repo, planRepo: planRepo),
         clockProvider.overrideWithValue(() => ahora),
         ...extra,
       ],
@@ -541,7 +541,10 @@ void main() {
         pantalla(repo, FakePlanRepository(plan: planBeta)),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining(' de '), findsNothing);
+      expect(
+        find.textContaining(RegExp(r'\d+ de \d+ veterinarios')),
+        findsNothing,
+      );
       await tester.pumpWidget(
         pantalla(repo, FakePlanRepository(plan: planGratis)),
       );

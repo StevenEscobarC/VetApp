@@ -6,7 +6,14 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
+import '../../../../core/errors/limite_plan.dart';
+import '../../../../core/utils/formato.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/domain/mi_plan.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/limite_plan_sheet.dart';
+import '../../../plan/presentation/widgets/prueba_clinica_sheet.dart';
 import '../../domain/miembro.dart';
 import '../../domain/team_failure.dart';
 import '../providers/team_providers.dart';
@@ -51,20 +58,110 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
     return r ?? false;
   }
 
+  /// Plan de la clínica: el del provider (la pantalla lo observa) y, si no
+  /// hay valor, una lectura directa. `null` si ninguna funciona.
+  Future<MiPlan?> _leerPlan() async {
+    MiPlan? plan;
+    try {
+      plan = await ref.read(miPlanProvider.future);
+    } catch (_) {}
+    if (plan != null) return plan;
+    try {
+      return await ref.read(planRepositoryProvider).miPlan();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _mostrarSinCupo(MiPlan planPrevio) async {
+    MiPlan plan = planPrevio;
+    ref.invalidate(miPlanProvider);
+    try {
+      plan = await ref.read(miPlanProvider.future) ?? planPrevio;
+    } catch (_) {}
+    if (!mounted) return;
+    await mostrarLimitePlanSheet(
+      context,
+      limite: LimitePlan.miembros,
+      plan: plan,
+      esAdmin: true,
+    );
+  }
+
+  Future<void> _avisarPruebaActiva(ScaffoldMessengerState messenger) async {
+    DateTime? hasta;
+    try {
+      await ref.read(invitacionVigenteProvider.future);
+      hasta = (await ref.read(miPlanProvider.future))?.vigenteHasta;
+    } catch (_) {}
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          hasta == null
+              ? 'Código generado'
+              : 'Prueba Clínica activa hasta el ${formatearFecha(hasta)}',
+        ),
+      ),
+    );
+    _verInvitacion();
+  }
+
+  void _verInvitacion() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _invitacionKey.currentContext;
+      if (ctx != null) Scrollable.ensureVisible(ctx);
+    });
+  }
+
+  /// Quita el indicador de carga del botón antes de abrir una hoja.
+  void _soltarBoton() {
+    if (mounted) setState(() => _generando = false);
+  }
+
   Future<void> _generar(bool hayVigente) async {
     if (hayVigente && !await _confirmarReemplazo()) return;
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _generando = true);
     try {
+      // Falla cerrado: sin plan legible no se genera nada, porque el servidor
+      // abriría la prueba Clínica (que se usa una sola vez) sin que el
+      // usuario viera la oferta.
+      final plan = await _leerPlan();
+      if (plan == null) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('No pudimos verificar tu plan. Intenta de nuevo.'),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+      if (plan.pruebaClinicaDisponible) {
+        _soltarBoton();
+        final r = await mostrarPruebaClinicaSheet(
+          context,
+          miembros: plan.pruebaClinicaMiembros,
+          activar: () => ref.read(teamActionsProvider).generarInvitacion(),
+        );
+        if (r == true) {
+          await _avisarPruebaActiva(messenger);
+        } else if (r == false) {
+          await _mostrarSinCupo(plan);
+        }
+        return;
+      }
+      if (plan.sinCupoMiembros) {
+        _soltarBoton();
+        await _mostrarSinCupo(plan);
+        return;
+      }
       await ref.read(teamActionsProvider).generarInvitacion();
       await ref.read(invitacionVigenteProvider.future);
       messenger.showSnackBar(const SnackBar(content: Text('Código generado')));
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final ctx = _invitacionKey.currentContext;
-        if (ctx != null) Scrollable.ensureVisible(ctx);
-      });
+      _verInvitacion();
     } on TeamFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       messenger.showSnackBar(
@@ -86,6 +183,9 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
     final esAdmin = perfil?.esAdmin ?? false;
     final invitacion = esAdmin ? ref.watch(invitacionVigenteProvider) : null;
     final vigente = invitacion?.value;
+    // Observado para que el futuro esté vivo cuando _generar lo lee.
+    final plan = esAdmin ? ref.watch(miPlanProvider).value : null;
+    final cupos = plan?.miembrosMax;
 
     Widget body;
     if (team.hasError && !team.hasValue) {
@@ -241,13 +341,27 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
               top: false,
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
-                child: AppButton(
-                  label: vigente != null
-                      ? 'Generar código nuevo'
-                      : 'Invitar veterinario',
-                  icon: Icons.person_add_alt_outlined,
-                  isLoading: _generando,
-                  onPressed: () => _generar(vigente != null),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppButton(
+                      label: vigente != null
+                          ? 'Generar código nuevo'
+                          : 'Invitar veterinario',
+                      icon: Icons.person_add_alt_outlined,
+                      isLoading: _generando,
+                      onPressed: () => _generar(vigente != null),
+                    ),
+                    if (plan != null && cupos != null && cupos >= 2) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        '${plan.veterinariosActivos} de $cupos veterinarios',
+                        style: textTheme.labelMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),

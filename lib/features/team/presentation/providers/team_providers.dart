@@ -4,6 +4,7 @@ import '../../../../core/data/supabase_client_provider.dart';
 import '../../../../core/data/clock_provider.dart';
 import '../../../appointments/presentation/providers/citas_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../data/repositories/supabase_team_repository.dart';
 import '../../domain/invitacion.dart';
 import '../../domain/miembro.dart';
@@ -62,6 +63,8 @@ class TeamActions {
   Future<Invitacion> generarInvitacion() async {
     final inv = await _ref.read(teamRepositoryProvider).generarInvitacion();
     _ref.invalidate(invitacionVigenteProvider);
+    // El servidor puede haber abierto la prueba Clínica en esta misma llamada.
+    _ref.invalidate(miPlanProvider);
     return inv;
   }
 
@@ -105,10 +108,13 @@ class TeamActions {
     _ref.invalidate(teamProvider);
     _ref.invalidate(agendaSemanaProvider);
     _ref.invalidate(authProfileProvider);
+    _ref.invalidate(miPlanProvider);
   }
 
   void _refrescar(String miembroId) {
     _ref.invalidate(teamProvider);
+    // Los cupos cambian al retirar o reactivar veterinarios.
+    _ref.invalidate(miPlanProvider);
     _ref.invalidate(agendaSemanaProvider);
     _ref.read(citasRevisionProvider.notifier).incrementar();
     if (_ref.read(authProfileProvider).value?.id == miembroId) {
