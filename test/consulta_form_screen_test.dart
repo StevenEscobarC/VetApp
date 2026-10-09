@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
@@ -17,6 +18,7 @@ import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_consultas.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/router_harness.dart';
 
 /// Field order rendered by [ConsultaFormScreen]: Diagnóstico (0), Tratamiento
@@ -55,6 +57,7 @@ Widget _appUnderTest({
       ),
     ],
     overrides: [
+      ...planOverrides(),
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
@@ -308,6 +311,60 @@ void main() {
       expect(find.text('Nueva consulta'), findsOneWidget);
     },
   );
+  testWidgets(
+    'LP004 del servidor (bandera vencida) abre la hoja de solo lectura, '
+    'conserva lo escrito y no muestra el mensaje crudo',
+    (tester) async {
+      const falla = ConsultaFailure(
+        'Tu cuenta está en solo lectura. Pide al administrador que active '
+        'el plan.',
+        limite: LimitePlan.soloLectura,
+      );
+      final repo = FakeConsultaRepository(error: falla);
+      await tester.pumpWidget(_appUnderTest(repo: repo));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoDiagnostico),
+        'Otitis',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoTratamiento),
+        'Gotas',
+      );
+      await tester.pump();
+
+      await tester.ensureVisible(find.text('Guardar consulta'));
+      await tester.tap(find.text('Guardar consulta'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.textContaining('Pide al administrador'), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(_campoDiagnostico))
+            .controller!
+            .text,
+        'Otitis',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(_campoTratamiento))
+            .controller!
+            .text,
+        'Gotas',
+      );
+      // El botón vuelve a quedar disponible (el guardado terminó).
+      expect(
+        tester
+            .widget<AppButton>(find.widgetWithText(AppButton, 'Guardar consulta'))
+            .isLoading,
+        isFalse,
+      );
+    },
+  );
+
   testWidgets(
     'con citaId: pill de la cita, anamnesis precargada editable y citaId '
     'enviado al guardar',

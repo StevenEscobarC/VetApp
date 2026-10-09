@@ -26,6 +26,7 @@ import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_recordatorios.dart';
 import 'helpers/fake_team.dart';
 import 'helpers/fake_vacunas.dart';
@@ -74,6 +75,7 @@ Widget _app() {
   return ProviderScope(
     retry: (retryCount, error) => null,
     overrides: [
+      ...planOverrides(),
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),

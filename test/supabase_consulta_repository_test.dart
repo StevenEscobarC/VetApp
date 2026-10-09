@@ -27,6 +27,27 @@ void main() {
     });
   });
 
+  group('mensajeErrorConsulta con límites del plan', () {
+    test('LP004 (code) -> mensaje de solo lectura', () {
+      expect(
+        mensajeErrorConsulta(
+          const PostgrestException(message: 'x', code: 'LP004'),
+        ),
+        'Tu cuenta está en solo lectura. Pide al administrador que active el '
+        'plan.',
+      );
+    });
+
+    test('LP004 llegando como P0001 con hint -> mensaje de solo lectura', () {
+      expect(
+        mensajeErrorConsulta(
+          const PostgrestException(message: 'x', code: 'P0001', hint: 'LP004'),
+        ),
+        contains('solo lectura'),
+      );
+    });
+  });
+
   group('mensajeErrorConsulta', () {
     test('cita que no admite consultas (23514)', () {
       expect(

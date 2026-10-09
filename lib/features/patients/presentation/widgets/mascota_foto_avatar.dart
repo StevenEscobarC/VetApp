@@ -17,6 +17,7 @@ class MascotaFotoAvatar extends ConsumerWidget {
     this.isUploading = false,
     this.onTomarFoto,
     this.onElegirGaleria,
+    this.bloqueado = false,
   });
 
   final String? fotoPath;
@@ -24,6 +25,9 @@ class MascotaFotoAvatar extends ConsumerWidget {
   final bool isUploading;
   final VoidCallback? onTomarFoto;
   final VoidCallback? onElegirGaleria;
+
+  /// Solo lectura: ver [AppPhotoPicker.bloqueado].
+  final bool bloqueado;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -48,6 +52,7 @@ class MascotaFotoAvatar extends ConsumerWidget {
       isUploading: isUploading,
       onTomarFoto: onTomarFoto,
       onElegirGaleria: onElegirGaleria,
+      bloqueado: bloqueado,
     );
   }
 }

@@ -15,6 +15,7 @@ class FakeClienteRepository implements SupabaseClienteRepository {
     this.error,
     CodigoVinculacion? codigoResultado,
     this.errorCodigo,
+    this.errorActualizar,
   }) : clientes = List.of(clientes),
        codigoResultado =
            codigoResultado ??
@@ -34,6 +35,9 @@ class FakeClienteRepository implements SupabaseClienteRepository {
   /// Si se establece, [generarCodigoVinculacion] lo lanza en vez de devolver
   /// [codigoResultado].
   final Object? errorCodigo;
+
+  /// Si se establece, [actualizar] lo lanza (los demás métodos siguen bien).
+  final Object? errorActualizar;
 
   /// (query, clinicaId) pairs, in call order.
   final List<(String, String)> busquedas = [];
@@ -74,6 +78,7 @@ class FakeClienteRepository implements SupabaseClienteRepository {
   @override
   Future<Cliente> actualizar(Cliente cliente) async {
     if (error != null) throw error!;
+    if (errorActualizar != null) throw errorActualizar!;
     actualizados.add(cliente);
     final index = clientes.indexWhere((c) => c.id == cliente.id);
     if (index != -1) clientes[index] = cliente;

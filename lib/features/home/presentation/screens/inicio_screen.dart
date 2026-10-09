@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,9 @@ import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../../plan/presentation/widgets/plan_banner.dart';
 import '../../../vaccination/presentation/widgets/mascota_search_sheet.dart';
 import '../../../vaccination/presentation/widgets/vacunas_pendientes_card.dart';
@@ -18,9 +23,22 @@ import '../../../vaccination/presentation/widgets/vacunas_pendientes_card.dart';
 class InicioScreen extends ConsumerWidget {
   const InicioScreen({super.key});
 
+  Future<void> _vacunar(BuildContext context, WidgetRef ref) async {
+    if (!await asegurarEscritura(
+      context,
+      ref,
+      plan: ref.read(miPlanProvider).value,
+    )) {
+      return;
+    }
+    if (!context.mounted) return;
+    unawaited(showMascotaSearchSheet(context));
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(authProfileProvider);
+    final puedeEscribir = ref.watch(puedeEscribirProvider);
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
@@ -70,10 +88,18 @@ class InicioScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.md),
               const VacunasPendientesCard(),
               const SizedBox(height: AppSpacing.md),
-              AppButton(
+              // Solo lectura: conserva lugar, acento y tamaño; el ícono pasa a
+              // candado y el toque abre la hoja explicativa en vez del
+              // buscador (D-12). Registrar una dosis es una escritura.
+              ControlEscritura(
+                puedeEscribir: puedeEscribir,
                 label: 'Vacunar',
-                icon: Icons.vaccines_outlined,
-                onPressed: () => showMascotaSearchSheet(context),
+                onTap: () => _vacunar(context, ref),
+                child: AppButton(
+                  label: 'Vacunar',
+                  icon: iconoEscritura(puedeEscribir, Icons.vaccines_outlined),
+                  onPressed: () => _vacunar(context, ref),
+                ),
               ),
             ],
           );

@@ -6,8 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/utils/captura_foto.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
+import 'package:vetapp/core/widgets/media/app_photo_picker.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clinical_history/data/services/historia_clinica_pdf_service.dart';
 import 'package:vetapp/features/clinical_history/domain/consulta_failure.dart';
@@ -16,11 +18,13 @@ import 'package:vetapp/features/clinical_history/presentation/providers/historia
 import 'package:vetapp/features/clinical_history/presentation/screens/consulta_form_screen.dart';
 import 'package:vetapp/features/clinical_history/presentation/widgets/historia_clinica_timeline.dart';
 import 'package:vetapp/features/patients/domain/entities/peso_registro.dart';
+import 'package:vetapp/features/patients/domain/mascota_failure.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/features/patients/presentation/screens/mascota_detail_screen.dart';
 import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
 import 'package:vetapp/features/vaccination/domain/entities/protocolo.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 
 import 'helpers/fake_auth.dart';
@@ -28,6 +32,7 @@ import 'helpers/fake_consultas.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/fake_pdf.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
@@ -122,6 +127,7 @@ Widget _appUnderTest({
   CompartirPdfFalso? compartir,
   String initialLocation = '/pacientes/m-1',
   bool formularioReal = false,
+  MiPlan? plan,
 }) {
   return routerHarness(
     initialLocation: initialLocation,
@@ -165,6 +171,7 @@ Widget _appUnderTest({
       ),
     ],
     overrides: [
+      ...planOverrides(plan: plan),
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
@@ -880,4 +887,266 @@ void main() {
       expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
     },
   );
+
+  group('solo lectura (colega sin plan vigente)', () {
+    const hoja = 'Tu cuenta está en solo lectura';
+
+    void pantallaAlta(WidgetTester tester) {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    Finder candadoEn(String etiqueta) => find.descendant(
+      of: find.widgetWithText(AppButton, etiqueta),
+      matching: find.byIcon(Icons.lock_outline),
+    );
+
+    for (final etiqueta in [
+      'Editar',
+      'Registrar peso',
+      'Nueva consulta',
+      'Agendar cita',
+    ]) {
+      testWidgets(
+        '"$etiqueta" muestra candado, semántica bloqueada y abre la hoja '
+        'sin navegar',
+        (tester) async {
+          final semantics = tester.ensureSemantics();
+          pantallaAlta(tester);
+          final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+          await tester.pumpWidget(
+            _appUnderTest(repo: repo, plan: planSoloLectura),
+          );
+          await tester.pumpAndSettle();
+
+          final boton = find.widgetWithText(AppButton, etiqueta);
+          final original = tester.widget<AppButton>(boton);
+          expect(candadoEn(etiqueta), findsOneWidget);
+          expect(
+            tester.getSemantics(boton).label,
+            contains('bloqueado, solo lectura'),
+          );
+
+          await tester.ensureVisible(boton);
+          await tester.tap(boton);
+          await tester.pumpAndSettle();
+
+          expect(find.text(hoja), findsOneWidget);
+          expect(find.text('FORM CONSULTA m-1'), findsNothing);
+          expect(find.textContaining('nueva-cita'), findsNothing);
+          expect(find.text('Paciente'), findsOneWidget);
+          // Conserva variante y tamaño: solo cambia el ícono.
+          expect(tester.widget<AppButton>(boton).variant, original.variant);
+          expect(tester.widget<AppButton>(boton).expand, original.expand);
+          semantics.dispose();
+        },
+      );
+    }
+
+    testWidgets('"Registrar peso" en solo lectura no abre la hoja de peso', (
+      tester,
+    ) async {
+      pantallaAlta(tester);
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      await tester.pumpWidget(_appUnderTest(repo: repo, plan: planSoloLectura));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Registrar peso'));
+      await tester.tap(find.text('Registrar peso'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(hoja), findsOneWidget);
+      expect(find.text('Peso (kg)'), findsNothing);
+    });
+
+    testWidgets(
+      'con plan Beta ningún control lleva candado y todo funciona como antes',
+      (tester) async {
+        pantallaAlta(tester);
+        final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+        await tester.pumpWidget(_appUnderTest(repo: repo, plan: planBeta));
+        await tester.pumpAndSettle();
+
+        expect(find.byIcon(Icons.lock_outline), findsNothing);
+        expect(find.byIcon(Icons.camera_alt_outlined), findsOneWidget);
+
+        await tester.ensureVisible(find.text('Nueva consulta'));
+        await tester.tap(find.text('Nueva consulta'));
+        await tester.pumpAndSettle();
+        expect(find.text('FORM CONSULTA m-1'), findsOneWidget);
+        expect(find.text(hoja), findsNothing);
+      },
+    );
+
+    testWidgets('tocar la foto abre la hoja en vez de la captura', (
+      tester,
+    ) async {
+      pantallaAlta(tester);
+      var capturas = 0;
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final fotos = FakeMascotaFotoDatasource();
+      await tester.pumpWidget(
+        _appUnderTest(
+          repo: repo,
+          fotos: fotos,
+          plan: planSoloLectura,
+          capturador: (context, fuente) async {
+            capturas++;
+            return kFotoPrueba;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // El badge de cámara pasa a candado (conserva su lugar).
+      expect(find.byIcon(Icons.camera_alt_outlined), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(AppPhotoPicker),
+          matching: find.byIcon(Icons.lock_outline),
+        ),
+        findsWidgets,
+      );
+
+      await tester.tap(find.byType(InkWell).first);
+      await tester.pumpAndSettle();
+
+      expect(find.text(hoja), findsOneWidget);
+      expect(capturas, 0);
+      expect(fotos.uploads, isEmpty);
+    });
+
+    testWidgets('"Elegir de galería" en solo lectura abre la hoja y no captura', (
+      tester,
+    ) async {
+      pantallaAlta(tester);
+      var capturas = 0;
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      await tester.pumpWidget(
+        _appUnderTest(
+          repo: repo,
+          plan: planSoloLectura,
+          capturador: (context, fuente) async {
+            capturas++;
+            return kFotoPrueba;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Elegir de galería'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(hoja), findsOneWidget);
+      expect(capturas, 0);
+    });
+
+    testWidgets('Exportar historia clínica a PDF sigue funcionando', (
+      tester,
+    ) async {
+      pantallaAlta(tester);
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: consultasRocky);
+      final compartir = CompartirPdfFalso();
+      await tester.pumpWidget(
+        _appUnderTest(
+          repo: repo,
+          consultaRepo: consultaRepo,
+          compartir: compartir,
+          plan: planSoloLectura,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
+      await tester.tap(find.byTooltip('Exportar historia clínica a PDF'));
+      await tester.pumpAndSettle();
+
+      expect(compartir.llamadas, hasLength(1));
+      expect(find.text(hoja), findsNothing);
+    });
+
+    testWidgets('la historia clínica se puede leer y expandir', (tester) async {
+      pantallaAlta(tester);
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: consultasRocky);
+      await tester.pumpWidget(
+        _appUnderTest(
+          repo: repo,
+          consultaRepo: consultaRepo,
+          plan: planSoloLectura,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Otitis externa'));
+      await tester.tap(find.text('Otitis externa'));
+      await tester.pumpAndSettle();
+      expect(find.text('Se rasca la oreja derecha'), findsOneWidget);
+      expect(find.text(hoja), findsNothing);
+    });
+
+    testWidgets(
+      'LP004 al guardar el peso (bandera vencida) abre la hoja de solo '
+      'lectura',
+      (tester) async {
+        pantallaAlta(tester);
+        final repo = FakeMascotaRepository(
+          mascotas: [mascotaRocky],
+          errorRegistrarPeso: const MascotaFailure(
+            'Tu cuenta está en solo lectura. Pide al administrador que '
+            'active el plan.',
+            limite: LimitePlan.soloLectura,
+          ),
+        );
+        await tester.pumpWidget(_appUnderTest(repo: repo, plan: planBeta));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.text('Registrar peso'));
+        await tester.tap(find.text('Registrar peso'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextFormField), '13,2');
+        await tester.tap(find.text('Guardar'));
+        await tester.pumpAndSettle();
+
+        expect(find.text(hoja), findsOneWidget);
+        expect(find.textContaining('Pide al administrador'), findsNothing);
+        expect(repo.pesosRegistrados, hasLength(1));
+      },
+    );
+
+    testWidgets(
+      'LP004 al cambiar la foto (bandera vencida) abre la hoja y no muestra '
+      'el snackbar de error',
+      (tester) async {
+        pantallaAlta(tester);
+        final repo = FakeMascotaRepository(
+          mascotas: [mascotaRocky],
+          errorActualizarFoto: const MascotaFailure(
+            'Tu cuenta está en solo lectura. Pide al administrador que '
+            'active el plan.',
+            limite: LimitePlan.soloLectura,
+          ),
+        );
+        await tester.pumpWidget(
+          _appUnderTest(
+            repo: repo,
+            plan: planBeta,
+            capturador: capturadorFalso(kFotoPrueba),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byIcon(Icons.camera_alt_outlined));
+        await tester.pumpAndSettle();
+
+        expect(find.text(hoja), findsOneWidget);
+        expect(
+          find.text('No pudimos subir la foto. Intenta de nuevo.'),
+          findsNothing,
+        );
+      },
+    );
+  });
 }

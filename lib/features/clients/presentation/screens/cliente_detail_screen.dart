@@ -13,6 +13,7 @@ import '../../../patients/domain/entities/mascota.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../domain/cliente_failure.dart';
 import '../../domain/entities/cliente.dart';
 import '../providers/clientes_providers.dart';
@@ -111,6 +112,14 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
   Future<void> _guardar() async {
     final original = _original;
     if (original == null) return;
+    if (!await asegurarEscritura(
+      context,
+      ref,
+      plan: ref.read(miPlanProvider).value,
+    )) {
+      return;
+    }
+    if (!mounted) return;
 
     setState(() {
       _loading = true;
@@ -150,6 +159,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
         context,
       ).showSnackBar(const SnackBar(content: Text('Cambios guardados')));
     } on ClienteFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -240,11 +250,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-          AppButton(
-            label: 'Guardar cambios',
-            onPressed: _puedeGuardar ? _guardar : null,
-            isLoading: _loading,
-          ),
+          _botonGuardar(context),
           const SizedBox(height: AppSpacing.xl),
           Text('Mascotas', style: textTheme.titleMedium),
           const SizedBox(height: AppSpacing.md),
@@ -268,6 +274,30 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           _buildVinculacionRow(context, cliente),
         ],
       ),
+    );
+  }
+
+  /// "Guardar cambios": único CTA con acento. En solo lectura conserva lugar,
+  /// variante y tamaño; cambia el ícono por el candado, queda siempre
+  /// tocable (no hay botones muertos) y al tocarlo abre la hoja de solo
+  /// lectura sin llamar a `actualizar` (D-12).
+  Widget _botonGuardar(BuildContext context) {
+    final puedeEscribir = ref.watch(puedeEscribirProvider);
+
+    Future<void> explicar() =>
+        asegurarEscritura(context, ref, plan: ref.read(miPlanProvider).value);
+
+    final boton = AppButton(
+      label: 'Guardar cambios',
+      icon: puedeEscribir ? null : iconoEscritura(puedeEscribir, Icons.save),
+      onPressed: puedeEscribir ? (_puedeGuardar ? _guardar : null) : explicar,
+      isLoading: _loading,
+    );
+    return ControlEscritura(
+      puedeEscribir: puedeEscribir,
+      label: 'Guardar cambios',
+      onTap: explicar,
+      child: boton,
     );
   }
 
