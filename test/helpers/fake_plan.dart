@@ -6,7 +6,7 @@ import 'package:vetapp/features/plan/presentation/providers/plan_providers.dart'
 /// In-memory [SupabasePlanRepository] stand-in; [error] is thrown by
 /// [miPlan] so tests can exercise the error branch. [llamadas] counts reads.
 class FakePlanRepository implements SupabasePlanRepository {
-  FakePlanRepository({this.plan = planBeta, this.error});
+  FakePlanRepository({MiPlan? plan, this.error}) : plan = plan ?? planBeta;
 
   MiPlan plan;
   Object? error;
@@ -163,6 +163,6 @@ final MiPlan planSoloLectura = MiPlan(
 /// Overrides listos para cualquier test que renderice algo que lea el plan.
 List<Override> planOverrides({MiPlan? plan, Object? error}) => [
   planRepositoryProvider.overrideWithValue(
-    FakePlanRepository(plan: plan ?? planBeta, error: error),
+    FakePlanRepository(plan: plan, error: error),
   ),
 ];

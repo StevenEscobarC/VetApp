@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
@@ -144,10 +145,10 @@ void main() {
       expect((i.texto, i.estilo), ('Prueba Pro · 12 días', EstiloPlan.prueba));
 
       i = insigniaPlan(planClinicaTrial.copyWith(diasRestantes: 3));
-      expect((i.texto, i.estilo), (
-        'Prueba Clínica · 3 días',
-        EstiloPlan.alerta,
-      ));
+      expect(
+        (i.texto, i.estilo),
+        ('Prueba Clínica · 3 días', EstiloPlan.alerta),
+      );
 
       i = insigniaPlan(planProTrial.copyWith(diasRestantes: 0));
       expect(i.texto, 'Prueba Pro · último día');
@@ -279,37 +280,51 @@ void main() {
       expect(repo.llamadas, 0);
     });
 
-    test('miPlanProvider reads the repository once for an active vet', () async {
-      final repo = FakePlanRepository(plan: planGratis);
-      final c = _container(
-        perfil: vetAdminProfile,
-        extra: [planRepositoryProvider.overrideWithValue(repo)],
-      );
-      expect(await c.read(miPlanProvider.future), planGratis);
-      expect(repo.llamadas, 1);
-    });
+    test(
+      'miPlanProvider reads the repository once for an active vet',
+      () async {
+        final repo = FakePlanRepository(plan: planGratis);
+        final c = _container(
+          perfil: vetAdminProfile,
+          extra: [planRepositoryProvider.overrideWithValue(repo)],
+        );
+        expect(await c.read(miPlanProvider.future), planGratis);
+        expect(repo.llamadas, 1);
+      },
+    );
 
-    test('miPlanProvider is null when the repository cannot be built', () async {
-      final c = _container(
-        perfil: vetAdminProfile,
-        extra: [
-          planRepositoryProvider.overrideWith((ref) => throw StateError('sin')),
-        ],
-      );
-      expect(await c.read(miPlanProvider.future), isNull);
-    });
+    test(
+      'miPlanProvider is null when the repository cannot be built',
+      () async {
+        final c = _container(
+          perfil: vetAdminProfile,
+          extra: [
+            planRepositoryProvider.overrideWith(
+              (ref) => throw StateError('sin'),
+            ),
+          ],
+        );
+        expect(await c.read(miPlanProvider.future), isNull);
+      },
+    );
 
-    test('RPC errors stay AsyncError and puedeEscribir defaults to true', () async {
-      final repo = FakePlanRepository(error: const PlanFailure('x'));
-      final c = _container(
-        perfil: vetAdminProfile,
-        extra: [planRepositoryProvider.overrideWithValue(repo)],
-      );
-      c.listen(miPlanProvider, (_, _) {});
-      await expectLater(c.read(miPlanProvider.future), throwsA(isA<PlanFailure>()));
-      expect(c.read(miPlanProvider).hasError, isTrue);
-      expect(c.read(puedeEscribirProvider), isTrue);
-    });
+    test(
+      'RPC errors stay AsyncError and puedeEscribir defaults to true',
+      () async {
+        final repo = FakePlanRepository(error: const PlanFailure('x'));
+        final c = _container(
+          perfil: vetAdminProfile,
+          extra: [planRepositoryProvider.overrideWithValue(repo)],
+        );
+        c.listen(miPlanProvider, (_, _) {});
+        await expectLater(
+          c.read(miPlanProvider.future),
+          throwsA(isA<PlanFailure>()),
+        );
+        expect(c.read(miPlanProvider).hasError, isTrue);
+        expect(c.read(puedeEscribirProvider), isTrue);
+      },
+    );
 
     test('puedeEscribirProvider follows the server flag', () async {
       final c = _container(
