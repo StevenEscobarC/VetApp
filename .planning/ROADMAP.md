@@ -295,14 +295,14 @@ Plans:
   4. Ningún usuario puede cambiar su plan; el dueño del producto activa/renueva planes con `asignar_plan` (solo service_role), incluido Fundador; clínicas existentes quedan en Beta
   5. Mi plan muestra plan, vigencia y contadores, con contacto por WhatsApp de soporte solo para admin y sin precios ni pago; banners al 80 %/últimos 7 días y hojas explicativas al tocar una acción limitada
 **Depends on:** Phase 5
-**Plans:** 11 plans
+**Plans:** 2/11 plans executed
 **UI hint**: yes
 
 Plans:
 **Wave 1**
 
-- [ ] 05.1-01-PLAN.md — Delta SQL Fase 5.1: clinica_planes, _plan_efectivo (fuente única), backfill Beta, prueba Pro al alta, mi_plan/puede_escribir, triggers LP001..LP004, prueba Clínica en invitaciones, logo oculto en el carné, asignar_plan solo service_role
-- [ ] 05.1-02-PLAN.md — Mi plan: contrato Dart (MiPlan, repositorio, providers, fake), pantalla /mas/plan y fila con insignia en Más
+- [x] 05.1-01-PLAN.md — Delta SQL Fase 5.1: clinica_planes, _plan_efectivo (fuente única), backfill Beta, prueba Pro al alta, mi_plan/puede_escribir, triggers LP001..LP004, prueba Clínica en invitaciones, logo oculto en el carné, asignar_plan solo service_role
+- [x] 05.1-02-PLAN.md — Mi plan: contrato Dart (MiPlan, repositorio, providers, fake), pantalla /mas/plan y fila con insignia en Más
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
