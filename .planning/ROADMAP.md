@@ -295,7 +295,7 @@ Plans:
   4. Ningún usuario puede cambiar su plan; el dueño del producto activa/renueva planes con `asignar_plan` (solo service_role), incluido Fundador; clínicas existentes quedan en Beta
   5. Mi plan muestra plan, vigencia y contadores, con contacto por WhatsApp de soporte solo para admin y sin precios ni pago; banners al 80 %/últimos 7 días y hojas explicativas al tocar una acción limitada
 **Depends on:** Phase 5
-**Plans:** 2/11 plans executed
+**Plans:** 8/11 plans executed
 **UI hint**: yes
 
 Plans:
@@ -307,19 +307,19 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [ ] 05.1-03-PLAN.md — [BLOCKING] Aplicar el delta en vivo (MCP) y correr los 193 checks existentes sin cambios
-- [ ] 05.1-04-PLAN.md — Límite de 50 pacientes: mapeo LP00x, hoja explicativa, gate de acciones y candado de solo lectura en altas
-- [ ] 05.1-05-PLAN.md — Contacto por WhatsApp de soporte (solo admin, sin precios) y banner de Inicio (80 %, últimos 7 días, Beta con fecha, gracia, solo lectura)
+- [x] 05.1-04-PLAN.md — Límite de 50 pacientes: mapeo LP00x, hoja explicativa, gate de acciones y candado de solo lectura en altas
+- [x] 05.1-05-PLAN.md — Contacto por WhatsApp de soporte (solo admin, sin precios) y banner de Inicio (80 %, últimos 7 días, Beta con fecha, gracia, solo lectura)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 05.1-06-PLAN.md — Smoke R1..R45 (238 checks) + sondas + [BLOCKING] pegar smoke en vivo
-- [ ] 05.1-07-PLAN.md — Prueba Clínica 30 días al generar el primer código y cupos en Equipo
-- [ ] 05.1-08-PLAN.md — Logo y protocolos propios en Gratis: avisos, hojas y "Guardar en mi catálogo"
-- [ ] 05.1-09-PLAN.md — Solo lectura de colegas: ficha, historia clínica, carné e Inicio
+- [x] 05.1-07-PLAN.md — Prueba Clínica 30 días al generar el primer código y cupos en Equipo
+- [x] 05.1-08-PLAN.md — Logo y protocolos propios en Gratis: avisos, hojas y "Guardar en mi catálogo"
+- [x] 05.1-09-PLAN.md — Solo lectura de colegas: ficha, historia clínica, carné e Inicio
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 05.1-10-PLAN.md — Solo lectura de colegas en la agenda y tope de pacientes desde el formulario de cita
+- [x] 05.1-10-PLAN.md — Solo lectura de colegas en la agenda y tope de pacientes desde el formulario de cita
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
