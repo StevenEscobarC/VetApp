@@ -2,14 +2,17 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clinic/domain/clinica.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/clinic/domain/clinica_failure.dart';
 import 'package:vetapp/features/clinic/presentation/providers/clinica_providers.dart';
 import 'package:vetapp/features/clinic/presentation/providers/datos_clinica_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_clinica.dart';
+import 'helpers/fake_plan.dart';
 
 const _conLogo = Clinica(
   id: 'cli-1',
@@ -25,7 +28,7 @@ const _conLogo = Clinica(
   FakeClinicaRepository repo,
   FakeClinicaLogoDatasource logos,
 })
-_armar(Clinica clinica, {ClinicaFailure? error}) {
+_armar(Clinica clinica, {ClinicaFailure? error, Object? errorPlan, MiPlan? planActual}) {
   final repo = FakeClinicaRepository(clinica: clinica, error: error);
   final logos = FakeClinicaLogoDatasource();
   final c = ProviderContainer(
@@ -35,6 +38,7 @@ _armar(Clinica clinica, {ClinicaFailure? error}) {
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
+      ...planOverrides(plan: planActual, error: errorPlan),
     ],
   );
   addTearDown(c.dispose);
@@ -161,5 +165,60 @@ void main() {
           quitarLogo: true,
         );
     expect(r.logoPath, isNull);
+  });
+
+  test('logo nuevo con plan Gratis falla con LP003 sin subir nada', () async {
+    final t = _armar(_conLogo, planActual: planGratis);
+    await expectLater(
+      t.c
+          .read(guardarDatosClinicaProvider)
+          .call(
+            actual: _conLogo,
+            nombre: 'A',
+            ciudad: '',
+            direccion: '',
+            telefono: '',
+            nuevoLogo: bytes,
+          ),
+      throwsA(
+        isA<ClinicaFailure>().having(
+          (e) => e.limite,
+          'limite',
+          LimitePlan.funcion,
+        ),
+      ),
+    );
+    expect(t.logos.subidas, isEmpty);
+    expect(t.repo.llamadasActualizar, isEmpty);
+  });
+
+  test('logo nuevo con la lectura del plan fallida sigue como antes', () async {
+    final t = _armar(_conLogo, errorPlan: Exception('sin red'));
+    await t.c
+        .read(guardarDatosClinicaProvider)
+        .call(
+          actual: _conLogo,
+          nombre: 'A',
+          ciudad: '',
+          direccion: '',
+          telefono: '',
+          nuevoLogo: bytes,
+        );
+    expect(t.logos.subidas, hasLength(1));
+  });
+
+  test('quitar logo en Gratis no consulta el plan ni se bloquea', () async {
+    final t = _armar(_conLogo, planActual: planGratis);
+    await t.c
+        .read(guardarDatosClinicaProvider)
+        .call(
+          actual: _conLogo,
+          nombre: 'A',
+          ciudad: '',
+          direccion: '',
+          telefono: '',
+          quitarLogo: true,
+        );
+    expect(t.repo.llamadasActualizar.single['logoPath'], isNull);
   });
 }
