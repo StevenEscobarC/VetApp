@@ -10,6 +10,9 @@ import '../../../../core/widgets/cards/app_card.dart';
 import '../../../appointments/presentation/providers/recordatorios_providers.dart';
 import '../../../appointments/presentation/screens/recordatorios_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../plan/presentation/plan_textos.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/plan_insignia.dart';
 import '../../../team/presentation/providers/team_providers.dart';
 
 /// Sign-out lives here (no confirmation dialog — out of scope per
@@ -27,6 +30,8 @@ class MasScreen extends ConsumerWidget {
         ?.where((m) => m.activo)
         .length;
     final matricula = ref.watch(authProfileProvider).value?.matricula;
+    final plan = ref.watch(miPlanProvider).value;
+    final insignia = plan == null ? null : insigniaPlan(plan);
     return Scaffold(
       appBar: const AppTopBar(title: 'Más'),
       body: SingleChildScrollView(
@@ -104,6 +109,41 @@ class MasScreen extends ConsumerWidget {
                     ),
                     const Icon(Icons.chevron_right),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Semantics(
+              label: insignia == null
+                  ? 'Mi plan'
+                  : 'Mi plan, ${insignia.texto}',
+              excludeSemantics: true,
+              button: true,
+              child: AppCard(
+                onTap: () => context.push('/mas/plan'),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 56),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.workspace_premium_outlined),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'Mi plan',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
+                      if (insignia != null)
+                        Flexible(
+                          child: PlanInsignia(
+                            compacta: true,
+                            texto: insignia.texto,
+                            estilo: insignia.estilo,
+                          ),
+                        ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
                 ),
               ),
             ),

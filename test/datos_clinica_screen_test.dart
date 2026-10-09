@@ -26,6 +26,7 @@ import 'helpers/fake_citas.dart';
 import 'helpers/fake_clinica.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_recordatorios.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_team.dart';
 import 'helpers/router_harness.dart';
 
@@ -55,6 +56,7 @@ List<Override> _overrides(
     ),
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
+    ...planOverrides(),
   ];
 }
 

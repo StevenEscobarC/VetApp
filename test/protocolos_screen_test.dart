@@ -16,6 +16,7 @@ import 'package:vetapp/features/vaccination/presentation/providers/vacuna_provid
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_recordatorios.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_team.dart';
 import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
@@ -90,6 +91,7 @@ List<Override> _overrides(
     ),
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
+    ...planOverrides(),
   ];
 }
 
