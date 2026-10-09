@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/utils/telefono_co.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
@@ -401,6 +402,101 @@ void main() {
       expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
       expect(find.text('NUEVA MASCOTA'), findsNothing);
       semantics.dispose();
+    });
+
+    testWidgets('en solo lectura "Guardar cambios" muestra candado, abre la '
+        'hoja y no llama actualizar (aunque no haya cambios)', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final repo = FakeClienteRepository(clientes: [clienteRita, clientePedro]);
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _appUnderTest(plan: planSoloLectura, clienteRepo: repo),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Guardar cambios'));
+
+      final boton = find.widgetWithText(AppButton, 'Guardar cambios');
+      expect(
+        find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSemantics(boton).label,
+        contains('bloqueado, solo lectura'),
+      );
+      expect(tester.widget<AppButton>(boton).variant, AppButtonVariant.primary);
+
+      await tester.tap(find.text('Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(repo.actualizados, isEmpty);
+      semantics.dispose();
+    });
+
+    testWidgets('con plan Beta "Guardar cambios" no lleva candado y guarda '
+        'como antes', (tester) async {
+      final repo = FakeClienteRepository(clientes: [clienteRita, clientePedro]);
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_appUnderTest(plan: planBeta, clienteRepo: repo));
+      await tester.pumpAndSettle();
+
+      final boton = find.widgetWithText(AppButton, 'Guardar cambios');
+      expect(
+        find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
+        findsNothing,
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoTelefono),
+        '3005550000',
+      );
+      await tester.pump();
+      await tester.ensureVisible(boton);
+      await tester.tap(boton);
+      await tester.pumpAndSettle();
+
+      expect(repo.actualizados, hasLength(1));
+      expect(find.text('Tu cuenta está en solo lectura'), findsNothing);
+    });
+
+    testWidgets('LP004 del servidor con bandera vencida abre la hoja y '
+        'conserva lo escrito', (tester) async {
+      final repo = FakeClienteRepository(
+        clientes: [clienteRita, clientePedro],
+        errorActualizar: const ClienteFailure(
+          'Tu cuenta está en solo lectura. Pide al administrador que active '
+          'el plan.',
+          limite: LimitePlan.soloLectura,
+        ),
+      );
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_appUnderTest(plan: planBeta, clienteRepo: repo));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoTelefono),
+        '3005550000',
+      );
+      await tester.pump();
+      await tester.ensureVisible(find.text('Guardar cambios'));
+      await tester.tap(find.text('Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.textContaining('Pide al administrador'), findsNothing);
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(_campoTelefono))
+            .controller!
+            .text,
+        '3005550000',
+      );
     });
   });
 
