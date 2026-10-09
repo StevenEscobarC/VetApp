@@ -295,11 +295,35 @@ Plans:
   4. Ningún usuario puede cambiar su plan; el dueño del producto activa/renueva planes con `asignar_plan` (solo service_role), incluido Fundador; clínicas existentes quedan en Beta
   5. Mi plan muestra plan, vigencia y contadores, con contacto por WhatsApp de soporte solo para admin y sin precios ni pago; banners al 80 %/últimos 7 días y hojas explicativas al tocar una acción limitada
 **Depends on:** Phase 5
-**Plans:** 0 plans
+**Plans:** 11 plans
 **UI hint**: yes
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 05.1 to break down)
+**Wave 1**
+
+- [ ] 05.1-01-PLAN.md — Delta SQL Fase 5.1: clinica_planes, _plan_efectivo (fuente única), backfill Beta, prueba Pro al alta, mi_plan/puede_escribir, triggers LP001..LP004, prueba Clínica en invitaciones, logo oculto en el carné, asignar_plan solo service_role
+- [ ] 05.1-02-PLAN.md — Mi plan: contrato Dart (MiPlan, repositorio, providers, fake), pantalla /mas/plan y fila con insignia en Más
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05.1-03-PLAN.md — [BLOCKING] Aplicar el delta en vivo (MCP) y correr los 193 checks existentes sin cambios
+- [ ] 05.1-04-PLAN.md — Límite de 50 pacientes: mapeo LP00x, hoja explicativa, gate de acciones y candado de solo lectura en altas
+- [ ] 05.1-05-PLAN.md — Contacto por WhatsApp de soporte (solo admin, sin precios) y banner de Inicio (80 %, últimos 7 días, Beta con fecha, gracia, solo lectura)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05.1-06-PLAN.md — Smoke R1..R45 (238 checks) + sondas + [BLOCKING] pegar smoke en vivo
+- [ ] 05.1-07-PLAN.md — Prueba Clínica 30 días al generar el primer código y cupos en Equipo
+- [ ] 05.1-08-PLAN.md — Logo y protocolos propios en Gratis: avisos, hojas y "Guardar en mi catálogo"
+- [ ] 05.1-09-PLAN.md — Solo lectura de colegas: ficha, historia clínica, carné e Inicio
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 05.1-10-PLAN.md — Solo lectura de colegas en la agenda y tope de pacientes desde el formulario de cita
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 05.1-11-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca/copy sin dinero, UAT vetapp-qa en emulador y aprobación
 
 ### Phase 6: Inventario
 
