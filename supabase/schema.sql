@@ -427,6 +427,7 @@ using (
   and (storage.foldername(name))[1] = public.mi_clinica_id()::text
 );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists mascota_fotos_insert on storage.objects;
 create policy mascota_fotos_insert on storage.objects for insert to authenticated
 with check (
@@ -435,6 +436,7 @@ with check (
   and (storage.foldername(name))[1] = public.mi_clinica_id()::text
 );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists mascota_fotos_update on storage.objects;
 create policy mascota_fotos_update on storage.objects for update to authenticated
 using (
@@ -448,6 +450,7 @@ with check (
   and (storage.foldername(name))[1] = public.mi_clinica_id()::text
 );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists mascota_fotos_delete on storage.objects;
 create policy mascota_fotos_delete on storage.objects for delete to authenticated
 using (
@@ -3184,6 +3187,7 @@ create policy clinica_logos_select on storage.objects
     and (storage.foldername(name))[1] = public.mi_clinica_id()::text
   );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists clinica_logos_insert on storage.objects;
 create policy clinica_logos_insert on storage.objects
   for insert to authenticated
@@ -3194,6 +3198,7 @@ create policy clinica_logos_insert on storage.objects
     and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
   );
 
+-- redefinida en Fase 5.1 (plan): ver bloque al final del archivo
 drop policy if exists clinica_logos_update on storage.objects;
 create policy clinica_logos_update on storage.objects
   for update to authenticated
@@ -3636,5 +3641,221 @@ $$;
 
 revoke all on function public.asignar_plan(uuid, text, int, date, boolean, date) from public, anon, authenticated;
 grant execute on function public.asignar_plan(uuid, text, int, date, boolean, date) to service_role;
+
+-- 8. Límites y bloqueos por plan (triggers). Todos con SQLSTATE propio (clase LP, nunca clase 40
+-- para que PostgREST no reintente) y el mismo código en HINT por si un proxy reescribe el SQLSTATE.
+
+-- LP001 (D-03/D-04): en Gratis la mascota 51 se rechaza. Cubre el INSERT directo que permite
+-- mascotas_insert y las dos RPC de registro sin editarlas (la RPC combinada hace rollback completo,
+-- así que no queda un cliente huérfano). El advisory lock serializa inserciones concurrentes en 49.
+create or replace function public.mascotas_validar_limite()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_max int;
+  v_count int;
+begin
+  select e.pacientes_max into v_max from public._plan_efectivo(new.clinica_id) e;
+  if v_max is null then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('mascotas:' || new.clinica_id::text, 0));
+
+  select count(*) into v_count from public.mascotas m where m.clinica_id = new.clinica_id;
+  if v_count >= v_max then
+    raise exception 'Llegaste a los 50 pacientes del plan Gratis. Con Pro registras pacientes ilimitados.'
+      using errcode = 'LP001', hint = 'LP001';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.mascotas_validar_limite() from public, anon, authenticated;
+
+drop trigger if exists mascotas_validar_limite on public.mascotas;
+create trigger mascotas_validar_limite before insert on public.mascotas for each row execute function public.mascotas_validar_limite();
+
+-- LP003 (D-06): en Gratis no se guarda un logo nuevo. Quitar el logo (null) o guardar otros datos
+-- de la clínica con la misma ruta ya almacenada sigue permitido (el WHEN lo deja pasar).
+create or replace function public.clinicas_validar_logo()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if not coalesce((select e.logo_permitido from public._plan_efectivo(new.id) e), false) then
+    raise exception 'El logo de la clínica es parte de Pro y Clínica. Mientras tanto se muestra solo el nombre.'
+      using errcode = 'LP003', hint = 'LP003';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.clinicas_validar_logo() from public, anon, authenticated;
+
+drop trigger if exists clinicas_validar_logo on public.clinicas;
+create trigger clinicas_validar_logo before update of logo_path on public.clinicas for each row when (new.logo_path is not null and new.logo_path is distinct from old.logo_path) execute function public.clinicas_validar_logo();
+
+-- LP003 (D-06): en Gratis no se crean ni editan protocolos propios. Los cambios solo de `activo`
+-- (desactivar_protocolo) pasan; restablecer_protocolo es un DELETE y no lo cubre este trigger.
+-- registrar_dosis con p_guardar_en_catalogo en Gratis falla completa con LP003: la app mantiene ese
+-- interruptor apagado en Gratis y reabre el formulario con sus datos si recibe LP003.
+create or replace function public.protocolos_validar_plan()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if new.clinica_id is null then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and (to_jsonb(new) - 'activo' - 'updated_at') = (to_jsonb(old) - 'activo' - 'updated_at') then
+    return new;
+  end if;
+
+  if not coalesce((select e.protocolos_propios_permitidos from public._plan_efectivo(new.clinica_id) e), false) then
+    raise exception 'Los protocolos propios son parte de Pro y Clínica. Puedes seguir usando los protocolos estándar.'
+      using errcode = 'LP003', hint = 'LP003';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.protocolos_validar_plan() from public, anon, authenticated;
+
+drop trigger if exists protocolos_validar_plan on public.protocolos_vacunacion;
+create trigger protocolos_validar_plan before insert or update on public.protocolos_vacunacion for each row execute function public.protocolos_validar_plan();
+
+-- LP004 (D-02/D-12, decisión bloqueada 3): el veterinario que excede los cupos del plan queda en
+-- solo lectura. Guarda en las 7 tablas de escritura clínica; NO hay guarda en carne_enlaces ni en
+-- vacuna_alertas (compartir el carné y gestionar alertas siguen permitidos) y marcar el recordatorio
+-- de una cita (recordatorio_enviado_at) tampoco se bloquea. Es trigger y no policy restrictiva para
+-- que UPDATE/DELETE fallen con LP004 en vez de afectar 0 filas (Pitfall 7) y para cubrir también las
+-- RPC security definer (el trigger corre igual bajo el dueño). Devuelve old en DELETE (Pitfall 3).
+-- El nombre `guard_solo_lectura` ordena antes que `mascotas_validar_limite`: LP004 gana sobre LP001.
+create or replace function public.guard_solo_lectura()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_solo_recordatorio boolean := false;
+begin
+  if auth.uid() is null then
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
+  end if;
+
+  if tg_table_name = 'citas' and tg_op = 'UPDATE' then
+    v_solo_recordatorio :=
+      (to_jsonb(new) - 'recordatorio_enviado_at' - 'updated_at')
+      = (to_jsonb(old) - 'recordatorio_enviado_at' - 'updated_at');
+  end if;
+
+  if not v_solo_recordatorio and not public.puede_escribir() then
+    raise exception 'Tu cuenta está en solo lectura: el plan de tu clínica no incluye más veterinarios. Pide al administrador que active el plan.'
+      using errcode = 'LP004', hint = 'LP004';
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.guard_solo_lectura() from public, anon, authenticated;
+
+drop trigger if exists guard_solo_lectura on public.clientes;
+create trigger guard_solo_lectura before insert or update or delete on public.clientes for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.mascotas;
+create trigger guard_solo_lectura before insert or update or delete on public.mascotas for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.mascota_pesos;
+create trigger guard_solo_lectura before insert or update or delete on public.mascota_pesos for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.citas;
+create trigger guard_solo_lectura before insert or update or delete on public.citas for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.cita_mascotas;
+create trigger guard_solo_lectura before insert or update or delete on public.cita_mascotas for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.consultas;
+create trigger guard_solo_lectura before insert or update or delete on public.consultas for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.dosis_aplicadas;
+create trigger guard_solo_lectura before insert or update or delete on public.dosis_aplicadas for each row execute function public.guard_solo_lectura();
+
+-- 9. Storage: el logo nuevo exige un plan que lo permita (D-06) y las fotos de mascota exigen
+-- poder escribir (D-12). Quitar el logo (clinica_logos_delete) y toda lectura quedan intactos.
+drop policy if exists clinica_logos_insert on storage.objects;
+create policy clinica_logos_insert on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and public.plan_permite_logo()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
+  );
+
+drop policy if exists clinica_logos_update on storage.objects;
+create policy clinica_logos_update on storage.objects
+  for update to authenticated
+  using (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and public.plan_permite_logo()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
+  )
+  with check (
+    bucket_id = 'clinica-logos'
+    and public.es_admin_clinica()
+    and public.plan_permite_logo()
+    and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+    and name ~ '^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$'
+  );
+
+drop policy if exists mascota_fotos_insert on storage.objects;
+create policy mascota_fotos_insert on storage.objects for insert to authenticated
+with check (
+  bucket_id = 'mascota-fotos'
+  and public.es_veterinario()
+  and public.puede_escribir()
+  and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+);
+
+drop policy if exists mascota_fotos_update on storage.objects;
+create policy mascota_fotos_update on storage.objects for update to authenticated
+using (
+  bucket_id = 'mascota-fotos'
+  and public.es_veterinario()
+  and public.puede_escribir()
+  and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+)
+with check (
+  bucket_id = 'mascota-fotos'
+  and public.es_veterinario()
+  and public.puede_escribir()
+  and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+);
+
+drop policy if exists mascota_fotos_delete on storage.objects;
+create policy mascota_fotos_delete on storage.objects for delete to authenticated
+using (
+  bucket_id = 'mascota-fotos'
+  and public.es_veterinario()
+  and public.puede_escribir()
+  and (storage.foldername(name))[1] = public.mi_clinica_id()::text
+);
 
 notify pgrst, 'reload schema';
