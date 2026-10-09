@@ -61,17 +61,25 @@ void main() {
     expect(find.text('Activo'), findsOneWidget);
   });
 
-  testWidgets('Gratis 42 of 50 shows counter and bar, no remaining helper', (
+  testWidgets('Gratis below 80 % shows counter and bar, no helper', (
     tester,
   ) async {
-    await _abrir(tester, planGratis);
+    await _abrir(tester, planGratis.copyWith(pacientesCount: 30));
     expect(find.text('Plan Gratis'), findsOneWidget);
-    expect(find.text('42 de 50 pacientes'), findsOneWidget);
+    expect(find.text('30 de 50 pacientes'), findsOneWidget);
     expect(find.byKey(_barra), findsOneWidget);
     expect(find.textContaining('Te quedan'), findsNothing);
     expect(find.textContaining('Límite alcanzado'), findsNothing);
     expect(find.text('Plan sin vencimiento'), findsOneWidget);
     expect(find.text('Hasta 50 pacientes y 1 veterinario.'), findsOneWidget);
+  });
+
+  testWidgets('Gratis 42 of 50 (84 %) already warns with Te quedan 8', (
+    tester,
+  ) async {
+    await _abrir(tester, planGratis);
+    expect(find.text('42 de 50 pacientes'), findsOneWidget);
+    expect(find.text('Te quedan 8'), findsOneWidget);
   });
 
   testWidgets('Gratis 45 of 50 shows Te quedan 5', (tester) async {
