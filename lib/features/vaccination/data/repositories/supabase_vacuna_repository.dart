@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/data/limite_plan_postgrest.dart';
+import '../../../../core/errors/limite_plan.dart';
 import '../../../../core/utils/formato.dart';
 import '../../domain/entities/carne.dart';
 import '../../domain/entities/protocolo.dart';
@@ -24,7 +26,7 @@ class SupabaseVacunaRepository {
     try {
       return await op();
     } on PostgrestException catch (e) {
-      throw VacunaFailure(mensajeErrorVacuna(e));
+      throw vacunaFailureDe(e);
     } catch (_) {
       throw VacunaFailure(generico);
     }
@@ -313,10 +315,23 @@ class SupabaseVacunaRepository {
   }, 'No pudimos cargar las vacunas de la cita.');
 }
 
+/// [VacunaFailure] con el mensaje en español y, si aplica, el límite de plan.
+@visibleForTesting
+VacunaFailure vacunaFailureDe(PostgrestException e) =>
+    VacunaFailure(mensajeErrorVacuna(e), limite: limitePlanDe(e));
+
 /// Traducciones centralizadas de `PostgrestException.code` a mensajes en
 /// español — nunca se muestra el texto crudo del servidor.
 @visibleForTesting
 String mensajeErrorVacuna(PostgrestException e) {
+  switch (limitePlanDe(e)) {
+    case LimitePlan.funcion:
+      return 'Los protocolos propios son parte de Pro y Clínica.';
+    case LimitePlan.soloLectura:
+      return 'Tu cuenta está en solo lectura. Pide al administrador que active el plan.';
+    case _:
+      break;
+  }
   switch (e.code) {
     case '42501':
       return 'No tienes permiso para hacer esto en esta clínica.';
