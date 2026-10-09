@@ -3,10 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/data/clock_provider.dart';
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/patients/domain/entities/mascota.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
 import 'package:vetapp/features/vaccination/domain/entities/protocolo.dart';
@@ -17,6 +19,7 @@ import 'package:vetapp/features/vaccination/presentation/vacunacion_routes.dart'
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_mascotas.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
@@ -125,6 +128,7 @@ Widget _app(
   String ruta = '/dosis/nueva?mascotaId=m-1',
   AuthProfile? perfil,
   Mascota mascota = _rocky,
+  MiPlan? plan,
 }) {
   _resultado = null;
   return routerHarness(
@@ -156,6 +160,7 @@ Widget _app(
         FakeMascotaRepository(mascotas: [mascota]),
       ),
       clockProvider.overrideWithValue(() => DateTime.utc(2026, 10, 1, 17)),
+      ...planOverrides(plan: plan),
     ],
   );
 }
@@ -376,4 +381,94 @@ void main() {
       expect(args['clinicaExterna'], isNull);
     },
   );
+
+  group('plan Gratis (Guardar en mi catálogo)', () {
+    const titulo = 'Los protocolos propios son parte de Pro';
+
+    final interruptor = find.widgetWithText(
+      SwitchListTile,
+      'Guardar en mi catálogo',
+    );
+    bool valorInterruptor(WidgetTester tester) =>
+        tester.widget<SwitchListTile>(interruptor).value;
+
+    testWidgets('el interruptor arranca apagado, avisa y no se puede activar', (
+      tester,
+    ) async {
+      final repo = _repo();
+      await _abrir(tester, _app(repo, plan: planGratis));
+      await _elegir(tester, 'Otro...');
+      expect(find.text('Guardar en mi catálogo'), findsOneWidget);
+      expect(find.text('Disponible en Pro.'), findsOneWidget);
+      expect(valorInterruptor(tester), isFalse);
+
+      await tester.enterText(find.byType(TextFormField).first, 'Giardia');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(interruptor);
+      await tester.pumpAndSettle();
+      await tester.tap(interruptor);
+      await tester.pumpAndSettle();
+      expect(find.text(titulo), findsOneWidget);
+      expect(valorInterruptor(tester), isFalse);
+
+      await tester.tap(find.text('Ahora no'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
+      await tester.pumpAndSettle();
+      final args = repo.llamadas
+          .lastWhere((l) => l.metodo == 'registrarDosis')
+          .args;
+      expect(args['codigo'], 'otro:giardia');
+      expect(args['guardarEnCatalogo'], false);
+      expect(find.text(titulo), findsNothing);
+    });
+
+    testWidgets('con plan que lo incluye no hay aviso y arranca encendido', (
+      tester,
+    ) async {
+      await _abrir(tester, _app(_repo(), plan: planProTrial));
+      await _elegir(tester, 'Otro...');
+      expect(find.text('Disponible en Pro.'), findsNothing);
+      expect(valorInterruptor(tester), isTrue);
+    });
+
+    testWidgets('LP003 del servidor abre la hoja, conserva el formulario y '
+        'apaga el interruptor', (tester) async {
+      final repo = _repo(
+        errorRegistrar: const VacunaFailure(
+          'Los protocolos propios son parte de Pro y Clínica.',
+          limite: LimitePlan.funcion,
+        ),
+      );
+      await _abrir(tester, _app(repo));
+      await _elegir(tester, 'Otro...');
+      await tester.enterText(find.byType(TextFormField).first, 'Giardia');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
+      await tester.pumpAndSettle();
+      expect(find.text(titulo), findsOneWidget);
+      expect(find.text('Giardia'), findsOneWidget);
+      expect(valorInterruptor(tester), isFalse);
+      expect(
+        find.text('Los protocolos propios son parte de Pro y Clínica.'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('LP004 del servidor abre la hoja de solo lectura', (
+      tester,
+    ) async {
+      final repo = _repo(
+        errorRegistrar: const VacunaFailure(
+          'x',
+          limite: LimitePlan.soloLectura,
+        ),
+      );
+      await _abrir(tester, _app(repo));
+      await _elegir(tester, 'Antirrábica');
+      await tester.tap(find.widgetWithText(AppButton, 'Guardar dosis'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+    });
+  });
 }

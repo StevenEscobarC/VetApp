@@ -3,12 +3,15 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/home/presentation/screens/mas_screen.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
+import 'package:vetapp/features/vaccination/domain/vacuna_failure.dart';
 import 'package:vetapp/features/vaccination/domain/entities/protocolo.dart';
 import 'package:vetapp/features/vaccination/presentation/protocolos_routes.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
@@ -79,6 +82,7 @@ const _catalogo = [_polivalente, _bordetella, _giardia, _triple];
 List<Override> _overrides(
   FakeVacunaRepository repo, {
   AuthProfile perfil = vetAdminProfile,
+  MiPlan? plan,
 }) {
   SharedPreferences.setMockInitialValues({});
   return [
@@ -91,7 +95,7 @@ List<Override> _overrides(
     ),
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
-    ...planOverrides(),
+    ...planOverrides(plan: plan),
   ];
 }
 
@@ -99,6 +103,7 @@ Widget _app(
   FakeVacunaRepository repo, {
   AuthProfile perfil = vetAdminProfile,
   String initial = '/mas/protocolos',
+  MiPlan? plan,
 }) => routerHarness(
   initialLocation: initial,
   routes: [
@@ -108,18 +113,19 @@ Widget _app(
       routes: masProtocolosRoutes,
     ),
   ],
-  overrides: _overrides(repo, perfil: perfil),
+  overrides: _overrides(repo, perfil: perfil, plan: plan),
 );
 
 Future<void> _abrir(
   WidgetTester tester,
   FakeVacunaRepository repo, {
   AuthProfile perfil = vetAdminProfile,
+  MiPlan? plan,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(_app(repo, perfil: perfil));
+  await tester.pumpWidget(_app(repo, perfil: perfil, plan: plan));
   await tester.pumpAndSettle();
 }
 
@@ -153,10 +159,7 @@ void main() {
     expect(find.text('Polivalente'), findsOneWidget);
     expect(find.text('Triple felina'), findsNothing);
     expect(find.text('3 dosis cada 21 días · refuerzo anual'), findsOneWidget);
-    expect(
-      find.text('1 dosis · refuerzo cada 6 meses'),
-      findsOneWidget,
-    );
+    expect(find.text('1 dosis · refuerzo cada 6 meses'), findsOneWidget);
     expect(find.text('1 dosis · sin refuerzo'), findsOneWidget);
     expect(find.text('Personalizado'), findsNWidgets(2));
     expect(
@@ -201,7 +204,9 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Restablecer'));
     await tester.pumpAndSettle();
     expect(
-      repo.llamadas.where((l) => l.metodo == 'restablecerProtocolo').single
+      repo.llamadas
+          .where((l) => l.metodo == 'restablecerProtocolo')
+          .single
           .args['codigo'],
       'bordetella',
     );
@@ -230,7 +235,9 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Desactivar').last);
     await tester.pumpAndSettle();
     expect(
-      repo.llamadas.where((l) => l.metodo == 'desactivarProtocolo').single
+      repo.llamadas
+          .where((l) => l.metodo == 'desactivarProtocolo')
+          .single
           .args['codigo'],
       'custom:giardia',
     );
@@ -331,5 +338,131 @@ void main() {
       (l) => l.metodo == 'guardarProtocolo',
     );
     expect(llamada.args['opcionesDuracionDias'], [30, 35]);
+  });
+
+  group('plan Gratis (protocolos propios)', () {
+    const filaGratis =
+        'En el plan Gratis usas los protocolos estándar. Con Pro creas y '
+        'editas los tuyos.';
+    const tituloHoja = 'Los protocolos propios son parte de Pro';
+
+    testWidgets('muestra la fila y Nuevo biológico abre la hoja', (
+      tester,
+    ) async {
+      final repo = FakeVacunaRepository(protocolosData: _catalogo);
+      await _abrir(tester, repo, plan: planGratis);
+      expect(find.text(filaGratis), findsOneWidget);
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+      await _tocar(tester, find.text('Nuevo biológico'));
+      expect(find.text(tituloHoja), findsOneWidget);
+      expect(find.text('Dosis de la serie'), findsNothing);
+      expect(
+        repo.llamadas.where((l) => l.metodo == 'guardarProtocolo'),
+        isEmpty,
+      );
+    });
+
+    testWidgets('guardar un protocolo estándar abre la hoja sin llamar', (
+      tester,
+    ) async {
+      final repo = FakeVacunaRepository(protocolosData: _catalogo);
+      await _abrir(tester, repo, plan: planGratis);
+      await tester.tap(find.text('Polivalente'));
+      await tester.pumpAndSettle();
+      await _tocar(tester, find.text('28 días'));
+      await _tocar(tester, find.text('Guardar cambios'));
+      expect(find.text(tituloHoja), findsOneWidget);
+      expect(find.text('Dosis de la serie'), findsOneWidget);
+      expect(
+        repo.llamadas.where((l) => l.metodo == 'guardarProtocolo'),
+        isEmpty,
+      );
+    });
+
+    testWidgets('Restablecer y Desactivar siguen permitidos', (tester) async {
+      final repo = FakeVacunaRepository(protocolosData: _catalogo);
+      await _abrir(tester, repo, plan: planGratis);
+      await tester.tap(find.text('Bordetella'));
+      await tester.pumpAndSettle();
+      await _tocar(tester, find.text('Restablecer valores estándar'));
+      await tester.tap(find.widgetWithText(TextButton, 'Restablecer'));
+      await tester.pumpAndSettle();
+      expect(find.text(tituloHoja), findsNothing);
+      expect(
+        repo.llamadas.where((l) => l.metodo == 'restablecerProtocolo'),
+        hasLength(1),
+      );
+
+      await tester.tap(find.text('Giardia'));
+      await tester.pumpAndSettle();
+      await _tocar(tester, find.text('Desactivar'));
+      await tester.tap(find.widgetWithText(TextButton, 'Desactivar').last);
+      await tester.pumpAndSettle();
+      expect(find.text(tituloHoja), findsNothing);
+      expect(
+        repo.llamadas.where((l) => l.metodo == 'desactivarProtocolo'),
+        hasLength(1),
+      );
+    });
+  });
+
+  testWidgets(
+    'con Pro de prueba no hay fila y Nuevo biológico abre la hoja de edición',
+    (tester) async {
+      final repo = FakeVacunaRepository(protocolosData: _catalogo);
+      await _abrir(tester, repo, plan: planProTrial);
+      expect(find.textContaining('En el plan Gratis'), findsNothing);
+      await tester.tap(find.text('Nuevo biológico'));
+      await tester.pumpAndSettle();
+      expect(find.text('Especie'), findsOneWidget);
+      expect(
+        find.text('Los protocolos propios son parte de Pro'),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'LP003 del servidor abre la hoja de protocolos y deja la edición abierta',
+    (tester) async {
+      final repo = FakeVacunaRepository(
+        protocolosData: _catalogo,
+        errorGuardarProtocolo: const VacunaFailure(
+          'Los protocolos propios son parte de Pro y Clínica.',
+          limite: LimitePlan.funcion,
+        ),
+      );
+      await _abrir(tester, repo);
+      await tester.tap(find.text('Polivalente'));
+      await tester.pumpAndSettle();
+      await _tocar(tester, find.text('28 días'));
+      await _tocar(tester, find.text('Guardar cambios'));
+      expect(
+        find.text('Los protocolos propios son parte de Pro'),
+        findsOneWidget,
+      );
+      expect(find.text('Dosis de la serie'), findsOneWidget);
+      expect(
+        find.text('Los protocolos propios son parte de Pro y Clínica.'),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('LP004 del servidor abre la hoja de solo lectura', (
+    tester,
+  ) async {
+    final repo = FakeVacunaRepository(
+      protocolosData: _catalogo,
+      errorGuardarProtocolo: const VacunaFailure(
+        'x',
+        limite: LimitePlan.soloLectura,
+      ),
+    );
+    await _abrir(tester, repo);
+    await tester.tap(find.text('Polivalente'));
+    await tester.pumpAndSettle();
+    await _tocar(tester, find.text('Guardar cambios'));
+    expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
   });
 }

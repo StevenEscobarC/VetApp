@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/features/vaccination/data/repositories/supabase_vacuna_repository.dart';
 import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
 
@@ -21,8 +22,45 @@ void main() {
         'Revisa los datos: la fecha no puede ser futura y los valores deben ser válidos.',
       );
       expect(m('23505'), 'Ya existe un registro igual.');
-      expect(m('P0001'), 'No pudimos completar la operación. Intenta de nuevo.');
+      expect(
+        m('P0001'),
+        'No pudimos completar la operación. Intenta de nuevo.',
+      );
       expect(m('XX'), 'No pudimos completar la operación. Intenta de nuevo.');
+    });
+  });
+
+  group('límites de plan', () {
+    String m(String code) =>
+        mensajeErrorVacuna(PostgrestException(message: 'raw', code: code));
+
+    test('mensajeErrorVacuna mapea LP003 y LP004', () {
+      expect(m('LP003'), 'Los protocolos propios son parte de Pro y Clínica.');
+      expect(
+        m('LP004'),
+        'Tu cuenta está en solo lectura. Pide al administrador que active el plan.',
+      );
+      expect(
+        mensajeErrorVacuna(
+          PostgrestException(message: 'raw', code: 'P0001', hint: 'LP003'),
+        ),
+        'Los protocolos propios son parte de Pro y Clínica.',
+      );
+    });
+
+    test('vacunaFailureDe lleva el límite o null', () {
+      expect(
+        vacunaFailureDe(PostgrestException(message: 'x', code: 'LP003')).limite,
+        LimitePlan.funcion,
+      );
+      expect(
+        vacunaFailureDe(PostgrestException(message: 'x', code: 'LP004')).limite,
+        LimitePlan.soloLectura,
+      );
+      expect(
+        vacunaFailureDe(PostgrestException(message: 'x', code: '42501')).limite,
+        isNull,
+      );
     });
   });
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/data/clock_provider.dart';
+import '../../../../core/errors/limite_plan.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
@@ -16,6 +17,9 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../patients/domain/entities/mascota.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../../patients/presentation/widgets/mascota_foto_avatar.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/limite_plan_sheet.dart';
 import '../../domain/duraciones.dart';
 import '../../domain/entities/carne.dart';
 import '../../domain/entities/protocolo.dart';
@@ -207,9 +211,15 @@ class _RegistrarDosisScreenState extends ConsumerState<RegistrarDosisScreen> {
     );
   }
 
+  /// El catálogo propio es de Pro/Clínica; mientras el plan carga o si no se
+  /// puede leer se asume permitido (el servidor es la autoridad).
+  bool get _propiosPermitidos =>
+      ref.read(miPlanProvider).value?.protocolosPropiosPermitidos ?? true;
+
   Future<void> _guardar(_Seleccion sel, bool esAdmin) async {
     if (_loading) return;
     setState(() => _loading = true);
+    final enCatalogo = _otro && esAdmin && _guardarEnCatalogo;
     try {
       final r = await ref.read(registrarDosisProvider)(
         mascotaId: widget.mascotaId,
@@ -226,13 +236,27 @@ class _RegistrarDosisScreenState extends ConsumerState<RegistrarDosisScreen> {
         lote: _loteCtrl.text,
         observaciones: _observacionesCtrl.text,
         citaId: widget.citaId,
-        guardarEnCatalogo: _otro && esAdmin && _guardarEnCatalogo,
+        guardarEnCatalogo: enCatalogo && _propiosPermitidos,
       );
       if (!mounted) return;
       context.pop(r);
     } on VacunaFailure catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
+      // Respaldo del servidor: el formulario queda intacto; si fue LP003 se
+      // apaga el interruptor para que el reintento guarde solo la dosis.
+      if (e.limite == LimitePlan.funcion) {
+        setState(() => _guardarEnCatalogo = false);
+      }
+      if (await manejarLimitePlan(
+        context,
+        ref,
+        e,
+        funcion: FuncionPro.protocolos,
+      )) {
+        return;
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(e.message)));
@@ -261,6 +285,8 @@ class _RegistrarDosisScreenState extends ConsumerState<RegistrarDosisScreen> {
     final textTheme = Theme.of(context).textTheme;
     final perfil = ref.watch(authProfileProvider).value;
     final esAdmin = perfil?.esAdmin ?? false;
+    final plan = ref.watch(miPlanProvider).value;
+    final propios = plan?.protocolosPropiosPermitidos ?? true;
     final protocolos = ref
         .watch(protocolosProvider(mascota.especie.name))
         .asData
@@ -434,9 +460,29 @@ class _RegistrarDosisScreenState extends ConsumerState<RegistrarDosisScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Guardar en mi catálogo'),
-                      subtitle: const Text('Aparecerá en Más > Protocolos.'),
-                      value: _guardarEnCatalogo,
-                      onChanged: (v) => setState(() => _guardarEnCatalogo = v),
+                      subtitle: Text(
+                        propios
+                            ? 'Aparecerá en Más > Protocolos.'
+                            : 'Disponible en Pro.',
+                        style: propios
+                            ? null
+                            : textTheme.labelLarge?.copyWith(
+                                color: AppColors.textMuted,
+                              ),
+                      ),
+                      value: propios && _guardarEnCatalogo,
+                      onChanged: (v) async {
+                        if (v && !propios) {
+                          await asegurarFuncionPro(
+                            context,
+                            ref,
+                            FuncionPro.protocolos,
+                            plan: plan,
+                          );
+                          return;
+                        }
+                        setState(() => _guardarEnCatalogo = v);
+                      },
                     ),
                   ],
                 ] else if (p != null && p.opcionesDuracionDias.isNotEmpty) ...[

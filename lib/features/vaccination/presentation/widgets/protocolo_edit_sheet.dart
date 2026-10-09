@@ -6,6 +6,9 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/chips/app_filter_chip.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/limite_plan_sheet.dart';
 import '../../domain/duraciones.dart';
 import '../../domain/entities/protocolo.dart';
 import '../../domain/vacuna_failure.dart';
@@ -106,10 +109,7 @@ class _ProtocoloEditSheetState extends ConsumerState<ProtocoloEditSheet> {
       ? e.message
       : 'No pudimos guardar el protocolo. Intenta de nuevo.';
 
-  Future<void> _ejecutar(
-    Future<void> Function() accion,
-    String exito,
-  ) async {
+  Future<void> _ejecutar(Future<void> Function() accion, String exito) async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     setState(() => _guardando = true);
@@ -120,6 +120,18 @@ class _ProtocoloEditSheetState extends ConsumerState<ProtocoloEditSheet> {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(exito)));
     } catch (e) {
+      // Respaldo del servidor (LP003/LP004): la hoja de edición queda abierta
+      // con sus valores para reintentar más tarde.
+      if (mounted &&
+          await manejarLimitePlan(
+            context,
+            ref,
+            e,
+            funcion: FuncionPro.protocolos,
+          )) {
+        if (mounted) setState(() => _guardando = false);
+        return;
+      }
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(_mensaje(e))));
@@ -136,6 +148,15 @@ class _ProtocoloEditSheetState extends ConsumerState<ProtocoloEditSheet> {
           : null;
     });
     if (_errorNombre != null || _errorDuraciones != null) return;
+    if (!await asegurarFuncionPro(
+      context,
+      ref,
+      FuncionPro.protocolos,
+      plan: ref.read(miPlanProvider).value,
+    )) {
+      return;
+    }
+    if (!mounted) return;
     await _ejecutar(() async {
       await ref
           .read(protocolosActionsProvider)
@@ -317,14 +338,8 @@ class _ProtocoloEditSheetState extends ConsumerState<ProtocoloEditSheet> {
                 titulo: 'Tipo',
                 opciones: const [
                   ('Vacuna', TipoDosis.vacuna),
-                  (
-                    'Desparasitación interna',
-                    TipoDosis.desparasitacionInterna,
-                  ),
-                  (
-                    'Desparasitación externa',
-                    TipoDosis.desparasitacionExterna,
-                  ),
+                  ('Desparasitación interna', TipoDosis.desparasitacionInterna),
+                  ('Desparasitación externa', TipoDosis.desparasitacionExterna),
                 ],
                 actual: _tipo,
                 onChanged: (v) => setState(() => _tipo = v),

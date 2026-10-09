@@ -77,6 +77,23 @@ void main() {
     );
   });
 
+  test('mensajeErrorClinica mapea LP003 y LP004 (por code o por hint)', () {
+    expect(
+      mensajeErrorClinica(PostgrestException(message: 'x', code: 'LP003')),
+      'El logo es parte de Pro y Clínica.',
+    );
+    expect(
+      mensajeErrorClinica(
+        PostgrestException(message: 'x', code: 'P0001', hint: 'LP003'),
+      ),
+      'El logo es parte de Pro y Clínica.',
+    );
+    expect(
+      mensajeErrorClinica(PostgrestException(message: 'x', code: 'LP004')),
+      'Tu cuenta está en solo lectura. Pide al administrador que active el plan.',
+    );
+  });
+
   test('rutaLogo respeta la forma del SQL', () {
     const id = '3f2b1c4d-0000-4000-8000-000000000001';
     final r = ClinicaLogoDatasource.rutaLogo(id, 1700000000000);

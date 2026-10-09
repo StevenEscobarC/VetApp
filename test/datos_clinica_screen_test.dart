@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/utils/captura_foto.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
@@ -17,6 +18,7 @@ import 'package:vetapp/features/clinic/presentation/providers/clinica_providers.
 import 'package:vetapp/features/clinic/presentation/providers/datos_clinica_providers.dart';
 import 'package:vetapp/features/clinic/presentation/screens/datos_clinica_screen.dart';
 import 'package:vetapp/features/home/presentation/screens/mas_screen.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascota_foto_providers.dart';
 import 'package:vetapp/features/team/presentation/equipo_routes.dart';
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
@@ -39,6 +41,7 @@ List<Override> _overrides(
   AuthProfile perfil, {
   CapturadorFoto? capturador,
   AuthProfileNotifier Function()? auth,
+  MiPlan? plan,
 }) {
   SharedPreferences.setMockInitialValues({});
   return [
@@ -56,7 +59,7 @@ List<Override> _overrides(
     ),
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
-    ...planOverrides(),
+    ...planOverrides(plan: plan),
   ];
 }
 
@@ -68,6 +71,7 @@ Future<void> _abrir(
   String initial = '/mas/clinica',
   CapturadorFoto? capturador,
   AuthProfileNotifier Function()? auth,
+  MiPlan? plan,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1;
@@ -88,6 +92,7 @@ Future<void> _abrir(
         perfil,
         capturador: capturador,
         auth: auth,
+        plan: plan,
       ),
     ),
   );
@@ -257,5 +262,125 @@ void main() {
     expect(llamada['logoPath'], logos.subidas.single);
     expect(llamada['telefono'], '30012345709');
     expect(find.text('Datos de la clínica guardados'), findsOneWidget);
+  });
+
+  group('plan Gratis (logo)', () {
+    testWidgets(
+      'muestra la pista y Elegir de galería abre la hoja sin selector',
+      (tester) async {
+        var llamadas = 0;
+        await _abrir(
+          tester,
+          FakeClinicaRepository(),
+          FakeClinicaLogoDatasource(),
+          plan: planGratis,
+          capturador: (_, _) async {
+            llamadas++;
+            return kFotoPrueba;
+          },
+        );
+        expect(
+          find.text('El logo se muestra en Pro y Clínica.'),
+          findsOneWidget,
+        );
+        await _tocar(tester, find.text('Elegir de galería'));
+        expect(find.text('El logo es parte de Pro'), findsOneWidget);
+        expect(llamadas, 0);
+        expect(find.byKey(const Key('logo-clinica')), findsNothing);
+      },
+    );
+
+    testWidgets('Tomar foto también abre la hoja y no el selector', (
+      tester,
+    ) async {
+      var llamadas = 0;
+      await _abrir(
+        tester,
+        FakeClinicaRepository(),
+        FakeClinicaLogoDatasource(),
+        plan: planGratis,
+        capturador: (_, _) async {
+          llamadas++;
+          return kFotoPrueba;
+        },
+      );
+      await _tocar(tester, find.text('Tomar foto'));
+      expect(find.text('El logo es parte de Pro'), findsOneWidget);
+      expect(llamadas, 0);
+    });
+
+    testWidgets('logo guardado: vista previa, texto y Quitar logo sin hoja', (
+      tester,
+    ) async {
+      final repo = FakeClinicaRepository(
+        clinica: clinicaDePrueba.copyWith(logoPath: 'cli-1/logo-1.jpg'),
+      );
+      final logos = FakeClinicaLogoDatasource();
+      await _abrir(
+        tester,
+        repo,
+        logos,
+        plan: planGratis.copyWith(logoGuardado: true),
+      );
+      expect(find.byKey(const Key('logo-clinica')), findsOneWidget);
+      expect(
+        find.text('Guardado. Se mostrará cuando actives Pro o Clínica.'),
+        findsOneWidget,
+      );
+      await _tocar(tester, find.text('Quitar logo'));
+      await _tocar(tester, find.text('Guardar cambios'));
+      expect(find.text('El logo es parte de Pro'), findsNothing);
+      expect(repo.llamadasActualizar.single['logoPath'], isNull);
+      expect(logos.eliminados, ['cli-1/logo-1.jpg']);
+    });
+
+    testWidgets('sin logo guardado no aparece el texto de guardado', (
+      tester,
+    ) async {
+      await _abrir(
+        tester,
+        FakeClinicaRepository(),
+        FakeClinicaLogoDatasource(),
+        plan: planGratis,
+      );
+      expect(
+        find.text('Guardado. Se mostrará cuando actives Pro o Clínica.'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('Guardar datos sin tocar el logo no abre la hoja', (
+      tester,
+    ) async {
+      final repo = FakeClinicaRepository();
+      await _abrir(tester, repo, FakeClinicaLogoDatasource(), plan: planGratis);
+      await _tocar(tester, find.text('Guardar cambios'));
+      expect(find.text('El logo es parte de Pro'), findsNothing);
+      expect(repo.llamadasActualizar, hasLength(1));
+    });
+  });
+
+  testWidgets('plan Beta no muestra la pista del logo', (tester) async {
+    await _abrir(tester, FakeClinicaRepository(), FakeClinicaLogoDatasource());
+    expect(find.text('El logo se muestra en Pro y Clínica.'), findsNothing);
+  });
+
+  testWidgets('LP003 al guardar abre la hoja del logo y conserva los campos', (
+    tester,
+  ) async {
+    final repo = FakeClinicaRepository();
+    await _abrir(tester, repo, FakeClinicaLogoDatasource());
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '3001234567'),
+      '30099',
+    );
+    repo.error = const ClinicaFailure(
+      'El logo es parte de Pro y Clínica.',
+      limite: LimitePlan.funcion,
+    );
+    await _tocar(tester, find.text('Guardar cambios'));
+    expect(find.text('El logo es parte de Pro'), findsOneWidget);
+    expect(find.text('30099'), findsOneWidget);
+    expect(find.text('El logo es parte de Pro y Clínica.'), findsNothing);
   });
 }

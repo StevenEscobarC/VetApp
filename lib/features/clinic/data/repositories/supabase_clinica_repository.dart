@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/data/limite_plan_postgrest.dart';
+import '../../../../core/errors/limite_plan.dart';
 import '../../domain/clinica.dart';
 import '../../domain/clinica_failure.dart';
 
@@ -59,7 +61,7 @@ class SupabaseClinicaRepository {
       );
       return Clinica.desdeJson(Map<String, dynamic>.from(r as Map));
     } on PostgrestException catch (e) {
-      throw ClinicaFailure(mensajeErrorClinica(e));
+      throw ClinicaFailure(mensajeErrorClinica(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const ClinicaFailure(
         'No pudimos guardar los datos de la clínica. Intenta de nuevo.',
@@ -69,6 +71,14 @@ class SupabaseClinicaRepository {
 }
 
 String mensajeErrorClinica(PostgrestException e) {
+  switch (limitePlanDe(e)) {
+    case LimitePlan.funcion:
+      return 'El logo es parte de Pro y Clínica.';
+    case LimitePlan.soloLectura:
+      return 'Tu cuenta está en solo lectura. Pide al administrador que active el plan.';
+    case _:
+      break;
+  }
   switch (e.code) {
     case '42501':
       return 'Solo los administradores pueden cambiar los datos de la clínica.';

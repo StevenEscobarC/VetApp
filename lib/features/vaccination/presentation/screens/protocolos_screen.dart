@@ -7,6 +7,9 @@ import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/chips/app_filter_chip.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/limite_plan_sheet.dart';
 import '../providers/protocolos_providers.dart';
 import '../providers/vacuna_providers.dart';
 import '../widgets/protocolo_edit_sheet.dart';
@@ -25,11 +28,19 @@ class ProtocolosScreen extends ConsumerStatefulWidget {
 class _ProtocolosScreenState extends ConsumerState<ProtocolosScreen> {
   String _especie = 'perro';
 
+  Future<void> _nuevoBiologico() async {
+    if (!await asegurarFuncionPro(context, ref, FuncionPro.protocolos)) return;
+    if (!mounted) return;
+    await showProtocoloEditSheet(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final puedeEditar = ref.watch(puedeEditarProtocolosProvider);
     final catalogo = ref.watch(protocolosProvider(_especie));
+    final plan = ref.watch(miPlanProvider).value;
+    final propiosPermitidos = plan?.protocolosPropiosPermitidos ?? true;
 
     Widget lista;
     if (catalogo.hasError && !catalogo.hasValue) {
@@ -112,6 +123,10 @@ class _ProtocolosScreenState extends ConsumerState<ProtocolosScreen> {
                     ],
                   ),
                 ),
+                if (!propiosPermitidos) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  const _FilaPlanGratis(),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 Wrap(
                   spacing: AppSpacing.sm,
@@ -141,7 +156,7 @@ class _ProtocolosScreenState extends ConsumerState<ProtocolosScreen> {
                   ? AppButton(
                       label: 'Nuevo biológico',
                       icon: Icons.add,
-                      onPressed: () => showProtocoloEditSheet(context),
+                      onPressed: _nuevoBiologico,
                     )
                   : Text(
                       'Solo los administradores pueden cambiar los '
@@ -156,6 +171,41 @@ class _ProtocolosScreenState extends ConsumerState<ProtocolosScreen> {
       ),
     );
   }
+}
+
+/// Fila fija (no descartable) que explica que los protocolos propios son de
+/// Pro; los estándar siguen disponibles.
+class _FilaPlanGratis extends StatelessWidget {
+  const _FilaPlanGratis();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceMuted,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.lock_outline,
+          size: 20,
+          color: AppColors.textSecondary,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            'En el plan Gratis usas los protocolos estándar. Con Pro creas y '
+            'editas los tuyos.',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: AppColors.textSecondary),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SkeletonTile extends StatelessWidget {
