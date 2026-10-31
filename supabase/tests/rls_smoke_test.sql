@@ -32,7 +32,8 @@
 -- columna), invitaciones (uso único, vencida, revocada, inexistente, metadata falsificada), RPC solo-admin y
 -- aisladas por clínica, último admin, auto-retiro (D-14), reasignación de citas (D-15), acceso cortado al
 -- retirar (T6), autoría visible (D-13), citas por veterinario (D-07) y consultas FK restrict (D-06).
--- Fase 5 (bloque Q, 48 checks): vacunación — aislamiento, solo-append, cálculo derivado, alertas, enlace público, logo de la clínica. Total esperado: 193.
+-- Fase 5 (bloque Q, 48 checks): vacunación — aislamiento, solo-append, cálculo derivado, alertas, enlace público, logo de la clínica.
+-- Fase 5.1 (bloque R, 45 checks): planes y límites — plan efectivo, asignar_plan solo service_role, límite de 50, prueba Clínica y cupos, solo lectura, logo/protocolos. Total esperado: 238.
 
 do $$
 declare
@@ -108,6 +109,44 @@ declare
   q_cita2 uuid;
   q_prox date;
   q_n int;
+  -- Fase 5.1 (bloque R)
+  r_hoy date;
+  r_vet_n uuid := gen_random_uuid();
+  r_vet_g uuid := gen_random_uuid();
+  r_vet_s uuid := gen_random_uuid();
+  r_vet_s2 uuid := gen_random_uuid();
+  r_vet_s3 uuid := gen_random_uuid();
+  r_vet_s4 uuid := gen_random_uuid();
+  r_vet_l uuid := gen_random_uuid();
+  r_c_n uuid;
+  r_c_g uuid;
+  r_c_s uuid;
+  r_c_l uuid;
+  r_c_deriv uuid;
+  r_cliente uuid;
+  r_cliente2 uuid;
+  r_m uuid;
+  r_cita uuid;
+  r_dosis uuid;
+  r_s_cliente uuid;
+  r_s_m uuid;
+  r_s_cita uuid;
+  r_s_dosis uuid;
+  r_l_cliente uuid;
+  r_l_m uuid;
+  r_row record;
+  r_row2 record;
+  r_json jsonb;
+  r_n int;
+  r_n2 int;
+  r_cod text;
+  r_cod2 text;
+  r_tok text;
+  r_logo text;
+  r_logo2 text;
+  r_proto text;
+  r_arr text[];
+  r_d date;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -3018,6 +3057,1277 @@ begin
      or not has_function_privilege('authenticated', 'public.actualizar_clinica(text,text,text,text,text)', 'execute') then
     failures := failures || 'Q48 grants de actualizar_clinica incorrectos (anon debe fallar, authenticated ejecutar)';
   end if;
+
+  -------------------------------------------------------------------------
+  -- ===== R: Planes y límites (Fase 5.1) =====
+  -- R1..R45. Las derivaciones usan fechas explícitas (p_hoy = r_hoy + n); r_hoy es _hoy_bogota()
+  -- fijado al inicio. Cada regreso a postgres limpia request.jwt.claims (auth.uid() null), porque
+  -- asignar_plan, guard_solo_lectura y puede_escribir leen auth.uid(). Todo se revierte al final.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', '', true);
+  r_hoy := public._hoy_bogota();
+
+  -- Setup R (no cuenta en checks): vets nuevos con clínica propia (Pro de prueba por 30 días).
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values
+      (r_vet_n, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-r-n@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke R N', 'clinica_nombre', 'Smoke Clinica R N'),
+       now(), now()),
+      (r_vet_g, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-r-g@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke R G', 'clinica_nombre', 'Smoke Clinica R G'),
+       now(), now()),
+      (r_vet_s, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-r-s@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke R S', 'clinica_nombre', 'Smoke Clinica R S'),
+       now(), now()),
+      (r_vet_l, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-r-l@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke R L', 'clinica_nombre', 'Smoke Clinica R L'),
+       now(), now());
+    select clinica_id into r_c_n from public.perfiles where id = r_vet_n;
+    select clinica_id into r_c_g from public.perfiles where id = r_vet_g;
+    select clinica_id into r_c_s from public.perfiles where id = r_vet_s;
+    select clinica_id into r_c_l from public.perfiles where id = r_vet_l;
+  exception when others then
+    failures := failures || ('SETUPR error inesperado: ' || sqlerrm);
+  end;
+
+  -- R1: clinica_planes existe, RLS activa y exactamente una policy (SELECT).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if not exists (select 1 from pg_class where oid = 'public.clinica_planes'::regclass and relrowsecurity) then
+      failures := failures || 'R1 clinica_planes no tiene RLS activa';
+    end if;
+    select count(*) into r_n from pg_policies where schemaname = 'public' and tablename = 'clinica_planes';
+    select count(*) into r_n2 from pg_policies
+      where schemaname = 'public' and tablename = 'clinica_planes' and cmd = 'SELECT';
+    if r_n <> 1 or r_n2 <> 1 then
+      failures := failures || format('R1 policies de clinica_planes: total=%s select=%s (se esperaba 1 y 1)', r_n, r_n2);
+    end if;
+  exception when others then
+    failures := failures || ('R1 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R2: clínica nueva -> fila gratis con Pro de prueba +30; mi_plan devuelve Pro/prueba_pro con las 21 claves.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into r_row2 from public.clinica_planes where clinica_id = r_c_n;
+    if not found or r_row2.plan is distinct from 'gratis' or r_row2.prueba_pro_hasta is distinct from r_hoy + 30 then
+      failures := failures || format('R2 fila de plan de la clínica nueva: plan=%s prueba_pro_hasta=%s', r_row2.plan, r_row2.prueba_pro_hasta);
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_n, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_json := public.mi_plan();
+    if r_json ->> 'plan' is distinct from 'pro' or r_json ->> 'origen' is distinct from 'prueba_pro'
+       or r_json ->> 'estado' is distinct from 'vigente'
+       or (r_json ->> 'dias_restantes')::int is distinct from 30
+       or (r_json ->> 'miembros_max')::int is distinct from 1
+       or jsonb_typeof(r_json -> 'pacientes_max') is distinct from 'null'
+       or (r_json ->> 'logo_permitido')::boolean is not true
+       or (r_json ->> 'puede_escribir')::boolean is not true
+       or (r_json ->> 'prueba_clinica_disponible')::boolean is not true then
+      failures := failures || ('R2 mi_plan de la clínica nueva: ' || r_json::text);
+    end if;
+    select count(*) into r_n from jsonb_object_keys(r_json);
+    select count(*) into r_n2 from jsonb_object_keys(r_json) k
+      where k = any (array['plan', 'origen', 'estado', 'fundador', 'vigente_hasta', 'gracia_hasta',
+                           'dias_restantes', 'ultimo_vencimiento', 'ultimo_origen', 'pacientes_count',
+                           'pacientes_max', 'veterinarios_activos', 'miembros_max', 'logo_permitido',
+                           'logo_guardado', 'protocolos_propios_permitidos', 'puede_escribir',
+                           'prueba_clinica_disponible', 'prueba_clinica_miembros', 'hay_colegas',
+                           'clinica_nombre']);
+    if r_n <> 21 or r_n2 <> 21 then
+      failures := failures || format('R2 mi_plan debía tener exactamente las 21 claves del contrato (total=%s conocidas=%s)', r_n, r_n2);
+    end if;
+  exception when others then
+    failures := failures || ('R2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R3: un insert directo en clinicas (como crear_mi_clinica) también crea la fila de plan.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into public.clinicas (nombre) values ('Smoke R Directa') returning id into r_c_deriv;
+    select * into r_row2 from public.clinica_planes where clinica_id = r_c_deriv;
+    if not found or r_row2.prueba_pro_hasta is distinct from public._hoy_bogota() + 30 then
+      failures := failures || format('R3 la clínica insertada directo no recibió Pro de prueba +30 (prueba_pro_hasta=%s)', r_row2.prueba_pro_hasta);
+    end if;
+  exception when others then
+    failures := failures || ('R3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R4: un veterinario no puede cambiar su propio plan (sin privilegio UPDATE); la fila no cambia.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_n, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      update public.clinica_planes
+         set plan = 'clinica', miembros_max = 5, pagado_hasta = public._hoy_bogota() + 365
+       where clinica_id = r_c_n;
+      get diagnostics r_n = row_count;
+      if r_n <> 0 then
+        failures := failures || format('R4 el veterinario modificó %s fila(s) de su plan', r_n);
+      end if;
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('R4 update: error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if not exists (
+      select 1 from public.clinica_planes
+      where clinica_id = r_c_n and plan = 'gratis' and miembros_max = 1 and pagado_hasta is null
+    ) then
+      failures := failures || 'R4 la fila de plan cambió tras el intento de auto-ascenso';
+    end if;
+  exception when others then
+    failures := failures || ('R4 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R5: un veterinario no puede insertar filas en clinica_planes.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_n, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      insert into public.clinica_planes (clinica_id) values (clinica_a_id);
+      failures := failures || 'R5 el veterinario pudo insertar en clinica_planes';
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('R5 insert: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R5 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R6: un veterinario no puede borrar filas de clinica_planes; la fila sigue ahí.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_n, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      delete from public.clinica_planes;
+      get diagnostics r_n = row_count;
+      if r_n <> 0 then
+        failures := failures || format('R6 el veterinario borró %s fila(s) de clinica_planes', r_n);
+      end if;
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('R6 delete: error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if not exists (select 1 from public.clinica_planes where clinica_id = r_c_n) then
+      failures := failures || 'R6 la fila de plan de la clínica desapareció';
+    end if;
+  exception when others then
+    failures := failures || ('R6 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R7: aislamiento por clínica: vet B no ve el plan de la clínica de r_vet_n y solo ve el suyo.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', vet_b_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into r_n from public.clinica_planes where clinica_id = r_c_n;
+    select count(*) into r_n2 from public.clinica_planes;
+    if r_n <> 0 or r_n2 <> 1 then
+      failures := failures || format('R7 vet B ve %s fila(s) de la clínica ajena y %s en total (se esperaba 0 y 1)', r_n, r_n2);
+    end if;
+  exception when others then
+    failures := failures || ('R7 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R8: grants de la superficie nueva.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if has_function_privilege('authenticated', 'public.asignar_plan(uuid,text,int,date,boolean,date)', 'execute')
+       or has_function_privilege('authenticated', 'public._plan_efectivo(uuid,date)', 'execute')
+       or has_function_privilege('anon', 'public.mi_plan()', 'execute')
+       or has_function_privilege('anon', 'public.puede_escribir()', 'execute')
+       or has_function_privilege('anon', 'public.plan_permite_logo()', 'execute')
+       or has_function_privilege('anon', 'public.asignar_plan(uuid,text,int,date,boolean,date)', 'execute')
+       or has_table_privilege('authenticated', 'public.clinica_planes', 'UPDATE') then
+      failures := failures || 'R8 grants demasiado abiertos (asignar_plan/_plan_efectivo para authenticated, RPC de plan para anon o UPDATE en clinica_planes)';
+    end if;
+    if not has_function_privilege('authenticated', 'public.mi_plan()', 'execute')
+       or not has_function_privilege('authenticated', 'public.puede_escribir()', 'execute')
+       or not has_function_privilege('service_role', 'public.asignar_plan(uuid,text,int,date,boolean,date)', 'execute') then
+      failures := failures || 'R8 faltan grants: mi_plan/puede_escribir para authenticated o asignar_plan para service_role';
+    end if;
+  exception when others then
+    failures := failures || ('R8 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R9: asignar_plan con sesión de veterinario se rechaza.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_n, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.asignar_plan(r_c_n, 'beta');
+      failures := failures || 'R9 el veterinario pudo ejecutar asignar_plan';
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('R9 asignar_plan: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R9 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R10: prueba Pro sin gracia: el último día incluido es vigente, el siguiente cae a Gratis.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    update public.clinica_planes set prueba_pro_hasta = r_hoy + 3 where clinica_id = r_c_deriv;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 3);
+    if r_row.plan is distinct from 'pro' or r_row.origen is distinct from 'prueba_pro'
+       or r_row.estado is distinct from 'vigente' or r_row.dias_restantes is distinct from 0 then
+      failures := failures || format('R10 último día de la prueba Pro: plan=%s origen=%s estado=%s dias=%s', r_row.plan, r_row.origen, r_row.estado, r_row.dias_restantes);
+    end if;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 4);
+    if r_row.plan is distinct from 'gratis' or r_row.ultimo_origen is distinct from 'prueba_pro'
+       or r_row.ultimo_vencimiento is distinct from r_hoy + 3 then
+      failures := failures || format('R10 día siguiente a la prueba Pro: plan=%s ultimo_origen=%s ultimo_vencimiento=%s', r_row.plan, r_row.ultimo_origen, r_row.ultimo_vencimiento);
+    end if;
+  exception when others then
+    failures := failures || ('R10 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R11: Pro pagado: vigente, gracia de 15 días y luego Gratis con el último vencimiento.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    perform public.asignar_plan(r_c_deriv, 'pro', null, r_hoy + 10);
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy);
+    if r_row.plan is distinct from 'pro' or r_row.origen is distinct from 'pagado'
+       or r_row.estado is distinct from 'vigente' or r_row.dias_restantes is distinct from 10 then
+      failures := failures || format('R11 Pro pagado vigente: plan=%s origen=%s estado=%s dias=%s', r_row.plan, r_row.origen, r_row.estado, r_row.dias_restantes);
+    end if;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 11);
+    if r_row.plan is distinct from 'pro' or r_row.origen is distinct from 'pagado'
+       or r_row.estado is distinct from 'gracia' or r_row.gracia_hasta is distinct from r_hoy + 25
+       or r_row.dias_restantes is distinct from 14 then
+      failures := failures || format('R11 primer día de gracia: estado=%s gracia_hasta=%s dias=%s', r_row.estado, r_row.gracia_hasta, r_row.dias_restantes);
+    end if;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 25);
+    if r_row.estado is distinct from 'gracia' or r_row.dias_restantes is distinct from 0 then
+      failures := failures || format('R11 último día de gracia: estado=%s dias=%s', r_row.estado, r_row.dias_restantes);
+    end if;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 26);
+    if r_row.plan is distinct from 'gratis' or r_row.ultimo_origen is distinct from 'pagado'
+       or r_row.ultimo_vencimiento is distinct from r_hoy + 10 then
+      failures := failures || format('R11 tras la gracia: plan=%s ultimo_origen=%s ultimo_vencimiento=%s', r_row.plan, r_row.ultimo_origen, r_row.ultimo_vencimiento);
+    end if;
+  exception when others then
+    failures := failures || ('R11 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R12: Clínica pagada con tramo; tramos y fechas inválidos fallan con check_violation.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    perform public.asignar_plan(r_c_deriv, 'clinica', 3, r_hoy + 30);
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy);
+    if r_row.plan is distinct from 'clinica' or r_row.miembros_max is distinct from 3 then
+      failures := failures || format('R12 Clínica tramo 3: plan=%s miembros_max=%s', r_row.plan, r_row.miembros_max);
+    end if;
+    begin
+      perform public.asignar_plan(r_c_deriv, 'clinica', 4, r_hoy + 30);
+      failures := failures || 'R12 el tramo 4 debía fallar con check_violation';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('R12 tramo 4: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.asignar_plan(r_c_deriv, 'clinica', 3, null, false);
+      failures := failures || 'R12 Clínica sin pagado_hasta debía fallar con check_violation';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('R12 sin pagado_hasta: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R12 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R13: prueba Clínica: 5 cupos vigente, gracia de 15 días y luego se acaba.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    r_d := r_hoy + 10;
+    update public.clinica_planes set prueba_clinica_usada = true, prueba_clinica_hasta = r_d where clinica_id = r_c_deriv;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_d);
+    if r_row.plan is distinct from 'clinica' or r_row.origen is distinct from 'prueba_clinica'
+       or r_row.estado is distinct from 'vigente' or r_row.miembros_max is distinct from 5 then
+      failures := failures || format('R13 prueba Clínica vigente: plan=%s origen=%s estado=%s miembros_max=%s', r_row.plan, r_row.origen, r_row.estado, r_row.miembros_max);
+    end if;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_d + 15);
+    if r_row.origen is distinct from 'prueba_clinica' or r_row.estado is distinct from 'gracia' then
+      failures := failures || format('R13 último día de gracia de la prueba Clínica: origen=%s estado=%s', r_row.origen, r_row.estado);
+    end if;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_d + 16);
+    if r_row.origen is not distinct from 'prueba_clinica' then
+      failures := failures || 'R13 la prueba Clínica seguía activa 16 días después de su fin';
+    end if;
+  exception when others then
+    failures := failures || ('R13 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R14: Beta sin vencimiento (sin tope de cupos) y Beta con fecha (sin gracia).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    perform public.asignar_plan(r_c_deriv, 'beta');
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 400);
+    if r_row.plan is distinct from 'beta' or r_row.estado is distinct from 'sin_vencimiento'
+       or r_row.miembros_max < 999 or r_row.logo_permitido is not true
+       or r_row.protocolos_propios_permitidos is not true then
+      failures := failures || format('R14 Beta sin fecha: plan=%s estado=%s miembros_max=%s logo=%s protocolos=%s', r_row.plan, r_row.estado, r_row.miembros_max, r_row.logo_permitido, r_row.protocolos_propios_permitidos);
+    end if;
+    perform public.asignar_plan(r_c_deriv, 'beta', null, null, false, r_hoy + 5);
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 6);
+    if r_row.plan is not distinct from 'beta' then
+      failures := failures || 'R14 la Beta con fecha seguía activa el día siguiente (no tiene gracia)';
+    end if;
+  exception when others then
+    failures := failures || ('R14 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R15: Fundador es solo una marca de precio: el plan pagado vence igual (vigente, gracia, Gratis).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    perform public.asignar_plan(r_c_deriv, 'pro', null, r_hoy + 5, true);
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 3);
+    if r_row.fundador is not true or r_row.plan is distinct from 'pro' or r_row.estado is distinct from 'vigente' then
+      failures := failures || format('R15 Fundador vigente: fundador=%s plan=%s estado=%s', r_row.fundador, r_row.plan, r_row.estado);
+    end if;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 6);
+    if r_row.plan is distinct from 'pro' or r_row.estado is distinct from 'gracia' then
+      failures := failures || format('R15 Fundador vencido debía quedar en gracia: plan=%s estado=%s', r_row.plan, r_row.estado);
+    end if;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 21);
+    if r_row.plan is distinct from 'gratis' then
+      failures := failures || format('R15 Fundador no vence nunca: a los 16 días de gracia plan=%s (se esperaba gratis)', r_row.plan);
+    end if;
+    begin
+      perform public.asignar_plan(r_c_deriv, 'pro', null, null, true);
+      failures := failures || 'R15 Fundador sin pagado_hasta debía fallar con check_violation';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('R15 sin pagado_hasta: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R15 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R16: jerarquía y desempate (Beta > Clínica > Pro > Gratis; a igual rango gana lo pagado) y
+  -- asignar_plan no toca las pruebas de la clínica.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    -- (a) Beta sin fecha + prueba Clínica vigente -> Beta.
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    update public.clinica_planes set plan = 'beta', prueba_clinica_usada = true, prueba_clinica_hasta = r_hoy + 20 where clinica_id = r_c_deriv;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy);
+    if r_row.plan is distinct from 'beta' or r_row.miembros_max is distinct from 999 then
+      failures := failures || format('R16 Beta + prueba Clínica: plan=%s miembros_max=%s', r_row.plan, r_row.miembros_max);
+    end if;
+    -- (b) Pro pagado vigente + prueba Pro vigente -> gana lo pagado.
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    update public.clinica_planes set plan = 'pro', pagado_hasta = r_hoy + 5, prueba_pro_hasta = r_hoy + 20 where clinica_id = r_c_deriv;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy);
+    if r_row.plan is distinct from 'pro' or r_row.origen is distinct from 'pagado' then
+      failures := failures || format('R16 Pro pagado + prueba Pro: plan=%s origen=%s', r_row.plan, r_row.origen);
+    end if;
+    -- (c) Pro pagado en gracia + prueba Pro vigente -> sigue ganando lo pagado (en gracia).
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    update public.clinica_planes set plan = 'pro', pagado_hasta = r_hoy - 3, prueba_pro_hasta = r_hoy + 20 where clinica_id = r_c_deriv;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy);
+    if r_row.origen is distinct from 'pagado' or r_row.estado is distinct from 'gracia' then
+      failures := failures || format('R16 Pro en gracia + prueba Pro: origen=%s estado=%s', r_row.origen, r_row.estado);
+    end if;
+    -- (d) Pro pagado vigente + prueba Clínica vigente -> Clínica (mayor rango).
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    update public.clinica_planes set plan = 'pro', pagado_hasta = r_hoy + 5, prueba_clinica_usada = true, prueba_clinica_hasta = r_hoy + 20 where clinica_id = r_c_deriv;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy);
+    if r_row.plan is distinct from 'clinica' then
+      failures := failures || format('R16 Pro pagado + prueba Clínica: plan=%s (se esperaba clinica)', r_row.plan);
+    end if;
+    -- (e) asignar_plan no modifica prueba_pro_hasta ni prueba_clinica_*.
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    update public.clinica_planes set prueba_pro_hasta = r_hoy + 20, prueba_clinica_usada = true, prueba_clinica_hasta = r_hoy + 7 where clinica_id = r_c_deriv;
+    perform public.asignar_plan(r_c_deriv, 'pro', null, r_hoy + 5);
+    perform public.asignar_plan(r_c_deriv, 'beta');
+    if not exists (
+      select 1 from public.clinica_planes
+      where clinica_id = r_c_deriv and prueba_pro_hasta = r_hoy + 20
+        and prueba_clinica_hasta = r_hoy + 7 and prueba_clinica_usada
+    ) then
+      failures := failures || 'R16 asignar_plan modificó las pruebas de la clínica';
+    end if;
+  exception when others then
+    failures := failures || ('R16 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Setup R-G (no cuenta en checks): clínica en Gratis sin prueba, con 1 cliente y 49 mascotas.
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set prueba_pro_hasta = r_hoy - 1 where clinica_id = r_c_g;
+    insert into public.clientes (clinica_id, nombre, telefono)
+      values (r_c_g, 'Smoke R Cliente G', '3000000001') returning id into r_cliente;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      select r_cliente, r_c_g, 'Smoke R Pet ' || g, 'perro' from generate_series(1, 49) g;
+    select id into r_m from public.mascotas where clinica_id = r_c_g order by created_at, id limit 1;
+  exception when others then
+    failures := failures || ('SETUPR-G error inesperado: ' || sqlerrm);
+  end;
+
+  -- R17: con 49 el registro 50 pasa; mi_plan reporta 50 de 50.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_g, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_mascota(r_cliente, 'Smoke R Pet 50', 'perro');
+    r_json := public.mi_plan();
+    if (r_json ->> 'pacientes_count')::int is distinct from 50 or (r_json ->> 'pacientes_max')::int is distinct from 50 then
+      failures := failures || ('R17 mi_plan con 50 pacientes: ' || r_json::text);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into r_n from public.mascotas where clinica_id = r_c_g;
+    if r_n <> 50 then
+      failures := failures || format('R17 la clínica tiene %s mascotas (se esperaban 50)', r_n);
+    end if;
+  exception when others then
+    failures := failures || ('R17 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R18: el INSERT directo de la mascota 51 se rechaza con LP001.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_g, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+        values (r_cliente, r_c_g, 'Smoke R Pet 51', 'perro');
+      failures := failures || 'R18 el insert directo de la mascota 51 debía fallar con LP001';
+    exception
+      when sqlstate 'LP001' then null;
+      when others then failures := failures || ('R18 insert directo: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R18 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R19: registrar_mascota en 50 falla con LP001.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_g, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.registrar_mascota(r_cliente, 'Smoke R Pet 51', 'perro');
+      failures := failures || 'R19 registrar_mascota en 50 debía fallar con LP001';
+    exception
+      when sqlstate 'LP001' then null;
+      when others then failures := failures || ('R19 registrar_mascota: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R19 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R20: registrar_cliente_con_mascota en 50 falla con LP001 sin dejar un cliente huérfano.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into r_n from public.clientes where clinica_id = r_c_g;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_g, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.registrar_cliente_con_mascota('Smoke R Huerfano', '3000000009', 'Smoke R Pet X', 'perro');
+      failures := failures || 'R20 registrar_cliente_con_mascota en 50 debía fallar con LP001';
+    exception
+      when sqlstate 'LP001' then null;
+      when others then failures := failures || ('R20 registrar_cliente_con_mascota: error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into r_n2 from public.clientes where clinica_id = r_c_g;
+    if r_n2 <> r_n then
+      failures := failures || format('R20 quedó un cliente huérfano (antes=%s después=%s)', r_n, r_n2);
+    end if;
+  exception when others then
+    failures := failures || ('R20 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R21: en 50 se pueden editar mascotas existentes y registrar consultas.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_g, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    update public.mascotas set nombre = 'Smoke R Renombrada' where id = r_m;
+    get diagnostics r_n = row_count;
+    if r_n <> 1 then
+      failures := failures || format('R21 el update de una mascota existente afectó %s fila(s)', r_n);
+    end if;
+    perform public.registrar_consulta(r_m, 'Smoke R dx', 'Smoke R tx');
+  exception when others then
+    failures := failures || ('R21 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R22: en 50 siguen permitidos cita, dosis y enlace del carné (D-02).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_g, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_cita := public.crear_cita(r_cliente, array[r_m], now() + interval '1 day');
+    r_dosis := public.registrar_dosis(r_m, 'polivalente', null, r_hoy - 10);
+    r_tok := public.obtener_o_crear_enlace_carne(r_m);
+    if r_cita is null or r_dosis is null or r_tok !~ '^[0-9a-f]{64}$' then
+      failures := failures || 'R22 cita, dosis o enlace del carné no se crearon con 50 pacientes';
+    end if;
+  exception when others then
+    failures := failures || ('R22 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R23: al borrar uno se puede registrar de nuevo (D-04); con Pro pagado no hay tope.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    delete from public.mascotas
+      where id = (select id from public.mascotas where clinica_id = r_c_g and id <> r_m order by created_at desc, id desc limit 1);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_g, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_mascota(r_cliente, 'Smoke R Pet Nueva', 'perro');
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into r_n from public.mascotas where clinica_id = r_c_g;
+    if r_n <> 50 then
+      failures := failures || format('R23 tras borrar y registrar quedaron %s mascotas (se esperaban 50)', r_n);
+    end if;
+    perform public.asignar_plan(r_c_g, 'pro', null, r_hoy + 30);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_g, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.registrar_mascota(r_cliente, 'Smoke R Pet 51 Pro', 'perro');
+    perform public.registrar_mascota(r_cliente, 'Smoke R Pet 52 Pro', 'perro');
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into r_n from public.mascotas where clinica_id = r_c_g;
+    if r_n <> 52 then
+      failures := failures || format('R23 con Pro pagado quedaron %s mascotas (se esperaban 52)', r_n);
+    end if;
+  exception when others then
+    failures := failures || ('R23 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R24: primer código sin cupo abre la prueba Clínica (+30 días, una vez) en la misma transacción.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_json := public.mi_plan();
+    if (r_json ->> 'prueba_clinica_disponible')::boolean is not true then
+      failures := failures || 'R24 mi_plan debía ofrecer la prueba Clínica antes de generar el código';
+    end if;
+    select g.codigo into r_cod from public.generar_invitacion_clinica() g;
+    if r_cod is null then
+      failures := failures || 'R24 generar_invitacion_clinica no devolvió un código';
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into r_row2 from public.clinica_planes where clinica_id = r_c_s;
+    if r_row2.prueba_clinica_usada is not true or r_row2.prueba_clinica_hasta is distinct from r_hoy + 30 then
+      failures := failures || format('R24 prueba Clínica: usada=%s hasta=%s (se esperaba true y %s)', r_row2.prueba_clinica_usada, r_row2.prueba_clinica_hasta, r_hoy + 30);
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_json := public.mi_plan();
+    if r_json ->> 'plan' is distinct from 'clinica' or r_json ->> 'origen' is distinct from 'prueba_clinica'
+       or (r_json ->> 'miembros_max')::int is distinct from 5 then
+      failures := failures || ('R24 mi_plan tras abrir la prueba Clínica: ' || r_json::text);
+    end if;
+  exception when others then
+    failures := failures || ('R24 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Setup R-S (no cuenta en checks): datos de la clínica S para los checks de solo lectura.
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into public.clientes (clinica_id, nombre, telefono)
+      values (r_c_s, 'Smoke R Cliente S', '3000000003') returning id into r_s_cliente;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (r_s_cliente, r_c_s, 'Smoke R Mascota S', 'perro') returning id into r_s_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_s_dosis := public.registrar_dosis(r_s_m, 'polivalente', null, r_hoy - 10);
+    perform public.registrar_consulta(r_s_m, 'Smoke R dx S', 'Smoke R tx S');
+    r_s_cita := public.crear_cita(r_s_cliente, array[r_s_m], now() + interval '3 days');
+  exception when others then
+    failures := failures || ('SETUPR-S error inesperado: ' || sqlerrm);
+  end;
+
+  -- R25: un colega se une con el código durante la prueba Clínica y puede escribir.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values (r_vet_s2, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+            'smoke-r-s2@vetapp.invalid',
+            jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke R S2', 'codigo_invitacion', r_cod),
+            now(), now());
+    if not exists (
+      select 1 from public.perfiles
+      where id = r_vet_s2 and clinica_id = r_c_s and rol = 'VETERINARIO' and activo
+    ) then
+      failures := failures || 'R25 el colega no quedó como veterinario activo de la clínica S';
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s2, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    insert into public.clientes (clinica_id, nombre, telefono) values (r_c_s, 'Smoke R Cliente S2', '3000000002');
+    if not public.puede_escribir() then
+      failures := failures || 'R25 el colega debía poder escribir durante la prueba Clínica';
+    end if;
+  exception when others then
+    failures := failures || ('R25 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R26: un segundo código con cupo libre no reinicia la prueba Clínica.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select g.codigo into r_cod2 from public.generar_invitacion_clinica() g;
+    if r_cod2 is null then
+      failures := failures || 'R26 el segundo código no se generó';
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into r_row2 from public.clinica_planes where clinica_id = r_c_s;
+    if r_row2.prueba_clinica_hasta is distinct from r_hoy + 30 then
+      failures := failures || format('R26 prueba_clinica_hasta cambió a %s', r_row2.prueba_clinica_hasta);
+    end if;
+  exception when others then
+    failures := failures || ('R26 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R27: Clínica pagada de 2 cupos con 2 activos -> generar_invitacion_clinica falla con LP002.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform public.asignar_plan(r_c_s, 'clinica', 2, r_hoy + 30);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform g.codigo from public.generar_invitacion_clinica() g;
+      failures := failures || 'R27 generar con los 2 cupos llenos debía fallar con LP002';
+    exception
+      when sqlstate 'LP002' then null;
+      when others then failures := failures || ('R27 generar: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R27 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R28: el cupo se re-verifica al consumir: con el cupo ya lleno, unirse_a_clinica falla con LP002.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform public.asignar_plan(r_c_s, 'clinica', 3, r_hoy + 30);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select g.codigo into r_cod2 from public.generar_invitacion_clinica() g;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values
+      (r_vet_s3, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-r-s3@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke R S3', 'clinica_nombre', 'Smoke Clinica R S3'),
+       now(), now()),
+      (r_vet_s4, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-r-s4@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke R S4', 'clinica_nombre', 'Smoke Clinica R S4'),
+       now(), now());
+    update public.perfiles set clinica_id = r_c_s, rol_clinica = 'veterinario', activo = true where id = r_vet_s3;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s4, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.unirse_a_clinica(r_cod2);
+      failures := failures || 'R28 unirse_a_clinica con el cupo lleno debía fallar con LP002';
+    exception
+      when sqlstate 'LP002' then null;
+      when others then failures := failures || ('R28 unirse_a_clinica: error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if exists (select 1 from public.clinica_invitaciones where codigo = r_cod2 and usada_por is not null) then
+      failures := failures || 'R28 la invitación quedó consumida pese al LP002';
+    end if;
+  exception when others then
+    failures := failures || ('R28 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R29: con la prueba Clínica ya usada y plan Gratis, generar falla con LP002 y no reabre la prueba.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes
+       set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, beta_hasta = null,
+           prueba_pro_hasta = r_hoy - 40, prueba_clinica_usada = true, prueba_clinica_hasta = r_hoy - 16
+     where clinica_id = r_c_s;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform g.codigo from public.generar_invitacion_clinica() g;
+      failures := failures || 'R29 generar con la prueba Clínica ya usada debía fallar con LP002';
+    exception
+      when sqlstate 'LP002' then null;
+      when others then failures := failures || ('R29 generar: error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into r_row2 from public.clinica_planes where clinica_id = r_c_s;
+    if r_row2.prueba_clinica_hasta is distinct from r_hoy - 16 then
+      failures := failures || format('R29 prueba_clinica_hasta cambió a %s (una prueba por clínica)', r_row2.prueba_clinica_hasta);
+    end if;
+  exception when others then
+    failures := failures || ('R29 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R30: solo lectura (Clínica terminó hace 16 días, Gratis): el colega no escribe en ninguna de las 6 vías.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s2, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    if public.puede_escribir() then
+      failures := failures || 'R30 puede_escribir() debía ser false para el colega';
+    end if;
+    begin
+      insert into public.clientes (clinica_id, nombre, telefono) values (r_c_s, 'Smoke R Bloqueado', '3000000004');
+      failures := failures || 'R30 insert de cliente debía fallar con LP004';
+    exception
+      when sqlstate 'LP004' then null;
+      when others then failures := failures || ('R30 insert cliente: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      update public.mascotas set nombre = 'Smoke R Bloqueada' where id = r_s_m;
+      failures := failures || 'R30 update de mascota debía fallar con LP004';
+    exception
+      when sqlstate 'LP004' then null;
+      when others then failures := failures || ('R30 update mascota: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      insert into public.mascota_pesos (mascota_id, peso_kg) values (r_s_m, 5);
+      failures := failures || 'R30 insert de peso debía fallar con LP004';
+    exception
+      when sqlstate 'LP004' then null;
+      when others then failures := failures || ('R30 insert peso: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.crear_cita(r_s_cliente, array[r_s_m], now() + interval '5 days');
+      failures := failures || 'R30 crear_cita debía fallar con LP004';
+    exception
+      when sqlstate 'LP004' then null;
+      when others then failures := failures || ('R30 crear_cita: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.registrar_consulta(r_s_m, 'Smoke R x', 'Smoke R y');
+      failures := failures || 'R30 registrar_consulta debía fallar con LP004';
+    exception
+      when sqlstate 'LP004' then null;
+      when others then failures := failures || ('R30 registrar_consulta: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.registrar_dosis(r_s_m, 'polivalente', null, r_hoy - 3);
+      failures := failures || 'R30 registrar_dosis debía fallar con LP004';
+    exception
+      when sqlstate 'LP004' then null;
+      when others then failures := failures || ('R30 registrar_dosis: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R30 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R31: el colega en solo lectura sigue leyendo, compartiendo el carné, gestionando alertas y marcando recordatorios.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s2, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into r_n from public.clientes where clinica_id = r_c_s;
+    select count(*) into r_n2 from public.mascotas where clinica_id = r_c_s;
+    if r_n < 1 or r_n2 < 1 or (select count(*) from public.consultas c join public.mascotas m on m.id = c.mascota_id where m.clinica_id = r_c_s) < 1 then
+      failures := failures || format('R31 lecturas de solo lectura: clientes=%s mascotas=%s', r_n, r_n2);
+    end if;
+    begin
+      perform public.carne_de_mascota(r_s_m);
+    exception when others then
+      failures := failures || ('R31 carne_de_mascota: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      r_tok := public.obtener_o_crear_enlace_carne(r_s_m);
+      if r_tok is null then
+        failures := failures || 'R31 obtener_o_crear_enlace_carne no devolvió token';
+      end if;
+    exception when others then
+      failures := failures || ('R31 enlace del carné: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.gestionar_alerta_vacuna(r_s_dosis, 'recordado');
+    exception when others then
+      failures := failures || ('R31 gestionar_alerta_vacuna: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      update public.citas set recordatorio_enviado_at = now() where id = r_s_cita;
+      get diagnostics r_n = row_count;
+      if r_n <> 1 then
+        failures := failures || format('R31 marcar recordatorio de la cita afectó %s fila(s)', r_n);
+      end if;
+    exception when others then
+      failures := failures || ('R31 recordatorio de cita: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R31 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R32: en el mismo estado el admin sí escribe; mi_plan refleja puede_escribir por usuario.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    insert into public.clientes (clinica_id, nombre, telefono) values (r_c_s, 'Smoke R Admin Escribe', '3000000005');
+    r_json := public.mi_plan();
+    if (r_json ->> 'puede_escribir')::boolean is not true then
+      failures := failures || 'R32 mi_plan del admin debía tener puede_escribir=true';
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s2, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_json := public.mi_plan();
+    if (r_json ->> 'puede_escribir')::boolean is not false then
+      failures := failures || 'R32 mi_plan del colega debía tener puede_escribir=false';
+    end if;
+  exception when others then
+    failures := failures || ('R32 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R33: en gracia de la prueba Clínica el colega escribe; el DELETE del admin borra exactamente 1 fila (Pitfall 3).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set prueba_clinica_hasta = r_hoy - 1 where clinica_id = r_c_s;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s2, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    insert into public.clientes (clinica_id, nombre, telefono)
+      values (r_c_s, 'Smoke R Gracia', '3000000006') returning id into r_cliente2;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_s, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    delete from public.clientes where id = r_cliente2;
+    get diagnostics r_n = row_count;
+    if r_n <> 1 then
+      failures := failures || format('R33 el DELETE del admin afectó %s fila(s) (se esperaba 1)', r_n);
+    end if;
+  exception when others then
+    failures := failures || ('R33 error inesperado: ' || sqlerrm);
+  end;
+
+  -- Setup R-L (no cuenta en checks): durante su Pro de prueba el admin L crea un protocolo propio y
+  -- sube y fija un logo; luego la clínica pasa a Gratis sin prueba. r_logo2 es un objeto válido nuevo.
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    r_logo := r_c_l::text || '/logo-1700000000100.jpg';
+    r_logo2 := r_c_l::text || '/logo-1700000000200.jpg';
+    insert into public.clientes (clinica_id, nombre, telefono)
+      values (r_c_l, 'Smoke R Cliente L', '3000000007') returning id into r_l_cliente;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (r_l_cliente, r_c_l, 'Smoke R Mascota L', 'perro') returning id into r_l_m;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_l, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_proto := public.guardar_protocolo(null, 'Smoke R Propio', 'vacuna', array['perro'], 1, null, 365, '{}'::int[]);
+    insert into storage.objects (bucket_id, name) values ('clinica-logos', r_logo);
+    perform public.actualizar_clinica('Smoke Clinica R L', 'Cali', 'Cra 1', '3000000000', r_logo);
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into storage.objects (bucket_id, name) values ('clinica-logos', r_logo2);
+    update public.clinica_planes
+       set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, beta_hasta = null,
+           prueba_pro_hasta = r_hoy - 1, prueba_clinica_hasta = null, prueba_clinica_usada = false
+     where clinica_id = r_c_l;
+  exception when others then
+    failures := failures || ('SETUPR-L error inesperado: ' || sqlerrm);
+  end;
+
+  -- R34: en Gratis un logo nuevo falla con LP003; la misma ruta con otro nombre y quitar el logo pasan.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_l, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.actualizar_clinica('Smoke Clinica R L', 'Cali', 'Cra 1', '3000000000', r_logo2);
+      failures := failures || 'R34 un logo nuevo en Gratis debía fallar con LP003';
+    exception
+      when sqlstate 'LP003' then null;
+      when others then failures := failures || ('R34 logo nuevo: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.actualizar_clinica('Smoke Clinica R L2', 'Cali', 'Cra 1', '3000000000', r_logo);
+    exception when others then
+      failures := failures || ('R34 misma ruta con otro nombre debía pasar: ' || sqlerrm);
+    end;
+    begin
+      perform public.actualizar_clinica('Smoke Clinica R L2', 'Cali', 'Cra 1', '3000000000', null);
+    exception when others then
+      failures := failures || ('R34 quitar el logo debía pasar: ' || sqlerrm);
+    end;
+    -- Restaurar la ruta guardada como postgres: se hace bajo Pro pagado (el trigger valida el plan) y se vuelve a Gratis.
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform public.asignar_plan(r_c_l, 'pro', null, r_hoy + 30);
+    update public.clinicas set logo_path = r_logo where id = r_c_l;
+    update public.clinica_planes
+       set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, beta_hasta = null,
+           prueba_pro_hasta = r_hoy - 1, prueba_clinica_hasta = null, prueba_clinica_usada = false
+     where clinica_id = r_c_l;
+  exception when others then
+    failures := failures || ('R34 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R35: en Gratis el admin no puede subir un logo al storage (plan_permite_logo es false).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_l, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      insert into storage.objects (bucket_id, name)
+        values ('clinica-logos', r_c_l::text || '/logo-1700000000300.jpg');
+      failures := failures || 'R35 subir un logo en Gratis debía fallar';
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('R35 storage: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R35 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R36: en Gratis no se crean protocolos propios ni se sobrescribe una semilla (LP003).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_l, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.guardar_protocolo(null, 'Smoke R Otro', 'vacuna', array['perro'], 1, null, 365, '{}'::int[]);
+      failures := failures || 'R36 crear un protocolo propio en Gratis debía fallar con LP003';
+    exception
+      when sqlstate 'LP003' then null;
+      when others then failures := failures || ('R36 protocolo nuevo: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.guardar_protocolo('polivalente', 'Polivalente', 'vacuna', array['perro'], 3, 28, 365, '{}'::int[]);
+      failures := failures || 'R36 sobrescribir la semilla polivalente en Gratis debía fallar con LP003';
+    exception
+      when sqlstate 'LP003' then null;
+      when others then failures := failures || ('R36 override de semilla: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R36 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R37: el protocolo propio existente sigue usable en Gratis y, aun desactivado, su próxima fecha se calcula (D-06).
+  -- Nota: registrar_dosis solo acepta protocolos activos, por eso la dosis se registra ANTES de desactivarlo.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_l, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_dosis := public.registrar_dosis(r_l_m, r_proto, null, r_hoy - 10);
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select f.proxima_fecha into r_d from public._carne_filas(r_c_l, r_l_m, r_hoy) f where f.codigo_protocolo = r_proto;
+    if r_d is null then
+      failures := failures || 'R37 la dosis del protocolo propio en Gratis no calculó proxima_fecha';
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_l, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.desactivar_protocolo(r_proto);
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if exists (select 1 from public.protocolos_vacunacion where clinica_id = r_c_l and codigo = r_proto and activo) then
+      failures := failures || 'R37 desactivar_protocolo no desactivó el protocolo en Gratis';
+    end if;
+    select f.proxima_fecha into r_d from public._carne_filas(r_c_l, r_l_m, r_hoy) f where f.codigo_protocolo = r_proto;
+    if r_d is null then
+      failures := failures || 'R37 desactivado el protocolo, la próxima fecha dejó de calcularse';
+    end if;
+  exception when others then
+    failures := failures || ('R37 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R38: en Gratis el carné del veterinario no entrega la ruta del logo aunque siga guardada.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_l, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_json := public.carne_de_mascota(r_l_m);
+    if jsonb_typeof(r_json -> 'clinica' -> 'logo_path') is distinct from 'null' then
+      failures := failures || ('R38 el carné entregó logo_path en Gratis: ' || coalesce(r_json -> 'clinica' ->> 'logo_path', 'null'));
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if not exists (select 1 from public.clinicas where id = r_c_l and logo_path is not null) then
+      failures := failures || 'R38 la ruta del logo no quedó guardada en clinicas.logo_path';
+    end if;
+  exception when others then
+    failures := failures || ('R38 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R39: el carné público en Gratis conserva el enlace y las 5 claves de clínica, con logo_path null.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_l, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_tok := public.obtener_o_crear_enlace_carne(r_l_m);
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    r_json := public.carne_publico(r_tok);
+    if r_json is null then
+      failures := failures || 'R39 el enlace público dejó de funcionar en Gratis';
+    else
+      select array_agg(k order by k) into r_arr from jsonb_object_keys(r_json -> 'clinica') k;
+      if r_arr is distinct from array['ciudad', 'direccion', 'logo_path', 'nombre', 'telefono'] then
+        failures := failures || ('R39 claves de clinica en el carné público: ' || coalesce(array_to_string(r_arr, ','), 'null'));
+      end if;
+      if jsonb_typeof(r_json -> 'clinica' -> 'logo_path') is distinct from 'null' then
+        failures := failures || 'R39 el carné público entregó logo_path en Gratis';
+      end if;
+    end if;
+  exception when others then
+    failures := failures || ('R39 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R40: al volver a un plan con logo reaparece la ruta guardada y mi_plan lo refleja.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform public.asignar_plan(r_c_l, 'pro', null, r_hoy + 30);
+    r_json := public.carne_publico(r_tok);
+    if r_json -> 'clinica' ->> 'logo_path' is distinct from r_logo then
+      failures := failures || ('R40 con Pro el logo_path del carné público es: ' || coalesce(r_json -> 'clinica' ->> 'logo_path', 'null'));
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_l, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_json := public.mi_plan();
+    if (r_json ->> 'logo_guardado')::boolean is not true or (r_json ->> 'logo_permitido')::boolean is not true then
+      failures := failures || ('R40 mi_plan con Pro: ' || r_json::text);
+    end if;
+  exception when others then
+    failures := failures || ('R40 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R41: toda clínica tiene exactamente una fila de plan y el backfill es idempotente (0 filas al repetirlo).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into r_n from public.clinicas c
+      where (select count(*) from public.clinica_planes cp where cp.clinica_id = c.id) <> 1;
+    if r_n <> 0 then
+      failures := failures || format('R41 hay %s clínica(s) sin exactamente una fila de plan', r_n);
+    end if;
+    insert into public.clinica_planes (clinica_id, plan) select c.id, 'beta' from public.clinicas c where not exists (select 1 from public.clinica_planes);
+    get diagnostics r_n2 = row_count;
+    if r_n2 <> 0 then
+      failures := failures || format('R41 el backfill repetido insertó %s fila(s)', r_n2);
+    end if;
+  exception when others then
+    failures := failures || ('R41 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R42: asignar_plan valida plan, clínica y fechas.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    begin
+      perform public.asignar_plan(r_c_deriv, 'oro');
+      failures := failures || 'R42 el plan oro debía fallar con check_violation';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('R42 plan oro: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.asignar_plan(gen_random_uuid(), 'pro', null, r_hoy + 30);
+      failures := failures || 'R42 una clínica inexistente debía fallar con foreign_key_violation';
+    exception
+      when foreign_key_violation then null;
+      when others then failures := failures || ('R42 clínica inexistente: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform public.asignar_plan(r_c_deriv, 'pro', null, null, false);
+      failures := failures || 'R42 Pro sin pagado_hasta debía fallar con check_violation';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('R42 Pro sin fecha: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('R42 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R43: asignar_plan devuelve jsonb con el plan efectivo resultante.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    r_json := public.asignar_plan(r_c_deriv, 'pro', null, r_hoy + 20);
+    select * into r_row from public._plan_efectivo(r_c_deriv);
+    if r_json ->> 'plan' is distinct from r_row.plan or r_json ->> 'estado' is distinct from r_row.estado
+       or r_json ->> 'plan' is distinct from 'pro' then
+      failures := failures || ('R43 asignar_plan devolvió: ' || coalesce(r_json::text, 'null'));
+    end if;
+  exception when others then
+    failures := failures || ('R43 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R44: anon sin acceso y triggers de la fase en su sitio (guarda en exactamente 7 tablas).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if has_table_privilege('anon', 'public.clinica_planes', 'SELECT') then
+      failures := failures || 'R44 anon tiene SELECT sobre clinica_planes';
+    end if;
+    if not exists (
+      select 1 from pg_trigger t
+      where t.tgrelid = 'public.clinicas'::regclass and t.tgname = 'clinicas_crear_plan' and not t.tgisinternal
+        and (t.tgtype & 1) = 1 and (t.tgtype & 2) = 0 and (t.tgtype & 4) <> 0
+    ) then
+      failures := failures || 'R44 falta clinicas_crear_plan (AFTER INSERT) en clinicas';
+    end if;
+    if not exists (select 1 from pg_trigger t where t.tgrelid = 'public.mascotas'::regclass and t.tgname = 'mascotas_validar_limite' and not t.tgisinternal)
+       or not exists (select 1 from pg_trigger t where t.tgrelid = 'public.clinicas'::regclass and t.tgname = 'clinicas_validar_logo' and not t.tgisinternal)
+       or not exists (select 1 from pg_trigger t where t.tgrelid = 'public.protocolos_vacunacion'::regclass and t.tgname = 'protocolos_validar_plan' and not t.tgisinternal) then
+      failures := failures || 'R44 faltan mascotas_validar_limite, clinicas_validar_logo o protocolos_validar_plan';
+    end if;
+    select array_agg(c.relname::text order by c.relname) into r_arr
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_namespace n on n.oid = c.relnamespace
+     where t.tgname = 'guard_solo_lectura' and not t.tgisinternal and n.nspname = 'public';
+    if r_arr is null or cardinality(r_arr) <> 7
+       or not (r_arr <@ array['cita_mascotas', 'citas', 'clientes', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas']
+               and array['cita_mascotas', 'citas', 'clientes', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas'] <@ r_arr) then
+      failures := failures || ('R44 guard_solo_lectura está en: ' || coalesce(array_to_string(r_arr, ','), 'ninguna tabla'));
+    end if;
+  exception when others then
+    failures := failures || ('R44 error inesperado: ' || sqlerrm);
+  end;
+
+  -- R45: Beta con fecha alimenta el aviso de Beta: vigente con días restantes, también en mi_plan.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
+    perform public.asignar_plan(r_c_deriv, 'beta', null, null, false, r_hoy + 5);
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy);
+    if r_row.plan is distinct from 'beta' or r_row.estado is distinct from 'vigente'
+       or r_row.vigente_hasta is distinct from r_hoy + 5 or r_row.dias_restantes is distinct from 5 then
+      failures := failures || format('R45 Beta con fecha: plan=%s estado=%s hasta=%s dias=%s', r_row.plan, r_row.estado, r_row.vigente_hasta, r_row.dias_restantes);
+    end if;
+    select * into r_row from public._plan_efectivo(r_c_deriv, r_hoy + 5);
+    if r_row.estado is distinct from 'vigente' or r_row.dias_restantes is distinct from 0 then
+      failures := failures || format('R45 último día de la Beta: estado=%s dias=%s', r_row.estado, r_row.dias_restantes);
+    end if;
+    perform public.asignar_plan(r_c_n, 'beta', null, null, false, r_hoy + 5);
+    perform set_config('request.jwt.claims', json_build_object('sub', r_vet_n, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    r_json := public.mi_plan();
+    if r_json ->> 'plan' is distinct from 'beta' or r_json ->> 'estado' is distinct from 'vigente'
+       or (r_json ->> 'vigente_hasta')::date is distinct from r_hoy + 5
+       or (r_json ->> 'dias_restantes')::int is distinct from 5 then
+      failures := failures || ('R45 mi_plan con Beta con fecha: ' || r_json::text);
+    end if;
+  exception when others then
+    failures := failures || ('R45 error inesperado: ' || sqlerrm);
+  end;
 
   -------------------------------------------------------------------------
   -- Volver a postgres y reportar. SIEMPRE se lanza una excepción para
