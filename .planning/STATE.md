@@ -122,7 +122,8 @@ Semilla: `SEED-001` acceso web para veterinario, dueño y admin (después del m�
 | fast | 05.1-06 cerrado: smoke en vivo `RLS SMOKE: PASS (238 checks) - cambios revertidos` (corrida 2) registrado en VALIDATION/SUMMARY, plan `[x]` en ROADMAP (VET-36/VET-37 Done) | 2026-10-30 | 225ba94 | — |
 | fast | 05.1-11 T1: `PHASE51_GATE_OK`, `LAYERS_OK`, APK debug, `BRAND: OK` (0 bloqueantes, 14 menores en el SUMMARY); T2 QA espera setup del usuario (VET-39) | 2026-10-30 | d25c915 | — |
 | fast | 05.1-11 T2: UAT `vetapp-qa` F1..F10 `QA: PASS`, A1 confirmado (F5), clínica QA restaurada a Beta; T3 (visto bueno) pendiente del usuario (VET-40) | 2026-10-31 | 2c7e8af | — |
-| fast | 05.1-11 cerrado: el usuario aprobó (T3), VALIDATION `status: approved` sin filas pendientes, plan `[x]` en ROADMAP (VET-38/VET-40 Done); falta `/gsd-verify-work 05.1` | 2026-10-31 | (this commit) | — |
+| fast | 05.1-11 cerrado: el usuario aprobó (T3), VALIDATION `status: approved` sin filas pendientes, plan `[x]` en ROADMAP (VET-38/VET-40 Done); falta `/gsd-verify-work 05.1` | 2026-10-31 | cfda0f8 | — |
+| 261031-et0 | VET-43 punto 1: el plan se relee al volver a primer plano, al enfocar Inicio/Más y al abrir Mi plan (sin relanzar); +7 pruebas (856), QA en emulador PASS C1..C5 | 2026-10-31 | bf9c523 | [261031-et0-refrescar-el-plan-sin-relanzar-la-app-ve](./quick/261031-et0-refrescar-el-plan-sin-relanzar-la-app-ve/) |
 
 ## Deferred Items
 
