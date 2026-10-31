@@ -120,7 +120,8 @@ Semilla: `SEED-001` acceso web para veterinario, dueño y admin (después del m�
 | fast | Evidencia de 05.1-06 en VALIDATION: T1 `SMOKE_R_OK`, T2 `PROBE_SYNTAX_OK`, `LIVE_SCHEMA_OK`, suite +849; T3 (smoke 238 en vivo) pendiente del usuario (VET-36/VET-37) | 2026-10-30 | 52c0a64 | — |
 | fast | 05.1-06 smoke en vivo FAIL 1/238 (R43): el check no reiniciaba `r_c_deriv` tras R16; R43 arranca con el reinicio estándar (vetapp-supabase), re-pegar pendiente | 2026-10-30 | 13d0462 | — |
 | fast | 05.1-06 cerrado: smoke en vivo `RLS SMOKE: PASS (238 checks) - cambios revertidos` (corrida 2) registrado en VALIDATION/SUMMARY, plan `[x]` en ROADMAP (VET-36/VET-37 Done) | 2026-10-30 | 225ba94 | — |
-| fast | 05.1-11 T1: `PHASE51_GATE_OK`, `LAYERS_OK`, APK debug, `BRAND: OK` (0 bloqueantes, 14 menores en el SUMMARY); T2 QA espera setup del usuario (VET-39) | 2026-10-30 | (this commit) | — |
+| fast | 05.1-11 T1: `PHASE51_GATE_OK`, `LAYERS_OK`, APK debug, `BRAND: OK` (0 bloqueantes, 14 menores en el SUMMARY); T2 QA espera setup del usuario (VET-39) | 2026-10-30 | d25c915 | — |
+| fast | 05.1-11 T2: UAT `vetapp-qa` F1..F10 `QA: PASS`, A1 confirmado (F5), clínica QA restaurada a Beta; T3 (visto bueno) pendiente del usuario (VET-40) | 2026-10-31 | (this commit) | — |
 
 ## Deferred Items
 
