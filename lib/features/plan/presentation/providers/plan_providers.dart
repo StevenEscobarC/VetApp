@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/config/soporte_config.dart';
@@ -15,7 +16,14 @@ final planRepositoryProvider = Provider<SupabasePlanRepository>((ref) {
 /// veterinario activo con clínica, o si Supabase no está disponible (modo
 /// degradado / tests sin override): así no se programan reintentos. Los
 /// errores del RPC siguen siendo [AsyncError].
+///
+/// Sigue vivo por [puedeEscribirProvider] en las ramas montadas del shell, así
+/// que se relee a propósito: al volver la app a primer plano (aquí), al enfocar
+/// Inicio/Más (`AppShell`), al abrir Mi plan (`MiPlanScreen`) y tras
+/// LP00x/altas/Equipo. Sin polling ni timers (05.1-UI-SPEC).
 final miPlanProvider = FutureProvider.autoDispose<MiPlan?>((ref) async {
+  final lifecycle = AppLifecycleListener(onResume: ref.invalidateSelf);
+  ref.onDispose(lifecycle.dispose);
   final perfil = await ref.watch(authProfileProvider.future);
   if (perfil == null ||
       !perfil.esVeterinario ||

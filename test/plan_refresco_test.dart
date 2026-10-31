@@ -272,9 +272,18 @@ void main() {
       expect(find.text('Plan Gratis'), findsOneWidget);
 
       repo.plan = planProPagadoFundador;
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-      await tester.pump();
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      // AppLifecycleListener valida las transiciones: se baja y se sube paso a paso.
+      for (final estado in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(estado);
+        await tester.pump();
+      }
       await tester.pumpAndSettle();
 
       expect(repo.llamadas, greaterThan(1));
