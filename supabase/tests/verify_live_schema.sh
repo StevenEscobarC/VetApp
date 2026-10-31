@@ -106,7 +106,7 @@ else
   any_fail=1
 fi
 
-for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario generar_invitacion_clinica revocar_invitacion retirar_miembro cambiar_rol_miembro crear_mi_clinica unirse_a_clinica es_admin_clinica es_miembro_activo es_autor_en_mi_clinica consumir_invitacion protocolos_efectivos guardar_protocolo restablecer_protocolo desactivar_protocolo registrar_dosis anular_dosis previsualizar_dosis carne_de_mascota vacunas_pendientes vacunas_resumen vacunas_resumen_mascotas gestionar_alerta_vacuna obtener_o_crear_enlace_carne regenerar_enlace_carne carne_publico actualizar_clinica; do
+for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario generar_invitacion_clinica revocar_invitacion retirar_miembro cambiar_rol_miembro crear_mi_clinica unirse_a_clinica es_admin_clinica es_miembro_activo es_autor_en_mi_clinica consumir_invitacion protocolos_efectivos guardar_protocolo restablecer_protocolo desactivar_protocolo registrar_dosis anular_dosis previsualizar_dosis carne_de_mascota vacunas_pendientes vacunas_resumen vacunas_resumen_mascotas gestionar_alerta_vacuna obtener_o_crear_enlace_carne regenerar_enlace_carne carne_publico actualizar_clinica mi_plan puede_escribir plan_permite_logo asignar_plan _plan_efectivo; do
   payload="{}"
   case "$rpc" in
     revocar_invitacion|es_miembro_activo|es_autor_en_mi_clinica)
@@ -175,6 +175,12 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
     actualizar_clinica)
       payload='{"p_nombre":"probe","p_ciudad":"","p_direccion":"","p_telefono":"","p_logo_path":null}'
       ;;
+    asignar_plan)
+      payload='{"p_clinica":"00000000-0000-0000-0000-000000000000","p_plan":"gratis"}'
+      ;;
+    _plan_efectivo)
+      payload='{"p_clinica":"00000000-0000-0000-0000-000000000000"}'
+      ;;
   esac
 
   rpc_code=$(curl -s -o /dev/null -w '%{http_code}' \
@@ -191,6 +197,8 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
     echo "OK rpc $rpc no expuesta 404 (función de trigger)"
   elif [ "$rpc_code" = "404" ] && [ "$rpc" = "carne_publico" ]; then
     echo "OK rpc carne_publico no expuesta a anon 404 (solo service_role)"
+  elif [ "$rpc_code" = "404" ] && { [ "$rpc" = "asignar_plan" ] || [ "$rpc" = "_plan_efectivo" ]; }; then
+    echo "OK rpc $rpc no expuesta a anon 404 (solo service_role / interna)"
   elif [ "$rpc_code" = "404" ]; then
     echo "FAIL rpc $rpc 404 (no aplicada)"
     any_fail=1
@@ -199,6 +207,23 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
     any_fail=1
   fi
 done
+
+# Fase 5.1: clinica_planes no concede nada a anon (revoke all + RLS solo veterinarios de la clínica).
+# Se acepta 401/403/404 (sin privilegio) o 200 con cuerpo [] -- nunca filas.
+cp_body=$(mktemp)
+cp_code=$(curl -s -o "$cp_body" -w '%{http_code}' \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  "$SUPABASE_URL/rest/v1/clinica_planes?select=clinica_id&limit=1")
+if [ "$cp_code" = "401" ] || [ "$cp_code" = "403" ] || [ "$cp_code" = "404" ]; then
+  echo "OK clinica_planes protegida $cp_code"
+elif [ "$cp_code" = "200" ] && [ "$(tr -d '[:space:]' < "$cp_body")" = "[]" ]; then
+  echo "OK clinica_planes 200 sin filas"
+else
+  echo "FAIL clinica_planes $cp_code"
+  any_fail=1
+fi
+rm -f "$cp_body"
 
 # Sonda de embeds de la agenda (Fase 4): valida los hints de relación que usa el
 # repositorio de citas. Con anon, RLS oculta todo: se espera 200 con cuerpo [].
