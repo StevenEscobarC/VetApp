@@ -41,9 +41,7 @@ Cita _cita(
   clienteNombre: cliente,
   clienteTelefono: tel,
   recordatorioEnviadoAt: enviado,
-  mascotas: const [
-    MascotaDeCita(id: 'm-1', nombre: 'Luna', especie: 'perro'),
-  ],
+  mascotas: const [MascotaDeCita(id: 'm-1', nombre: 'Luna', especie: 'perro')],
 );
 
 Future<void> _abrir(
@@ -83,8 +81,15 @@ Future<void> _abrir(
 }
 
 Future<void> _ida(WidgetTester tester) async {
+  // miPlanProvider usa AppLifecycleListener, que exige transiciones válidas
+  // (resumed -> inactive -> hidden -> paused y de vuelta); la hoja solo mira
+  // paused/hidden y resumed.
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
   await tester.pump();
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
   await tester.pumpAndSettle();
 }

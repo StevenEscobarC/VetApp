@@ -23,11 +23,28 @@ const String _errorGenerico = 'No pudimos cargar tu plan. Intenta de nuevo.';
 /// "Mi plan" (`/mas/plan`): qué plan tiene la clínica, hasta cuándo y cuánto
 /// se ha usado. Lo ven todos los veterinarios; todo lo que muestra viene de
 /// `mi_plan()` (el servidor decide fechas y límites).
-class MiPlanScreen extends ConsumerWidget {
+class MiPlanScreen extends ConsumerStatefulWidget {
   const MiPlanScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MiPlanScreen> createState() => _MiPlanScreenState();
+}
+
+class _MiPlanScreenState extends ConsumerState<MiPlanScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Si otra pantalla ya dejó el plan en caché, se relee al abrir Mi plan. En
+    // frío no: el primer `watch` ya lo pide y se leería dos veces.
+    if (ref.exists(miPlanProvider)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.invalidate(miPlanProvider);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final plan = ref.watch(miPlanProvider);
 
     Widget body;

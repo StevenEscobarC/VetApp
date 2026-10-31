@@ -26,6 +26,7 @@ import 'helpers/fake_team.dart';
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test('retirar forwards null destination, returns count, refreshes', () async {
     final (c, repo) = _setup();
     repo.citasAbiertas = 3;

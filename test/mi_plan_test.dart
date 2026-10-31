@@ -61,6 +61,7 @@ ProviderContainer _container({
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('MiPlan.desdeJson', () {
     test('maps all 21 keys', () {
       final p = MiPlan.desdeJson(_jsonCompleto);
