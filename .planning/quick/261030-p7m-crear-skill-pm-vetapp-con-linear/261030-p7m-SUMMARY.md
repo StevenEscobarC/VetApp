@@ -89,6 +89,18 @@ Las operaciones 2–10 dan historial de planes ya terminados; se pueden omitir s
 2. Autorizar los cambios de plan de las clínicas QA vía MCP y dar el número de soporte para el build QA.
 3. Visto bueno final de 05.1-11 T3 tras el reporte de QA.
 
+## Aplicado en Linear (OK del usuario, 2026-10-30)
+
+Las 17 operaciones del recorrido en seco:
+
+- Proyecto `Fase 5.1 · Planes y límites` (P-VET-13), In Progress.
+- Done con evidencia en la descripción: VET-27 [05.1-01], VET-28 [05.1-02], VET-29 [05.1-03], VET-30 [05.1-04], VET-31 [05.1-05], VET-32 [05.1-07], VET-33 [05.1-08], VET-34 [05.1-09], VET-35 [05.1-10], con `blockedBy` según `depends_on`.
+- VET-36 [05.1-06] In Review (High, blockedBy VET-29) + comentario de avance (`SMOKE_R_OK`, `PROBE_SYNTAX_OK` en `1b4d04f`); sub-issue VET-37 [05.1-06·T3] Todo, UAT, asignado al usuario.
+- VET-38 [05.1-11] Todo (High, blockedBy VET-36 y VET-37); sub-issues VET-39 [05.1-11·setup] y VET-40 [05.1-11·T3], Todo, UAT, asignados al usuario.
+- Proyecto `Fase 5 · Vacunación y Desparasitación` (P-VET-5) → Completed.
+
+Lección llevada a la skill: Linear mete el párrafo siguiente dentro de una lista si no hay línea en blanco (VET-27 y VET-28 se corrigieron con un parche).
+
 ## Deviations from Plan
 
 Ninguna. La skill no modifica `LOOPING.md` ni la sección 12 de `arquitecto-vetapp`; mencionar ahí a `pm-vetapp` queda como posible seguimiento.

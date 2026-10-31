@@ -83,9 +83,12 @@ Confirmado con el MCP de Linear el 2026-10-30. Al empezar cada sesión vuelve a 
   **Tareas:**
   - [ ] T1 <name> — `<marcador del automated, p. ej. SMOKE_R_OK>`
   - [ ] T2 …
+
   **Verificación:** comandos `<automated>` del plan + `flutter analyze` + `flutter test` + evidencia en `{NN}-VALIDATION.md`.
   Fuente: `.planning/phases/<carpeta>/{NN}-NN-PLAN.md`
   ```
+
+  Deja siempre una línea en blanco después de la lista de tareas: sin ella, Linear mete el párrafo siguiente dentro del último ítem.
 
 - **Labels:** `Feature` si el plan implementa requisitos; `Bug` para planes de gaps (`--gaps`) o `/gsd-debug`; `Seguridad` además si el plan toca RLS, grants o funciones `security definer`; `Deuda técnica`/`Mejora` para lo que vaya a Plataforma y Calidad; `UAT` solo en sub-issues humanos.
 - **Prioridad:** `2` (High) para planes de la fase activa en la ruta crítica y para sub-issues humanos que bloquean; `3` (Medium) para el resto de la fase activa; `4` (Low) para deuda y mejoras; `0` para `Idea diferida`.
