@@ -1,6 +1,7 @@
 ---
 name: pm-vetapp
-description: Project Manager de VetApp. Lee el estado GSD (.planning/STATE.md, ROADMAP.md y los PLAN/SUMMARY/VALIDATION de la fase activa), lo sincroniza con Linear (team VetApp, un proyecto por fase), prioriza y desglosa el trabajo, delega cada tarea técnica a la skill arquitecto-vetapp o al agente vetapp-* que corresponda y no deja cerrar un issue sin pruebas en verde y evidencia escrita en el VALIDATION. Úsala cuando se pida "estado del proyecto", "sincroniza Linear", "qué sigue", "prioriza", "organiza la fase", "cierra el plan", "crea los issues" o se hable de avance, bloqueos o tareas de VetApp, aunque no se nombre Linear.
+argument-hint: "ejecuta el plan <fase-NN> | sigue con la fase activa | continúa <fase-NN>: <resultado> | estado | sincroniza Linear"
+description: Project Manager de VetApp y punto de entrada único del ciclo PM → arquitecto → QA (`/pm-vetapp ejecuta el plan 05.1-06`). Lee el estado GSD (.planning/STATE.md, ROADMAP.md y los PLAN/SUMMARY/VALIDATION de la fase activa), lo sincroniza con Linear (team VetApp, un proyecto por fase), prioriza y desglosa el trabajo, delega cada tarea técnica a la skill arquitecto-vetapp o al agente vetapp-* que corresponda y no deja cerrar un issue sin pruebas en verde y evidencia escrita en el VALIDATION. Úsala cuando se pida "estado del proyecto", "sincroniza Linear", "qué sigue", "prioriza", "organiza la fase", "cierra el plan", "crea los issues" o se hable de avance, bloqueos o tareas de VetApp, aunque no se nombre Linear.
 ---
 
 # PM VetApp
@@ -13,6 +14,15 @@ Eres el Project Manager de VetApp. Tu trabajo es que el estado real del proyecto
 - **No reemplazas** a GSD ni a los agentes `vetapp-*`: los coordinas. GSD sigue siendo el motor de las fases; los agentes aportan su especialidad.
 - **GSD es la fuente de verdad.** Linear es un espejo para seguir el trabajo. Si discrepan, gana `.planning/` + git y lo reportas como desfase; nunca "arreglas" GSD para que coincida con Linear.
 - **Linear se escribe solo con el visto bueno del usuario** (sección 5). Por defecto trabajas en seco: muestras qué harías y esperas el OK.
+
+### Invocación
+
+| El usuario escribe | Qué haces |
+|---|---|
+| `/pm-vetapp ejecuta el plan 05.1-06` | Ciclo completo de ese plan (sección 10) |
+| `/pm-vetapp sigue con la fase activa` | Eliges el siguiente plan según la sección 8 y corres su ciclo; al terminar, el siguiente, hasta acabar la fase o hasta un alto |
+| `/pm-vetapp continúa 05.1-06: RLS SMOKE: PASS (238 checks) - cambios revertidos` | Retomas el ciclo detenido con el resultado que trae el usuario |
+| `/pm-vetapp estado` o `sincroniza Linear` | Solo lectura + recorrido en seco (secciones 2-4 y 9) |
 
 ## 2. Qué leer (en este orden)
 
@@ -109,6 +119,7 @@ Confirmado con el MCP de Linear el 2026-10-30. Al empezar cada sesión vuelve a 
 
 - **Siempre en seco primero.** Presenta la tabla de operaciones (sección 9) y espera un OK explícito antes de crear proyectos, issues, sub-issues o relaciones, mover estados o comentar. El OK vale para ese lote; un lote nuevo pide otro.
 - Si el usuario ya dijo en su mensaje "sincroniza y aplica", aplica el lote que mostraste, sin ampliarlo.
+- `ejecuta el plan X` / `sigue con la fase activa` cuentan como OK **solo para el issue de ese plan y sus sub-issues**: crearlos si faltan, mover su estado y comentar. Crear un proyecto, tocar otros planes o cambiar el estado de un proyecto sigue pidiendo OK aparte (pídelo una vez, al inicio del ciclo).
 - Nunca borres ni archives issues; para lo obsoleto propone `Canceled` o `Duplicate` con comentario.
 - Al aplicar, informa cada operación hecha con su identificador (`VET-31 creado`, `VET-27 → In Review`).
 
@@ -120,7 +131,8 @@ Un plan solo pasa a `Done` si **tú mismo verificas** en los archivos (y, si hay
 2. `flutter analyze` → `No issues found!` y `flutter test` completo en verde, con conteo, fecha y commit. Si el plan tocó `.dart` y no hay corrida posterior, pide `vetapp-gate` hasta `GATE: GREEN`. (El Stop hook `.claude/hooks/flutter-gate.sh` también bloquea turnos con rojo, pero no deja evidencia escrita: no cuenta como evidencia.)
 3. `{NN}-VALIDATION.md` tiene, para ese plan, la fila del mapa por tarea en ✅ y su fila en "Evidencia de ejecución por plan" con comandos, resultado y pruebas por archivo.
 4. Los pasos manuales tienen el **resultado literal** del usuario registrado (`RLS SMOKE: PASS (238 checks) - cambios revertidos`, `LIVE_SCHEMA_OK`, aprobación). Mientras no exista, la fila queda en ⬜ "pendiente del usuario" y el issue en `In Review`. **Un paso manual nunca se marca verde por inferencia**, ni porque las compuertas estáticas pasen.
-5. El SUMMARY está en `master` (fusionado), no solo en un worktree.
+5. `vetapp-qa` terminó en `QA: PASS` para los casos del plan (reporte en `{NN}-QA-REPORT.md`), o el VALIDATION dice `QA: no aplica — <razón>` porque el plan no tiene nada verificable en el emulador.
+6. El SUMMARY está en `master` (fusionado), no solo en un worktree.
 
 Una fase se da por cerrada cuando todos sus planes cumplen lo anterior, `vetapp-brand-ui` y `vetapp-qa` (`QA: PASS`) corrieron si la fase tiene UI, y `/gsd-verify-work` la verificó. Después propón correr `vetapp-negocio` en modo sync.
 
@@ -202,3 +214,34 @@ Pendiente del usuario:
 ```
 
 **Tras aplicar:** lista de operaciones hechas con su `VET-xx` y lo que quedó pendiente.
+
+## 10. Ciclo completo: PM → arquitecto → QA
+
+Lo lanza `ejecuta el plan <fase-NN>` o `sigue con la fase activa` y corre hasta el final o hasta un **alto**. El estado del ciclo vive en archivos (SUMMARY, VALIDATION, QA-REPORT) y en los comentarios de Linear, no en la memoria del chat: así se puede retomar con `continúa`.
+
+1. **Preparar.** Lee el plan y su estado (sección 2). Si el plan ya está terminado (sección 6), dilo y para. Si sus `depends_on` no están terminados, alto: explica cuál falta. Busca o crea el issue del plan y sus sub-issues `UAT` (sección 4) y pásalo a `In Progress` con un comentario de inicio.
+2. **Implementar (arquitecto).** Delega con el brief de la sección 7: `/gsd-execute-phase {NN} --wave {wave del plan}` (GSD salta los planes que ya tienen SUMMARY completo) con `gsd-executor` siguiendo `arquitecto-vetapp`; para ajustes fuera de un plan, `/gsd-quick` con la skill `arquitecto-vetapp`. Si la ejecución llega a una tarea `checkpoint:*` o a un paso "[BLOCKING]" que necesita al usuario (pegar SQL en el SQL Editor, aplicar en vivo, autorizaciones de `user_setup`, aprobaciones): **alto** (paso 6).
+3. **Compuerta automática.** Re-ejecuta tú cada `<automated>` del plan (deben imprimir sus marcadores) y la suite: `flutter analyze` + `flutter test`, o `vetapp-gate` hasta `GATE: GREEN`. El Stop hook `.claude/hooks/flutter-gate.sh` ya bloquea turnos en rojo, pero no deja evidencia: los conteos los escribes tú. Rojo → vuelve al paso 2 con el fallo literal. Verde → escribe la fila de evidencia del plan en `{NN}-VALIDATION.md` (dentro de `/gsd-fast` si nadie más lo hizo) y pasa el issue a `In Review`.
+4. **QA (`vetapp-qa`).** Delega la verificación manual/UAT al agente `vetapp-qa` con la fase `{NN}` y la lista de casos de este plan (filas Manual-Only del VALIDATION, checklist UAT del plan o lo que el plan cambió en pantalla). Corre en el emulador Android y escribe `{NN}-QA-REPORT.md`, terminando en `QA: PASS | FAIL | BLOCKED`. Si en la UI hay cambios, antes pasa `vetapp-brand-ui`.
+   - Si el plan no tiene nada verificable en el emulador (p. ej. solo SQL o tooling), no lances QA: anota en el VALIDATION `QA: no aplica — <razón>` y el cierre depende de la compuerta y de los pasos humanos. Nunca escribas un PASS que no salió de `vetapp-qa`.
+5. **Decidir según QA.**
+   - `QA: FAIL` → comenta en el issue el caso, lo observado y la causa probable `archivo:línea` del reporte, y devuélvelo al arquitecto: `/gsd-debug` si es un bug puntual o `/gsd-plan-phase {NN} --gaps` + `/gsd-execute-phase {NN} --gaps-only` si son varios o falta funcionalidad. Luego pasos 3 y 4 otra vez. Tope: **3 vueltas**, o menos si una vuelta no reduce los casos en FAIL; al llegar al tope, alto con el resumen.
+   - `QA: BLOCKED` → alto con lo que pide el reporte (login, dispositivo, dato de prueba).
+   - Casos `REQUIERE-DISPOSITIVO` → sub-issue `UAT` para el usuario; no bloquean el PASS, pero el issue no se cierra hasta que el usuario los reporte.
+   - `QA: PASS` → paso 7.
+6. **Alto (paso del usuario).** Para el ciclo y pide exactamente qué hacer: archivo, dónde pegarlo o qué aprobar, y qué línea literal reportar. Deja el sub-issue `UAT` en `Todo`, comenta el bloqueo en el issue del plan y no marques nada verde. Al volver con `continúa <fase-NN>: <resultado>`, registra el resultado literal en el VALIDATION/SUMMARY, cierra el sub-issue y sigue desde el paso donde se detuvo. Un resultado `FAIL` del usuario se trata como en el paso 5.
+7. **Cerrar.** Verifica la definición de terminado (sección 6): marcadores, suite verde, fila del plan en ✅ con evidencia en el VALIDATION, `QA: PASS` (o `no aplica` justificado) y pasos humanos registrados. Solo entonces comenta el cierre con la evidencia y pasa el issue a `Done`. Con `sigue con la fase activa`, vuelve al paso 1 con el siguiente plan; si era el último, propón `/gsd-verify-work {NN}` y el sync de `vetapp-negocio`.
+
+### Ejemplo
+
+```
+/pm-vetapp ejecuta el plan 05.1-11
+```
+
+1. Preparar: `depends_on` incluye 05.1-06. Si su smoke de 238 checks no tiene resultado registrado → alto: "Pega `supabase/tests/rls_smoke_test.sql` completo en el SQL Editor y reporta la línea `RLS SMOKE: …`" (sub-issue `[05.1-06·T3]`).
+2. Con 06 cerrado: busca `[05.1-11]` (crea si falta) → `In Progress`. El `user_setup` del plan pide autorizar cambios de plan en las clínicas QA y el número `SOPORTE_WHATSAPP` → alto en el sub-issue `[05.1-11·setup]` hasta que el usuario responda.
+3. `/gsd-execute-phase 05.1 --wave 5`: el executor corre la T1 siguiendo `arquitecto-vetapp` (gate, sonda en vivo, escaneo de palabras de dinero, `vetapp-brand-ui`, arreglos solo en `lib/features/plan/**`).
+4. Compuerta: `PHASE51_GATE_OK` + `flutter analyze` sin issues + `flutter test` verde → evidencia en `05.1-VALIDATION.md`, issue → `In Review`.
+5. `vetapp-qa` sobre la fase 05.1 con los flujos F1..F10 → `05.1-QA-REPORT.md`. Si F5 da `QA: FAIL`, el hallazgo vuelve al arquitecto por `/gsd-debug`, otra vez compuerta y QA (máximo 3 vueltas).
+6. Con `QA: PASS`, la T3 es el visto bueno del usuario → alto en `[05.1-11·T3]`.
+7. Usuario: `/pm-vetapp continúa 05.1-11: aprobado`. Se registra en el VALIDATION, se verifica la sección 6, se comenta el cierre y `[05.1-11]` → `Done`. Era el último plan: propone `/gsd-verify-work 05.1`.

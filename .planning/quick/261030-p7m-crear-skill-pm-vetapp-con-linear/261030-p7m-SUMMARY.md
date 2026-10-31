@@ -17,6 +17,10 @@ metrics:
 
 Skill de proyecto `pm-vetapp`: lee el estado GSD, lo refleja en Linear (team VetApp) con un issue por plan y un sub-issue `UAT` por cada paso humano, prioriza, delega lo técnico a `arquitecto-vetapp` / agentes `vetapp-*` dentro de comandos GSD y no deja cerrar un issue sin marcadores `<automated>`, `flutter analyze` + `flutter test` en verde y evidencia en `{NN}-VALIDATION.md`. Escribe en Linear solo con OK del usuario; por defecto trabaja en seco.
 
+## Ajuste de alcance: ciclo PM → arquitecto → QA
+
+Punto de entrada único (`/pm-vetapp ejecuta el plan <fase-NN>`, `sigue con la fase activa`, `continúa <fase-NN>: <resultado>`), con `argument-hint` en el frontmatter y la sección 10 del SKILL.md: preparar → implementar (`gsd-executor`/`arquitecto-vetapp`) → compuerta (`<automated>` + `flutter analyze` + `flutter test` + evidencia en VALIDATION) → `vetapp-qa` → FAIL vuelve al arquitecto (`/gsd-debug` o `--gaps`, máximo 3 vueltas), BLOCKED o paso humano detiene el ciclo y se lo pide al usuario → con `QA: PASS` y evidencia, `Done` en Linear. Planes sin nada verificable en emulador registran `QA: no aplica — <razón>` en vez de un PASS inventado. Invocar `ejecuta` autoriza solo las operaciones de Linear del issue de ese plan y sus sub-issues.
+
 ## Decisiones del usuario (2026-10-30)
 
 - Issue por plan; los pasos humanos (checkpoint, pegar smoke, `user_setup`, aprobación) son sub-issues con label `UAT`.
