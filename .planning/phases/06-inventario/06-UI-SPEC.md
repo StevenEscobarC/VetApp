@@ -1,10 +1,11 @@
 ---
 phase: 6
 slug: inventario
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-10-31
+reviewed_at: 2026-10-31
 ---
 
 # Phase 6 — UI Design Contract
@@ -66,7 +67,7 @@ Reused from `AppSpacing`, multiples of 4 only.
 | 2xl | 48px | Touch-target minimum: row buttons (−1, +), chips, sheet buttons, form buttons, steppers |
 | 3xl | 64px | Icon circle in empty states (`surfaceMuted` circle, 32px icon) |
 
-**Exceptions:** 48dp touch targets (`AppSpacing.touchTarget`) for every tap target; 56dp min height for the Más row and the Inicio card (same as sibling rows); list scroll content keeps **88px bottom padding** (56 FAB + 16 margin + 16 breathing room, local constant, multiple of 4) so the last row is never covered by the FAB; badge height 28px (compact, same as `DosisEstadoChip`); icon circle 64px with 32px icon (same local constant as 5 / 5.1). No other exceptions.
+**Exceptions:** 48dp touch targets (`AppSpacing.touchTarget`) for every tap target; 56dp min height for the Más row and the Inicio card (same as sibling rows); list scroll content keeps **88px bottom padding** (56 FAB + 16 margin + 16 breathing room, local constant, multiple of 4) so the last row is never covered by the FAB; badge height 28px (compact, same as `DosisEstadoChip`); icon circle 64px with 32px icon (same local constant as 5 / 5.1); `MovimientoTile` leading circle 40px; inline progress spinner 20px; standard Material icons 24px. No other exceptions.
 
 ---
 
