@@ -116,6 +116,7 @@ Semilla: `SEED-001` acceso web para veterinario, dueño y admin (después del m�
 | fast | Regla de escape de `adb input text` en `vetapp-qa` (sin URL-encoding, verificar antes de guardar) | 2026-10-01 | 94f7c6c | — |
 | fast | Hardening advisor 0028/0029: revoke EXECUTE anon/public en helpers RLS y trigger (aplicado en vivo 2026-10-01, VET-21) | 2026-10-01 | 4f44309 | — |
 | fast | Skill de proyecto `arquitecto-vetapp` copiada a `.claude/skills/` (estaba solo en la app de Claude) | 2026-10-01 | d4e4e29 | — |
+| 261030-p7m | Skill `pm-vetapp` (Project Manager): GSD↔Linear con issue por plan y sub-issues UAT, delegación a `arquitecto-vetapp`/`vetapp-*`, cierre solo con evidencia en VALIDATION; recorrido en seco de 05.1 en el SUMMARY | 2026-10-30 | (this commit) | [261030-p7m-crear-skill-pm-vetapp-con-linear](./quick/261030-p7m-crear-skill-pm-vetapp-con-linear/) |
 
 ## Deferred Items
 
