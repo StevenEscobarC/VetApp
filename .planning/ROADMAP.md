@@ -25,7 +25,8 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-10-02)
 - [x] **Phase 5: Vacunación y Desparasitación** - Carné digital con cálculo automático de próxima dosis y enlace compartible
  (completed 2026-10-03)
-- [ ] **Phase 5.1: Planes y límites** (INSERTED) - Suscripción por clínica: límites de pacientes/miembros, pantalla Mi plan (sin pago en la app), oferta Clínica al invitar
+- [x] **Phase 5.1: Planes y límites** (INSERTED) - Suscripción por clínica: límites de pacientes/miembros, pantalla Mi plan (sin pago en la app), oferta Clínica al invitar
+ (completed 2026-10-31)
 - [ ] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo
 - [ ] **Phase 7: Facturación** - Cotizaciones/facturas en PDF con descuento automático de inventario
 - [ ] **Phase 8: Dashboard y Diseño Visual** - Resumen operativo real y diseño terracota/crema aplicado a toda la app
@@ -295,7 +296,7 @@ Plans:
   4. Ningún usuario puede cambiar su plan; el dueño del producto activa/renueva planes con `asignar_plan` (solo service_role), incluido Fundador; clínicas existentes quedan en Beta
   5. Mi plan muestra plan, vigencia y contadores, con contacto por WhatsApp de soporte solo para admin y sin precios ni pago; banners al 80 %/últimos 7 días y hojas explicativas al tocar una acción limitada
 **Depends on:** Phase 5
-**Plans:** 8/11 plans executed
+**Plans:** 11/11 plans executed
 **UI hint**: yes
 
 Plans:
@@ -306,7 +307,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05.1-03-PLAN.md — [BLOCKING] Aplicar el delta en vivo (MCP) y correr los 193 checks existentes sin cambios
+- [x] 05.1-03-PLAN.md — [BLOCKING] Aplicar el delta en vivo (MCP) y correr los 193 checks existentes sin cambios
 - [x] 05.1-04-PLAN.md — Límite de 50 pacientes: mapeo LP00x, hoja explicativa, gate de acciones y candado de solo lectura en altas
 - [x] 05.1-05-PLAN.md — Contacto por WhatsApp de soporte (solo admin, sin precios) y banner de Inicio (80 %, últimos 7 días, Beta con fecha, gracia, solo lectura)
 

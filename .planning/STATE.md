@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Phase 5 + 4.1 context gathered — next: plan 04.1 (antes de la 5)"
-last_updated: "2026-10-09T00:32:33.394Z"
-last_activity: 2026-10-09 -- Phase 05.1 execution started
+status: completed
+stopped_at: "Phase 05.1 complete (verified human_needed 5/5) — next: Phase 6 Inventario (discuss)"
+last_updated: "2026-10-31T00:00:00.000Z"
+last_activity: 2026-10-31 -- Phase 05.1 verified and complete
 progress:
   total_phases: 11
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 72
   completed_plans: 61
   percent: 55
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** El veterinario puede llevar toda su consulta — pacientes, historia clínica, agenda — desde el celular, sin depender de un computador ni de una recepcionista.
-**Current focus:** Phase 05.1 — planes-y-l-mites
+**Current focus:** Phase 6 — Inventario (siguiente: discuss)
 
 ## Current Position
 
-Phase: 05.1 (planes-y-l-mites) — EXECUTING
-Plan: 1 of 11
-Status: Executing Phase 05.1
-Last activity: 2026-10-09 -- Phase 05.1 execution started
+Phase: 05.1 (planes-y-l-mites) — COMPLETE (11/11 planes; 05.1-VERIFICATION.md human_needed 5/5)
+Plan: 11 of 11
+Status: Phase 05.1 complete; pendientes humanos: envío real de WhatsApp en teléfono físico y decisión del build de Play sobre SOPORTE_WHATSAPP (A7)
+Last activity: 2026-10-31 -- Phase 05.1 verified and complete
 
 Progress: [████░░░░░] 44% (4 de 9 fases completas; Fase 5 sin discutir)
 
