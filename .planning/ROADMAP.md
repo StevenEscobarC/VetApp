@@ -312,7 +312,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 05.1-06-PLAN.md — Smoke R1..R45 (238 checks) + sondas + [BLOCKING] pegar smoke en vivo
+- [x] 05.1-06-PLAN.md — Smoke R1..R45 (238 checks) + sondas + [BLOCKING] pegar smoke en vivo
 - [x] 05.1-07-PLAN.md — Prueba Clínica 30 días al generar el primer código y cupos en Equipo
 - [x] 05.1-08-PLAN.md — Logo y protocolos propios en Gratis: avisos, hojas y "Guardar en mi catálogo"
 - [x] 05.1-09-PLAN.md — Solo lectura de colegas: ficha, historia clínica, carné e Inicio
