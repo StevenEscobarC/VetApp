@@ -323,7 +323,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 05.1-11-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca/copy sin dinero, UAT vetapp-qa en emulador y aprobación
+- [x] 05.1-11-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca/copy sin dinero, UAT vetapp-qa en emulador y aprobación
 
 ### Phase 6: Inventario
 
