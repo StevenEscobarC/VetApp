@@ -119,7 +119,8 @@ Semilla: `SEED-001` acceso web para veterinario, dueño y admin (después del m�
 | 261030-p7m | Skill `pm-vetapp` (Project Manager): GSD↔Linear con issue por plan y sub-issues UAT, delegación a `arquitecto-vetapp`/`vetapp-*`, cierre solo con evidencia en VALIDATION; recorrido en seco de 05.1 en el SUMMARY | 2026-10-30 | (this commit) | [261030-p7m-crear-skill-pm-vetapp-con-linear](./quick/261030-p7m-crear-skill-pm-vetapp-con-linear/) |
 | fast | Evidencia de 05.1-06 en VALIDATION: T1 `SMOKE_R_OK`, T2 `PROBE_SYNTAX_OK`, `LIVE_SCHEMA_OK`, suite +849; T3 (smoke 238 en vivo) pendiente del usuario (VET-36/VET-37) | 2026-10-30 | 52c0a64 | — |
 | fast | 05.1-06 smoke en vivo FAIL 1/238 (R43): el check no reiniciaba `r_c_deriv` tras R16; R43 arranca con el reinicio estándar (vetapp-supabase), re-pegar pendiente | 2026-10-30 | 13d0462 | — |
-| fast | 05.1-06 cerrado: smoke en vivo `RLS SMOKE: PASS (238 checks) - cambios revertidos` (corrida 2) registrado en VALIDATION/SUMMARY, plan `[x]` en ROADMAP (VET-36/VET-37 Done) | 2026-10-30 | (this commit) | — |
+| fast | 05.1-06 cerrado: smoke en vivo `RLS SMOKE: PASS (238 checks) - cambios revertidos` (corrida 2) registrado en VALIDATION/SUMMARY, plan `[x]` en ROADMAP (VET-36/VET-37 Done) | 2026-10-30 | 225ba94 | — |
+| fast | 05.1-11 T1: `PHASE51_GATE_OK`, `LAYERS_OK`, APK debug, `BRAND: OK` (0 bloqueantes, 14 menores en el SUMMARY); T2 QA espera setup del usuario (VET-39) | 2026-10-30 | (this commit) | — |
 
 ## Deferred Items
 
