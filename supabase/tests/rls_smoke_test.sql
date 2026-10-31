@@ -4256,6 +4256,7 @@ begin
   begin
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null, prueba_pro_hasta = null, prueba_clinica_hasta = null, prueba_clinica_usada = false, beta_hasta = null where clinica_id = r_c_deriv;
     r_json := public.asignar_plan(r_c_deriv, 'pro', null, r_hoy + 20);
     select * into r_row from public._plan_efectivo(r_c_deriv);
     if r_json ->> 'plan' is distinct from r_row.plan or r_json ->> 'estado' is distinct from r_row.estado
