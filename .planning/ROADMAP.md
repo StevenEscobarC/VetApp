@@ -338,7 +338,32 @@ Plans:
   2. El veterinario recibe una alerta cuando un producto cae por debajo del umbral de stock mínimo
   3. El veterinario puede ajustar manualmente la cantidad de un producto
 
-**Plans**: TBD
+**Plans:** 9 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — Contrato del servidor: productos + movimientos solo-append, RPC definer (crear/actualizar/archivar/mover_stock/inventario_resumen), RLS, guard en 9 tablas, autoría; smoke S1..S20 (258 checks) + R44 + sondas
+- [ ] 06-02-PLAN.md — Contrato Dart: Producto/Unidad/MovimientoStock, InventarioFailure tipado, repositorio, providers + acciones con invalidación G4, fake y overrides en 9 tests
+- [ ] 06-03-PLAN.md — formatearCop/parsearCop/formatearMiles, parsearFecha(permitirFuturo) y extensión retrocompatible de AppTextField
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 06-04-PLAN.md — [BLOCKING] Aplicar el delta Fase 6 en vivo (MCP con OK) y pegar el smoke (258 checks) + sonda
+- [ ] 06-05-PLAN.md — Más > Inventario: lista con insignias y búsqueda, Nuevo producto en un paso, rutas de primer nivel
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 06-06-PLAN.md — Ajuste rápido −1/+ con Deshacer, hoja Ajustar stock (Compra/Uso/Vencido/Conteo) y confirmación > 10
+- [ ] 06-07-PLAN.md — Alerta de stock bajo: tarjeta en Inicio, pastilla en Más, filtros Bajos/Vence pronto y Pedir por WhatsApp
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 06-08-PLAN.md — Detalle del producto con historial y autoría, editar (mínimo/precios solo admin) y archivar
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 06-09-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca, UAT vetapp-qa en emulador y aprobación
 **UI hint**: yes
 
 ### Phase 7: Facturación
