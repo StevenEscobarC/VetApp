@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
+import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/domain/inventario_failure.dart';
@@ -290,5 +291,221 @@ void main() {
     expect(a['unidad'], Unidad.caja);
     expect(a['categoria'], CategoriaProducto.insumo);
     expect(a['precioVentaCop'], isNull);
+  });
+
+  group('edición', () {
+    final prod = productoDePrueba(
+      cantidad: 5,
+      minimo: 2,
+      vencimiento: DateTime(2026, 12, 15),
+      precioVentaCop: 85000,
+      costoCop: 40000,
+    );
+
+    Future<void> abrirEditar(
+      WidgetTester tester,
+      FakeInventarioRepository repo, {
+      AuthProfile perfil = vetProfile,
+    }) async {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        routerHarness(
+          initialLocation: '/',
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (context, _) => Scaffold(
+                body: Center(
+                  child: TextButton(
+                    onPressed: () => context.push('/inventario/p1/editar'),
+                    child: const Text('ABRIR'),
+                  ),
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/inventario/:id/editar',
+              builder: (_, s) =>
+                  ProductoFormScreen(productoId: s.pathParameters['id']),
+            ),
+          ],
+          overrides: [
+            ...planOverrides(),
+            authProfileProvider.overrideWith(
+              () => FakeAuthProfileNotifier(profile: perfil),
+            ),
+            inventarioRepositoryProvider.overrideWithValue(repo),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ABRIR'));
+      await tester.pumpAndSettle();
+    }
+
+    Map<String, Object?> ultimaActualizar(FakeInventarioRepository r) =>
+        r.llamadas.lastWhere((l) => l.metodo == 'actualizarProducto').args;
+
+    testWidgets('admin: prellena, muestra unidad de solo lectura y guarda el '
+        'registro completo', (tester) async {
+      final repo = FakeInventarioRepository(productos: [prod]);
+      await abrirEditar(tester, repo);
+
+      expect(find.text('Editar producto'), findsOneWidget);
+      expect(find.text('Más detalles'), findsOneWidget);
+      expect(find.text('Guardar cambios'), findsOneWidget);
+      expect(find.text('Guardar producto'), findsNothing);
+      expect(find.text('Guardar y agregar otro'), findsNothing);
+      expect(find.text('Cantidad inicial'), findsNothing);
+      // Unidad: fila de solo lectura, sin chips de unidad.
+      expect(find.text('Unidad de conteo'), findsOneWidget);
+      expect(find.text('Frasco'), findsOneWidget);
+      expect(find.text('No se puede cambiar.'), findsOneWidget);
+      expect(find.widgetWithText(AppFilterChip, 'Frasco'), findsNothing);
+      expect(
+        find.text('Para cambiar la cantidad usa Ajustar stock en el detalle.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Solo el administrador puede cambiar el mínimo y los '
+          'precios.',
+        ),
+        findsNothing,
+      );
+      expect(find.widgetWithText(TextFormField, 'Amoxicilina'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, '15/12/2026'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, '85.000'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, '40.000'), findsOneWidget);
+
+      await _escribir(tester, 0, 'Amoxicilina 500');
+      await _escribir(tester, 1, '4');
+      await _guardar(tester, 'Guardar cambios');
+
+      final a = ultimaActualizar(repo);
+      expect(a['id'], 'p1');
+      expect(a['nombre'], 'Amoxicilina 500');
+      expect(a['minimo'], 4);
+      expect(a['categoria'], CategoriaProducto.medicamento);
+      expect(a['vencimiento'], DateTime(2026, 12, 15));
+      expect(a['precioVentaCop'], 85000);
+      expect(a['costoCop'], 40000);
+      expect(find.text('ABRIR'), findsOneWidget);
+      expect(find.text('Cambios guardados.'), findsOneWidget);
+    });
+
+    testWidgets('vaciar un precio lo envía como null', (tester) async {
+      final repo = FakeInventarioRepository(productos: [prod]);
+      await abrirEditar(tester, repo);
+      await _escribir(tester, 3, '');
+      await _guardar(tester, 'Guardar cambios');
+      final a = ultimaActualizar(repo);
+      expect(a['precioVentaCop'], isNull);
+      expect(a['costoCop'], 40000);
+    });
+
+    testWidgets('colega: mínimo y precios son filas de solo lectura sin '
+        'candado y se envían sin cambios', (tester) async {
+      final repo = FakeInventarioRepository(productos: [prod]);
+      await abrirEditar(tester, repo, perfil: vetColegaProfile);
+
+      expect(
+        find.text(
+          'Solo el administrador puede cambiar el mínimo y los '
+          'precios.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.lock_outline), findsNothing);
+      expect(find.widgetWithText(TextFormField, '85.000'), findsNothing);
+      expect(find.text('Stock mínimo'), findsOneWidget);
+      expect(find.text('Precio de venta'), findsOneWidget);
+      expect(find.text('Costo'), findsOneWidget);
+      expect(find.text(r'$ 85.000'), findsOneWidget);
+      expect(find.text(r'$ 40.000'), findsOneWidget);
+      // Solo Nombre y Vencimiento son editables.
+      expect(find.byType(TextFormField), findsNWidgets(2));
+
+      await _escribir(tester, 0, 'Amoxicilina B');
+      await _guardar(tester, 'Guardar cambios');
+
+      final a = ultimaActualizar(repo);
+      expect(a['nombre'], 'Amoxicilina B');
+      expect(a['minimo'], 2);
+      expect(a['precioVentaCop'], 85000);
+      expect(a['costoCop'], 40000);
+    });
+
+    testWidgets('sinPermiso del servidor: snackbar y el formulario se '
+        'queda', (tester) async {
+      final repo = FakeInventarioRepository(
+        productos: [prod],
+        errorActualizar: const InventarioFailure(
+          'x',
+          tipo: ErrorInventario.sinPermiso,
+        ),
+      );
+      await abrirEditar(tester, repo);
+      await _guardar(tester, 'Guardar cambios');
+      expect(
+        find.text('Solo el administrador de la clínica puede hacer esto.'),
+        findsOneWidget,
+      );
+      expect(find.text('Editar producto'), findsOneWidget);
+    });
+
+    testWidgets('nombre duplicado queda inline', (tester) async {
+      final repo = FakeInventarioRepository(
+        productos: [prod],
+        errorActualizar: const InventarioFailure(
+          'x',
+          tipo: ErrorInventario.nombreDuplicado,
+        ),
+      );
+      await abrirEditar(tester, repo);
+      await _guardar(tester, 'Guardar cambios');
+      expect(
+        find.text('Ya tienes un producto con ese nombre.'),
+        findsOneWidget,
+      );
+      expect(find.text('Editar producto'), findsOneWidget);
+    });
+
+    testWidgets('soloLectura del servidor abre la hoja del plan y conserva '
+        'los datos', (tester) async {
+      final repo = FakeInventarioRepository(
+        productos: [prod],
+        errorActualizar: const InventarioFailure(
+          'x',
+          tipo: ErrorInventario.soloLectura,
+          limite: LimitePlan.soloLectura,
+        ),
+      );
+      await abrirEditar(tester, repo);
+      await _escribir(tester, 0, 'Otro nombre');
+      await _guardar(tester, 'Guardar cambios');
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'Otro nombre'), findsOneWidget);
+    });
+
+    testWidgets('nombre vacío no guarda', (tester) async {
+      final repo = FakeInventarioRepository(productos: [prod]);
+      await abrirEditar(tester, repo);
+      await _escribir(tester, 0, '');
+      await _guardar(tester, 'Guardar cambios');
+      expect(find.text('Escribe el nombre del producto.'), findsOneWidget);
+      expect(
+        repo.llamadas.where((l) => l.metodo == 'actualizarProducto'),
+        isEmpty,
+      );
+    });
+
+    testWidgets('producto inexistente: no disponible', (tester) async {
+      await abrirEditar(tester, FakeInventarioRepository());
+      expect(find.text('Este producto ya no está disponible.'), findsOneWidget);
+      expect(find.text('Guardar cambios'), findsNothing);
+    });
   });
 }

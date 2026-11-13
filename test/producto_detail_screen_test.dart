@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/data/clock_provider.dart';
 import 'package:vetapp/core/theme/app_colors.dart';
+import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/inventory/domain/entities/movimiento_stock.dart';
 import 'package:vetapp/features/inventory/domain/entities/producto.dart';
+import 'package:vetapp/features/inventory/domain/inventario_failure.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/inventory/presentation/screens/producto_detail_screen.dart';
 import 'package:vetapp/features/inventory/presentation/widgets/movimiento_tile.dart';
@@ -431,5 +433,149 @@ void main() {
     expect(_movs(repo), isEmpty);
     expect(find.text('Ajustar stock'), findsNothing);
     semantics.dispose();
+  });
+
+  group('archivar', () {
+    Future<void> irAlBoton(WidgetTester tester) async {
+      await tester.scrollUntilVisible(
+        find.text('Archivar producto'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+    }
+
+    testWidgets(
+      'el administrador ve el botón destructivo con archive_outlined',
+      (tester) async {
+        await _abrir(
+          tester,
+          FakeInventarioRepository(productos: [_amoxicilina()]),
+        );
+        await irAlBoton(tester);
+        expect(find.byIcon(Icons.archive_outlined), findsOneWidget);
+        expect(
+          tester
+              .widget<AppButton>(
+                find.widgetWithText(AppButton, 'Archivar producto'),
+              )
+              .variant,
+          AppButtonVariant.destructive,
+        );
+      },
+    );
+
+    testWidgets('un colega no ve Archivar producto', (tester) async {
+      await _abrir(
+        tester,
+        FakeInventarioRepository(productos: [_amoxicilina()]),
+        perfil: vetColegaProfile,
+      );
+      expect(find.text('Archivar producto'), findsNothing);
+      expect(find.byIcon(Icons.archive_outlined), findsNothing);
+    });
+
+    testWidgets('el diálogo explica y Cancelar no hace nada', (tester) async {
+      final repo = FakeInventarioRepository(productos: [_amoxicilina()]);
+      await _abrir(tester, repo);
+      await irAlBoton(tester);
+      await tester.tap(find.text('Archivar producto'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          '«Amoxicilina» dejará de aparecer en tu inventario y no podrás '
+          'ajustar su stock. El historial de movimientos se conserva. Esta '
+          'acción no se puede deshacer desde la app.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      expect(
+        repo.llamadas.where((l) => l.metodo == 'archivarProducto'),
+        isEmpty,
+      );
+      expect(find.text('Amoxicilina'), findsOneWidget);
+    });
+
+    testWidgets('Archivar conserva el historial, vuelve y deja de listarse', (
+      tester,
+    ) async {
+      final repo = FakeInventarioRepository(
+        productos: [_amoxicilina()],
+        movimientos: [_mov(1)],
+      );
+      await _abrir(tester, repo);
+      await irAlBoton(tester);
+      await tester.tap(find.text('Archivar producto'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(AppButton, 'Archivar'));
+      await tester.pumpAndSettle();
+
+      expect(
+        repo.llamadas.where((l) => l.metodo == 'archivarProducto').single.args,
+        {'id': 'p1'},
+      );
+      expect(find.text('LISTA'), findsOneWidget);
+      expect(find.text('«Amoxicilina» archivado.'), findsOneWidget);
+      expect(await repo.productos(), isEmpty);
+      // Nada se borra: el historial sigue en el repositorio.
+      expect((await repo.movimientos('p1')).length, 1);
+    });
+
+    testWidgets('sinPermiso del servidor: snackbar y se queda', (tester) async {
+      final repo = FakeInventarioRepository(
+        productos: [_amoxicilina()],
+        errorArchivar: const InventarioFailure(
+          'x',
+          tipo: ErrorInventario.sinPermiso,
+        ),
+      );
+      await _abrir(tester, repo);
+      await irAlBoton(tester);
+      await tester.tap(find.text('Archivar producto'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(AppButton, 'Archivar'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Solo el administrador de la clínica puede hacer esto.'),
+        findsOneWidget,
+      );
+      expect(find.text('LISTA'), findsNothing);
+    });
+
+    testWidgets('noDisponible: snackbar y vuelve a la lista', (tester) async {
+      final repo = FakeInventarioRepository(
+        productos: [_amoxicilina()],
+        errorArchivar: const InventarioFailure(
+          'x',
+          tipo: ErrorInventario.noDisponible,
+        ),
+      );
+      await _abrir(tester, repo);
+      await irAlBoton(tester);
+      await tester.tap(find.text('Archivar producto'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(AppButton, 'Archivar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ese producto ya no está disponible.'), findsOneWidget);
+      expect(find.text('LISTA'), findsOneWidget);
+    });
+
+    testWidgets('solo lectura: candado y hoja del plan, sin diálogo', (
+      tester,
+    ) async {
+      final repo = FakeInventarioRepository(productos: [_amoxicilina()]);
+      await _abrir(tester, repo, plan: planSoloLectura);
+      await irAlBoton(tester);
+      expect(find.byIcon(Icons.archive_outlined), findsNothing);
+      await tester.tap(find.text('Archivar producto'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(
+        repo.llamadas.where((l) => l.metodo == 'archivarProducto'),
+        isEmpty,
+      );
+    });
   });
 }
