@@ -153,3 +153,15 @@ Ninguno.
 - `fade4f1` y `9f06800` existen en la rama `worktree-agent-a5819e74749386bdd`.
 - `supabase/schema.sql` contiene `p_cantidad_esperada int default null`, `errcode = 'IN004'`, `v_o.origen <> 'ajuste'` y el grant de 8 argumentos.
 - El smoke tiene 261 `checks := checks + 1`.
+
+## Aplicación en vivo (2026-11-13)
+
+- Autorización del usuario en el chat: "Autorizo".
+- Supabase MCP `apply_migration fase_06_10_mover_stock_cantidad_esperada` → `{"success":true}`. Se aplicaron las líneas 4393-4475 (`mover_stock`, con ambos `drop`), 4542-4543 (`revoke` y `grant`) y 4547 (`notify`).
+- Consulta de solo lectura: hay una sola firma, `mover_stock(uuid,integer,text,text,uuid,text,uuid,integer)`, con `prosecdef = true`; `anon` no puede ejecutarla y `authenticated` sí.
+- `bash supabase/tests/verify_live_schema.sh`: `OK rpc mover_stock protegido 401`, `LIVE_SCHEMA_OK`.
+- El usuario pegó el smoke completo en el SQL Editor. Línea literal:
+
+```
+RLS SMOKE: PASS (261 checks) - cambios revertidos
+```
