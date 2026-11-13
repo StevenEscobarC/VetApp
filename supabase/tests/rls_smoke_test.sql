@@ -34,7 +34,8 @@
 -- retirar (T6), autoría visible (D-13), citas por veterinario (D-07) y consultas FK restrict (D-06).
 -- Fase 5 (bloque Q, 48 checks): vacunación — aislamiento, solo-append, cálculo derivado, alertas, enlace público, logo de la clínica.
 -- Fase 5.1 (bloque R, 45 checks): planes y límites — plan efectivo, asignar_plan solo service_role, límite de 50, prueba Clínica y cupos, solo lectura, logo/protocolos.
--- Fase 6 (bloque S, 23 checks): inventario — aislamiento, solo-append, mover_stock atómico sin negativos, deshacer (solo de ajustes), conteo con cantidad esperada (IN004), solo admin, resumen de stock bajo, solo lectura, autoría. Total esperado: 261.
+-- Fase 6 (bloque S, 23 checks): inventario — aislamiento, solo-append, mover_stock atómico sin negativos, deshacer (solo de ajustes), conteo con cantidad esperada (IN004), solo admin, resumen de stock bajo, solo lectura, autoría.
+-- Fase 7 (bloque T, 23 checks hasta ahora): facturación — numeración por clínica sin huecos, idempotencia, descuento y devolución de stock, anular solo admin/autor, pagos, cotizaciones y conversión, visita ya cobrada, solo lectura, autoría. Total esperado: 284.
 
 do $$
 declare
@@ -172,6 +173,52 @@ declare
   s_t text;
   s_p text;
   s_sql text;
+  -- Fase 7 (bloque T)
+  t_vet_admin uuid := gen_random_uuid();
+  t_vet_col uuid := gen_random_uuid();
+  t_vet_col2 uuid := gen_random_uuid();
+  t_vet_q uuid := gen_random_uuid();
+  t_vet_otro uuid := gen_random_uuid();
+  t_c uuid;
+  t_c_otro uuid;
+  t_cli uuid;
+  t_cli2 uuid;
+  t_cli_otro uuid;
+  t_m uuid;
+  t_m2 uuid;
+  t_m_otro uuid;
+  t_p1 uuid;
+  t_p2 uuid;
+  t_p_arch uuid;
+  t_p_otro uuid;
+  t_s1 uuid;
+  t_s_otro uuid;
+  t_cita uuid;
+  t_cita2 uuid;
+  t_cons uuid;
+  t_cobro uuid;
+  t_cobro2 uuid;
+  t_cobro3 uuid;
+  t_cot uuid;
+  t_cot2 uuid;
+  t_cot3 uuid;
+  t_cc_conv uuid;
+  t_cc_cita uuid;
+  t_cc_cons uuid;
+  t_clave uuid;
+  t_clave2 uuid;
+  t_hoy date;
+  t_n int;
+  t_n2 int;
+  t_n3 int;
+  t_n4 int;
+  t_row record;
+  t_sql text;
+  t_json jsonb;
+  t_cod text;
+  t_items jsonb;
+  t_t text;
+  t_p text;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -4292,7 +4339,7 @@ begin
     failures := failures || ('R43 error inesperado: ' || sqlerrm);
   end;
 
-  -- R44: anon sin acceso y triggers de la fase en su sitio (guarda en exactamente 9 tablas).
+  -- R44: anon sin acceso y triggers de la fase en su sitio (guarda en exactamente 13 tablas).
   checks := checks + 1;
   begin
     perform set_config('role', 'postgres', true);
@@ -4317,9 +4364,9 @@ begin
       join pg_class c on c.oid = t.tgrelid
       join pg_namespace n on n.oid = c.relnamespace
      where t.tgname = 'guard_solo_lectura' and not t.tgisinternal and n.nspname = 'public';
-    if r_arr is null or cardinality(r_arr) <> 9
-       or not (r_arr <@ array['cita_mascotas', 'citas', 'clientes', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas', 'movimientos_inventario', 'productos']
-               and array['cita_mascotas', 'citas', 'clientes', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas', 'movimientos_inventario', 'productos'] <@ r_arr) then
+    if r_arr is null or cardinality(r_arr) <> 13
+       or not (r_arr <@ array['cita_mascotas', 'citas', 'clientes', 'clinica_servicios', 'cobro_contadores', 'cobro_items', 'cobros', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas', 'movimientos_inventario', 'productos']
+               and array['cita_mascotas', 'citas', 'clientes', 'clinica_servicios', 'cobro_contadores', 'cobro_items', 'cobros', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas', 'movimientos_inventario', 'productos'] <@ r_arr) then
       failures := failures || ('R44 guard_solo_lectura está en: ' || coalesce(array_to_string(r_arr, ','), 'ninguna tabla'));
     end if;
   exception when others then
@@ -5076,6 +5123,986 @@ begin
     end if;
   exception when others then
     failures := failures || ('S23 error inesperado: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- ===== T: Facturación (Fase 7) =====
+  -- T1..T23. Fixtures propios (t_*): nunca vet_a/vet_b ni los del bloque S, cuyos planes se mutan antes.
+  -- Cada regreso a postgres limpia request.jwt.claims. Todo se revierte al final.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', '', true);
+
+  -- Setup T (no cuenta en checks): admin y otro admin (clínicas propias), plan beta en la clínica T y
+  -- tres colegas invitados (cada código de invitación es de un solo uso), más clientes, mascotas,
+  -- productos, un servicio, una cita completada y su consulta.
+  begin
+    t_hoy := public._hoy_bogota();
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values
+      (t_vet_admin, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-t-admin@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke T Admin', 'clinica_nombre', 'Smoke Clinica T Admin'),
+       now(), now()),
+      (t_vet_otro, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-t-otro@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke T Otro', 'clinica_nombre', 'Smoke Clinica T Otro'),
+       now(), now());
+    select clinica_id into t_c from public.perfiles where id = t_vet_admin;
+    select clinica_id into t_c_otro from public.perfiles where id = t_vet_otro;
+    perform public.asignar_plan(t_c, 'beta');
+
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select g.codigo into t_cod from public.generar_invitacion_clinica() g;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values (t_vet_col, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+            'smoke-t-col@vetapp.invalid',
+            jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke T Colega', 'codigo_invitacion', t_cod),
+            now(), now());
+
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select g.codigo into t_cod from public.generar_invitacion_clinica() g;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values (t_vet_col2, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+            'smoke-t-col2@vetapp.invalid',
+            jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke T Colega Dos', 'codigo_invitacion', t_cod),
+            now(), now());
+
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select g.codigo into t_cod from public.generar_invitacion_clinica() g;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values (t_vet_q, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+            'smoke-t-q@vetapp.invalid',
+            jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke T Cotizador', 'codigo_invitacion', t_cod),
+            now(), now());
+
+    insert into public.clientes (clinica_id, nombre, telefono, cedula)
+      values (t_c, 'Smoke T Cliente', '3000000071', '1020304050') returning id into t_cli;
+    insert into public.clientes (clinica_id, nombre, telefono)
+      values (t_c, 'Smoke T Cliente Dos', '3000000072') returning id into t_cli2;
+    insert into public.clientes (clinica_id, nombre, telefono)
+      values (t_c_otro, 'Smoke T Cliente Otro', '3000000073') returning id into t_cli_otro;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (t_cli, t_c, 'Smoke T Luna', 'perro') returning id into t_m;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (t_cli2, t_c, 'Smoke T Tom', 'gato') returning id into t_m2;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (t_cli_otro, t_c_otro, 'Smoke T Otra', 'perro') returning id into t_m_otro;
+    insert into public.productos (clinica_id, nombre, unidad, cantidad, precio_venta_cop, creado_por)
+      values (t_c, 'Amoxicilina T', 'frasco', 10, 85000, t_vet_admin) returning id into t_p1;
+    insert into public.productos (clinica_id, nombre, unidad, cantidad, creado_por)
+      values (t_c, 'Gasas T', 'unidad', 5, t_vet_admin) returning id into t_p2;
+    insert into public.productos (clinica_id, nombre, unidad, cantidad, creado_por, archivado_at, archivado_por)
+      values (t_c, 'Archivado T', 'unidad', 5, t_vet_admin, now(), t_vet_admin) returning id into t_p_arch;
+    insert into public.productos (clinica_id, nombre, unidad, cantidad, creado_por)
+      values (t_c_otro, 'Otro T', 'unidad', 5, t_vet_otro) returning id into t_p_otro;
+    insert into public.clinica_servicios (clinica_id, nombre, precio_cop, creado_por)
+      values (t_c, 'Consulta', 50000, t_vet_admin) returning id into t_s1;
+    insert into public.clinica_servicios (clinica_id, nombre, precio_cop, creado_por)
+      values (t_c_otro, 'Consulta Otra', 40000, t_vet_otro) returning id into t_s_otro;
+    insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora, estado)
+      values (t_c, t_cli, t_vet_col, now() - interval '2 hours', 'completada') returning id into t_cita;
+    insert into public.cita_mascotas (cita_id, mascota_id, clinica_id) values (t_cita, t_m, t_c);
+    insert into public.citas (clinica_id, cliente_id, veterinario_id, fecha_hora)
+      values (t_c, t_cli2, t_vet_col, now() + interval '1 day') returning id into t_cita2;
+    insert into public.cita_mascotas (cita_id, mascota_id, clinica_id) values (t_cita2, t_m2, t_c);
+    insert into public.consultas (mascota_id, veterinario_id, diagnostico, tratamiento, cita_id)
+      values (t_m, t_vet_col, 'T', 'T', t_cita) returning id into t_cons;
+  exception when others then
+    failures := failures || ('SETUPT error inesperado: ' || sqlerrm);
+  end;
+
+  -- T1: estructura (4 tablas con RLS, solo policies SELECT, constraints, índices y columnas nuevas).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    foreach t_t in array array['cobros', 'cobro_items', 'clinica_servicios', 'cobro_contadores'] loop
+      if to_regclass('public.' || t_t) is null
+         or not exists (select 1 from pg_class c where c.oid = to_regclass('public.' || t_t) and c.relrowsecurity) then
+        failures := failures || ('T1 ' || t_t || ' no existe o no tiene RLS habilitado');
+      end if;
+      select count(*) into t_n from pg_policies p where p.schemaname = 'public' and p.tablename = t_t;
+      select count(*) into t_n2 from pg_policies p where p.schemaname = 'public' and p.tablename = t_t and p.cmd = 'SELECT';
+      if t_t = 'cobro_contadores' then
+        if t_n <> 0 then
+          failures := failures || ('T1 cobro_contadores no debe tener policies (hay ' || t_n || ')');
+        end if;
+      elsif t_n <> 1 or t_n2 <> 1 then
+        failures := failures || ('T1 ' || t_t || ' debe tener exactamente una policy SELECT (hay ' || t_n || ')');
+      end if;
+    end loop;
+    foreach t_t in array array[
+      'cobros_numero_uq', 'cobros_clave_uq', 'cobros_estado_por_tipo', 'cobros_creado_por_perfil_fkey',
+      'cobros_anulada_por_perfil_fkey', 'cobros_convertida_en_fkey', 'cobros_cotizacion_origen_fkey',
+      'cobro_items_cobro_misma_clinica_fkey', 'clientes_cedula_formato', 'clinicas_nit_formato'
+    ] loop
+      if not exists (select 1 from pg_constraint where conname = t_t) then
+        failures := failures || ('T1 falta la constraint ' || t_t);
+      end if;
+    end loop;
+    foreach t_t in array array['cobros_cita_activa_uq', 'cobros_consulta_activa_uq', 'clinica_servicios_nombre_activo_uq'] loop
+      if not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = t_t) then
+        failures := failures || ('T1 falta el índice ' || t_t);
+      end if;
+    end loop;
+    if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'clientes' and column_name = 'cedula')
+       or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'clinicas' and column_name = 'nit') then
+      failures := failures || 'T1 faltan las columnas clientes.cedula o clinicas.nit';
+    end if;
+  exception when others then
+    failures := failures || ('T1 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T2: privilegios (anon nada; authenticated sin escritura directa ni lectura de contadores; RPC solo
+  -- authenticated; helpers privados para nadie).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    foreach t_t in array array['public.cobros', 'public.cobro_items', 'public.clinica_servicios', 'public.cobro_contadores'] loop
+      if to_regclass(t_t) is null then
+        failures := failures || ('T2 falta la tabla ' || t_t);
+        continue;
+      end if;
+      if has_table_privilege('anon', t_t, 'SELECT') then
+        failures := failures || ('T2 anon tiene SELECT sobre ' || t_t);
+      end if;
+      foreach t_p in array array['INSERT', 'UPDATE', 'DELETE'] loop
+        if has_table_privilege('authenticated', t_t, t_p) then
+          failures := failures || ('T2 authenticated tiene ' || t_p || ' sobre ' || t_t);
+        end if;
+      end loop;
+    end loop;
+    if to_regclass('public.cobro_contadores') is not null and has_table_privilege('authenticated', 'public.cobro_contadores', 'SELECT') then
+      failures := failures || 'T2 authenticated tiene SELECT sobre cobro_contadores';
+    end if;
+    foreach t_t in array array[
+      'public.crear_cuenta_cobro(uuid,uuid,jsonb,uuid,uuid,uuid,uuid)',
+      'public.crear_cotizacion(uuid,uuid,jsonb,uuid)',
+      'public.marcar_cobro_pagado(uuid,text,date)',
+      'public.anular_cobro(uuid,text)'
+    ] loop
+      if to_regprocedure(t_t) is null then
+        failures := failures || ('T2 falta la RPC ' || t_t);
+        continue;
+      end if;
+      if has_function_privilege('anon', t_t, 'execute') then
+        failures := failures || ('T2 anon puede ejecutar ' || t_t);
+      end if;
+      if not has_function_privilege('authenticated', t_t, 'execute') then
+        failures := failures || ('T2 authenticated no puede ejecutar ' || t_t);
+      end if;
+    end loop;
+    foreach t_t in array array[
+      'public._aplicar_movimiento_stock(uuid,uuid,int,text,uuid,text,uuid,boolean)',
+      'public._total_items_cobro(uuid,jsonb)',
+      'public._insertar_items_cobro(uuid,uuid,jsonb,boolean,text)',
+      'public._numero_cobro(text,int)'
+    ] loop
+      if to_regprocedure(t_t) is null then
+        failures := failures || ('T2 falta el helper ' || t_t);
+        continue;
+      end if;
+      if has_function_privilege('anon', t_t, 'execute') or has_function_privilege('authenticated', t_t, 'execute') then
+        failures := failures || ('T2 el helper privado es ejecutable por anon o authenticated: ' || t_t);
+      end if;
+    end loop;
+  exception when others then
+    failures := failures || ('T2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T3: las 4 RPC y los 3 helpers plpgsql son security definer con search_path fijado; formato del número.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into t_n from pg_proc p
+     where p.pronamespace = 'public'::regnamespace
+       and p.proname in ('crear_cuenta_cobro', 'crear_cotizacion', 'marcar_cobro_pagado', 'anular_cobro',
+                         '_aplicar_movimiento_stock', '_total_items_cobro', '_insertar_items_cobro')
+       and p.prosecdef and p.proconfig is not null and 'search_path=public' = any (p.proconfig);
+    if t_n <> 7 then
+      failures := failures || ('T3 esperaba 7 funciones security definer con search_path=public, hay ' || t_n);
+    end if;
+    if public._numero_cobro('cuenta_cobro', 12) is distinct from 'CC-0012'
+       or public._numero_cobro('cotizacion', 4) is distinct from 'COT-0004'
+       or public._numero_cobro('cuenta_cobro', 12345) is distinct from 'CC-12345' then
+      failures := failures || format('T3 formato de número incorrecto: %s / %s / %s',
+        public._numero_cobro('cuenta_cobro', 12), public._numero_cobro('cotizacion', 4), public._numero_cobro('cuenta_cobro', 12345));
+    end if;
+  exception when others then
+    failures := failures || ('T3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T4: emitir una CC: número 1, snapshots, total calculado en el servidor, nombres copiados de la BD,
+  -- precio de línea sin tocar el precio base (D-07).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    t_clave := gen_random_uuid();
+    t_items := jsonb_build_array(
+      jsonb_build_object('tipo', 'producto', 'producto_id', t_p1, 'descripcion', 'Nombre falso', 'cantidad', 2, 'precio_unitario_cop', 80000),
+      jsonb_build_object('tipo', 'producto', 'producto_id', t_p2, 'cantidad', 1, 'precio_unitario_cop', 0),
+      jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'descripcion', 'X', 'cantidad', 1, 'precio_unitario_cop', 50000),
+      jsonb_build_object('tipo', 'producto', 'producto_id', t_p1, 'cantidad', 1, 'precio_unitario_cop', 80000)
+    );
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cuenta_cobro(t_clave, t_cli, t_items, t_m);
+    t_cobro := t_row.id;
+    if t_row.numero is distinct from 1 or t_row.ya_existia is distinct from false then
+      failures := failures || format('T4 esperaba numero 1 sin ya_existia, llegó %s / %s', t_row.numero, t_row.ya_existia);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into t_row from public.cobros where id = t_cobro;
+    if t_row.tipo is distinct from 'cuenta_cobro' or t_row.estado is distinct from 'pendiente' or t_row.fecha is distinct from t_hoy
+       or t_row.cliente_nombre is distinct from 'Smoke T Cliente' or t_row.cliente_cedula is distinct from '1020304050'
+       or t_row.mascota_nombre is distinct from 'Smoke T Luna' or t_row.creado_por is distinct from t_vet_col
+       or t_row.total_cop is distinct from 290000 then
+      failures := failures || format('T4 encabezado incorrecto: tipo=%s estado=%s fecha=%s cliente=%s cedula=%s mascota=%s total=%s',
+        t_row.tipo, t_row.estado, t_row.fecha, t_row.cliente_nombre, t_row.cliente_cedula, t_row.mascota_nombre, t_row.total_cop);
+    end if;
+    select count(*), min(orden), max(orden) into t_n, t_n2, t_n3 from public.cobro_items where cobro_id = t_cobro;
+    if t_n <> 4 or t_n2 is distinct from 1 or t_n3 is distinct from 4 then
+      failures := failures || format('T4 esperaba 4 ítems con orden 1..4, hay %s (%s..%s)', t_n, t_n2, t_n3);
+    end if;
+    select count(*) into t_n from public.cobro_items
+     where cobro_id = t_cobro and tipo = 'producto'
+       and descripcion = case when producto_id = t_p1 then 'Amoxicilina T' when producto_id = t_p2 then 'Gasas T' end;
+    select count(*) into t_n2 from public.cobro_items where cobro_id = t_cobro and descripcion = 'Nombre falso';
+    if t_n <> 3 or t_n2 <> 0 then
+      failures := failures || format('T4 las líneas de producto no copiaron el nombre de la BD (%s correctas, %s con texto del cliente)', t_n, t_n2);
+    end if;
+    select * into t_row from public.cobro_items where cobro_id = t_cobro and tipo = 'servicio';
+    if t_row.descripcion is distinct from 'Consulta' or t_row.precio_unitario_cop is distinct from 50000 or t_row.servicio_id is distinct from t_s1 then
+      failures := failures || format('T4 línea de servicio incorrecta: %s / %s', t_row.descripcion, t_row.precio_unitario_cop);
+    end if;
+    select precio_venta_cop into t_n from public.productos where id = t_p1;
+    if t_n is distinct from 85000 then
+      failures := failures || ('T4 el precio de línea cambió el precio base del producto: ' || coalesce(t_n::text, 'null'));
+    end if;
+  exception when others then
+    failures := failures || ('T4 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T5: descuento de stock agregado por producto, con movimientos origen factura en el libro.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select cantidad into t_n from public.productos where id = t_p1;
+    select cantidad into t_n2 from public.productos where id = t_p2;
+    if t_n is distinct from 7 or t_n2 is distinct from 4 then
+      failures := failures || format('T5 stock esperado 7 y 4, hay %s y %s', t_n, t_n2);
+    end if;
+    select count(*) into t_n from public.movimientos_inventario where ref_id = t_cobro;
+    select count(*) into t_n2 from public.movimientos_inventario
+     where ref_id = t_cobro and origen = 'factura' and motivo = 'venta' and nota = 'CC-0001' and veterinario_id = t_vet_col
+       and ((producto_id = t_p1 and delta = -3) or (producto_id = t_p2 and delta = -1));
+    if t_n <> 2 or t_n2 <> 2 then
+      failures := failures || format('T5 esperaba 2 movimientos de venta (uno por producto), hay %s (%s correctos)', t_n, t_n2);
+    end if;
+  exception when others then
+    failures := failures || ('T5 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T6: sin stock suficiente falla con IN001 (detail json) y no deja encabezado, ítems ni movimientos.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into t_n from public.cobros where clinica_id = t_c;
+    select count(*) into t_n2 from public.cobro_items where clinica_id = t_c;
+    select count(*) into t_n3 from public.movimientos_inventario where producto_id = t_p1;
+    select cantidad into t_n4 from public.productos where id = t_p1;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli,
+        jsonb_build_array(jsonb_build_object('tipo', 'producto', 'producto_id', t_p1, 'cantidad', 50, 'precio_unitario_cop', 85000)));
+      failures := failures || 'T6 una CC con 50 unidades y stock 7 debía fallar con IN001';
+    exception
+      when sqlstate 'IN001' then
+        get stacked diagnostics t_sql = pg_exception_detail;
+        begin
+          t_json := t_sql::jsonb;
+          if (t_json ->> 'quedan')::int is distinct from 7 or t_json ->> 'producto' is distinct from 'Amoxicilina T' then
+            failures := failures || ('T6 detail de IN001 incorrecto: ' || t_sql);
+          end if;
+        exception when others then
+          failures := failures || ('T6 el detail de IN001 no es json: ' || coalesce(t_sql, 'null'));
+        end;
+      when others then
+        failures := failures || ('T6 esperaba IN001 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select count(*) from public.cobros where clinica_id = t_c) <> t_n
+       or (select count(*) from public.cobro_items where clinica_id = t_c) <> t_n2
+       or (select count(*) from public.movimientos_inventario where producto_id = t_p1) <> t_n3
+       or (select cantidad from public.productos where id = t_p1) is distinct from t_n4 then
+      failures := failures || 'T6 el rechazo por stock dejó encabezado, ítems, movimientos o cambió la cantidad';
+    end if;
+  exception when others then
+    failures := failures || ('T6 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T7: el rechazo no quemó número: la siguiente CC válida es la 2.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cuenta_cobro(gen_random_uuid(), t_cli,
+      jsonb_build_array(jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 50000)));
+    t_cobro2 := t_row.id;
+    if t_row.numero is distinct from 2 then
+      failures := failures || ('T7 esperaba la CC numero 2 (sin huecos), llegó ' || coalesce(t_row.numero::text, 'null'));
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T7 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T8: idempotencia (D-21): la misma clave devuelve la misma CC con ya_existia y no mueve stock otra vez.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into t_n from public.cobros where clinica_id = t_c;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cuenta_cobro(t_clave, t_cli, t_items, t_m);
+    if t_row.id is distinct from t_cobro or t_row.numero is distinct from 1 or t_row.ya_existia is distinct from true then
+      failures := failures || format('T8 el reintento devolvió id distinto o sin ya_existia: numero=%s ya_existia=%s', t_row.numero, t_row.ya_existia);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select cantidad from public.productos where id = t_p1) is distinct from 7
+       or (select count(*) from public.movimientos_inventario where ref_id = t_cobro) <> 2
+       or (select count(*) from public.cobros where clinica_id = t_c) <> t_n then
+      failures := failures || 'T8 el reintento movió stock otra vez o creó otra CC';
+    end if;
+  exception when others then
+    failures := failures || ('T8 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T9: producto archivado o de otra clínica -> IN002 y no se crea nada.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into t_n from public.cobros where clinica_id = t_c;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach t_t in array array[t_p_arch::text, t_p_otro::text] loop
+      begin
+        perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli,
+          jsonb_build_array(jsonb_build_object('tipo', 'producto', 'producto_id', t_t, 'cantidad', 1, 'precio_unitario_cop', 1000)));
+        failures := failures || ('T9 producto no disponible debía fallar con IN002: ' || t_t);
+      exception
+        when sqlstate 'IN002' then null;
+        when others then failures := failures || ('T9 esperaba IN002 y llegó ' || sqlstate || ': ' || sqlerrm);
+      end;
+    end loop;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select count(*) from public.cobros where clinica_id = t_c) <> t_n
+       or exists (select 1 from public.movimientos_inventario where producto_id in (t_p_arch, t_p_otro)) then
+      failures := failures || 'T9 el rechazo IN002 dejó una CC o un movimiento';
+    end if;
+  exception when others then
+    failures := failures || ('T9 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T10: ids de otra clínica o inconsistentes -> check_violation, sin filtrar existencia y sin crear nada.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into t_n from public.cobros where clinica_id = t_c;
+    t_json := jsonb_build_array(jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 50000));
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach t_sql in array array[
+      format('select * from public.crear_cuenta_cobro(%L::uuid, %L::uuid, %L::jsonb)', gen_random_uuid(), t_cli_otro, t_json),
+      format('select * from public.crear_cuenta_cobro(%L::uuid, %L::uuid, %L::jsonb, %L::uuid)', gen_random_uuid(), t_cli, t_json, t_m_otro),
+      format('select * from public.crear_cuenta_cobro(%L::uuid, %L::uuid, %L::jsonb, %L::uuid)', gen_random_uuid(), t_cli, t_json, t_m2),
+      format('select * from public.crear_cuenta_cobro(%L::uuid, %L::uuid, %L::jsonb, null, %L::uuid)', gen_random_uuid(), t_cli, t_json, t_cita2),
+      format('select * from public.crear_cuenta_cobro(%L::uuid, %L::uuid, %L::jsonb)', gen_random_uuid(), t_cli,
+        jsonb_build_array(jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s_otro, 'cantidad', 1, 'precio_unitario_cop', 40000)))
+    ] loop
+      begin
+        execute t_sql;
+        failures := failures || ('T10 debía fallar con check_violation: ' || t_sql);
+      exception
+        when check_violation then null;
+        when others then failures := failures || ('T10 esperaba check_violation y llegó ' || sqlstate || ': ' || sqlerrm);
+      end;
+    end loop;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select count(*) from public.cobros where clinica_id = t_c) <> t_n then
+      failures := failures || 'T10 un id ajeno dejó una CC creada';
+    end if;
+  exception when others then
+    failures := failures || ('T10 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T11: validación de las líneas (vacías, 51, cantidades, precios, tipo, producto sin id, total 0, desbordamiento).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into t_n from public.cobros where clinica_id = t_c;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach t_json in array array[
+      '[]'::jsonb,
+      (select jsonb_agg(jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke T', 'cantidad', 1, 'precio_unitario_cop', 1000)) from generate_series(1, 51)),
+      jsonb_build_array(jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke T', 'cantidad', 0, 'precio_unitario_cop', 1000)),
+      jsonb_build_array(jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke T', 'cantidad', 1.5, 'precio_unitario_cop', 1000)),
+      jsonb_build_array(jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke T', 'cantidad', 1, 'precio_unitario_cop', -1)),
+      jsonb_build_array(jsonb_build_object('tipo', 'regalo', 'descripcion', 'Smoke T', 'cantidad', 1, 'precio_unitario_cop', 1000)),
+      jsonb_build_array(jsonb_build_object('tipo', 'producto', 'cantidad', 1, 'precio_unitario_cop', 1000)),
+      jsonb_build_array(
+        jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke T', 'cantidad', 1, 'precio_unitario_cop', 0),
+        jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 2, 'precio_unitario_cop', 0)),
+      jsonb_build_array(jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke T', 'cantidad', 100000, 'precio_unitario_cop', 100000000))
+    ] loop
+      begin
+        perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli, t_json);
+        failures := failures || ('T11 debía fallar con check_violation: ' || left(t_json::text, 120));
+      exception
+        when check_violation then null;
+        when others then failures := failures || ('T11 esperaba check_violation y llegó ' || sqlstate || ': ' || sqlerrm);
+      end;
+    end loop;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select count(*) from public.cobros where clinica_id = t_c) <> t_n then
+      failures := failures || 'T11 una línea inválida dejó una CC creada';
+    end if;
+  exception when others then
+    failures := failures || ('T11 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T12: un CLIENTE no puede usar ninguna de las 4 RPC.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    t_json := jsonb_build_array(jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 50000));
+    perform set_config('request.jwt.claims', json_build_object('sub', cliente_c_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach t_sql in array array[
+      format('select * from public.crear_cuenta_cobro(%L::uuid, %L::uuid, %L::jsonb)', gen_random_uuid(), t_cli, t_json),
+      format('select * from public.crear_cotizacion(%L::uuid, %L::uuid, %L::jsonb)', gen_random_uuid(), t_cli, t_json),
+      format('select public.marcar_cobro_pagado(%L::uuid, ''efectivo'')', t_cobro2),
+      format('select public.anular_cobro(%L::uuid, ''Smoke T cliente'')', t_cobro)
+    ] loop
+      begin
+        execute t_sql;
+        failures := failures || ('T12 el cliente pudo ejecutar: ' || t_sql);
+      exception
+        when insufficient_privilege then null;
+        when others then failures := failures || ('T12 esperaba insufficient_privilege y llegó ' || sqlstate || ': ' || sqlerrm);
+      end;
+    end loop;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T12 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T13: aislamiento por clínica, con control positivo.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_otro, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into t_n from public.cobros where clinica_id = t_c;
+    select count(*) into t_n2 from public.cobro_items where clinica_id = t_c;
+    select count(*) into t_n3 from public.clinica_servicios where clinica_id = t_c;
+    if t_n <> 0 or t_n2 <> 0 or t_n3 <> 0 then
+      failures := failures || format('T13 otra clínica ve cobros=%s ítems=%s servicios=%s', t_n, t_n2, t_n3);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into t_n from public.cobros where clinica_id = t_c;
+    if t_n < 2 then
+      failures := failures || ('T13 el admin debía ver al menos 2 cobros de su clínica, ve ' || t_n);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T13 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T14: ninguna escritura directa por PostgREST (ni siquiera el admin).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select total_cop into t_n2 from public.cobros where id = t_cobro;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach t_sql in array array[
+      format('insert into public.cobros (clinica_id, tipo, numero, estado, clave_idempotencia, fecha, cliente_nombre, total_cop, creado_por) values (%L, ''cuenta_cobro'', 999, ''pendiente'', %L, %L, ''Smoke T Directo'', 1000, %L)',
+        t_c, gen_random_uuid(), t_hoy, t_vet_admin),
+      format('update public.cobros set total_cop = 1 where id = %L', t_cobro),
+      format('delete from public.cobro_items where cobro_id = %L', t_cobro),
+      'update public.cobro_contadores set ultimo = 0',
+      format('insert into public.clinica_servicios (clinica_id, nombre, precio_cop, creado_por) values (%L, ''Smoke T Directo'', 1, %L)', t_c, t_vet_admin)
+    ] loop
+      begin
+        execute t_sql;
+        get diagnostics t_n = row_count;
+        if t_n <> 0 then
+          failures := failures || ('T14 la escritura directa afectó ' || t_n || ' filas: ' || t_sql);
+        end if;
+      exception
+        when insufficient_privilege then null;
+        when others then failures := failures || ('T14 esperaba insufficient_privilege y llegó ' || sqlstate || ': ' || sqlerrm);
+      end;
+    end loop;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select total_cop from public.cobros where id = t_cobro) is distinct from t_n2
+       or (select count(*) from public.cobro_items where cobro_id = t_cobro) <> 4 then
+      failures := failures || 'T14 una escritura directa cambió la CC o sus ítems';
+    end if;
+  exception when others then
+    failures := failures || ('T14 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T15: marcar pagada (método válido, fecha entre la emisión y hoy, idempotente; una cotización no se paga).
+  -- La cotización creada aquí es la primera de la clínica: numero 1 en su propio contador, aunque ya existan 2 CC.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cotizacion(gen_random_uuid(), t_cli,
+      jsonb_build_array(jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 50000)));
+    t_cot2 := t_row.id;
+    if t_row.numero is distinct from 1 then
+      failures := failures || ('T15 la primera cotización debía ser la numero 1 (contador propio), llegó ' || coalesce(t_row.numero::text, 'null'));
+    end if;
+    foreach t_sql in array array[
+      format('select public.marcar_cobro_pagado(%L::uuid, ''bitcoin'')', t_cobro2),
+      format('select public.marcar_cobro_pagado(%L::uuid, ''efectivo'', %L::date)', t_cobro2, t_hoy + 1),
+      format('select public.marcar_cobro_pagado(%L::uuid, ''efectivo'', %L::date)', t_cobro2, t_hoy - 1)
+    ] loop
+      begin
+        execute t_sql;
+        failures := failures || ('T15 debía fallar con check_violation: ' || t_sql);
+      exception
+        when check_violation then null;
+        when others then failures := failures || ('T15 esperaba check_violation y llegó ' || sqlstate || ': ' || sqlerrm);
+      end;
+    end loop;
+    perform public.marcar_cobro_pagado(t_cobro2, 'nequi');
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into t_row from public.cobros where id = t_cobro2;
+    if t_row.estado is distinct from 'pagada' or t_row.metodo_pago is distinct from 'nequi'
+       or t_row.pagada_el is distinct from t_hoy or t_row.pagado_por is distinct from t_vet_col then
+      failures := failures || format('T15 pago incorrecto: estado=%s metodo=%s pagada_el=%s', t_row.estado, t_row.metodo_pago, t_row.pagada_el);
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.marcar_cobro_pagado(t_cobro2, 'efectivo');
+    begin
+      perform public.marcar_cobro_pagado(t_cot2, 'efectivo');
+      failures := failures || 'T15 pagar una cotización debía fallar con BC001';
+    exception
+      when sqlstate 'BC001' then null;
+      when others then failures := failures || ('T15 esperaba BC001 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select metodo_pago from public.cobros where id = t_cobro2) is distinct from 'nequi' then
+      failures := failures || 'T15 el segundo marcar pagada cambió el método (debía ser idempotente)';
+    end if;
+  exception when others then
+    failures := failures || ('T15 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T16: anular solo el admin o quien la emitió; el motivo necesita 3..200 caracteres.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col2, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.anular_cobro(t_cobro, 'Error de precio');
+      failures := failures || 'T16 un colega no autor ni admin pudo anular';
+    exception
+      when insufficient_privilege then null;
+      when others then failures := failures || ('T16 esperaba insufficient_privilege y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select estado from public.cobros where id = t_cobro) is distinct from 'pendiente' then
+      failures := failures || 'T16 el intento del colega cambió el estado';
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.anular_cobro(t_cobro, '  ab ');
+      failures := failures || 'T16 un motivo de 2 caracteres debía fallar con check_violation';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('T16 esperaba check_violation y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.anular_cobro(t_cobro2, 'Prueba admin');
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into t_row from public.cobros where id = t_cobro2;
+    if t_row.estado is distinct from 'anulada' or t_row.anulada_por is distinct from t_vet_admin
+       or t_row.metodo_pago is distinct from 'nequi' or t_row.motivo_anulacion is distinct from 'Prueba admin' then
+      failures := failures || format('T16 el admin no anuló bien la CC pagada: estado=%s metodo=%s', t_row.estado, t_row.metodo_pago);
+    end if;
+  exception when others then
+    failures := failures || ('T16 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T17: anular devuelve el stock con movimientos deshacer enlazados (D-13), conserva el número.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.anular_cobro(t_cobro, 'Error de precio');
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into t_row from public.cobros where id = t_cobro;
+    if t_row.estado is distinct from 'anulada' or t_row.anulada_por is distinct from t_vet_col or t_row.anulada_at is null
+       or t_row.motivo_anulacion is distinct from 'Error de precio' or t_row.numero is distinct from 1 then
+      failures := failures || format('T17 anulación incorrecta: estado=%s motivo=%s numero=%s', t_row.estado, t_row.motivo_anulacion, t_row.numero);
+    end if;
+    if (select cantidad from public.productos where id = t_p1) is distinct from 10
+       or (select cantidad from public.productos where id = t_p2) is distinct from 5 then
+      failures := failures || 'T17 el stock no volvió a 10 y 5';
+    end if;
+    select count(*) into t_n from public.movimientos_inventario d
+      join public.movimientos_inventario v on v.id = d.deshace_id
+     where d.ref_id = t_cobro and d.motivo = 'deshacer' and d.origen = 'factura' and d.nota = 'Anulada CC-0001'
+       and v.ref_id = t_cobro and v.motivo = 'venta' and v.producto_id = d.producto_id and d.delta = -v.delta;
+    select count(*) into t_n2 from public.movimientos_inventario where ref_id = t_cobro;
+    if t_n <> 2 or t_n2 <> 4 then
+      failures := failures || format('T17 esperaba 2 movimientos deshacer enlazados (hay %s) y 4 en total (hay %s)', t_n, t_n2);
+    end if;
+  exception when others then
+    failures := failures || ('T17 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T18: doble anulación -> BC001 sin movimientos; anular funciona aunque el producto se archivó después (Pitfall 3).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into t_n2 from public.movimientos_inventario where ref_id = t_cobro;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.anular_cobro(t_cobro, 'Otra vez');
+      failures := failures || 'T18 anular dos veces debía fallar con BC001';
+    exception
+      when sqlstate 'BC001' then null;
+      when others then failures := failures || ('T18 esperaba BC001 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    select * into t_row from public.crear_cuenta_cobro(gen_random_uuid(), t_cli,
+      jsonb_build_array(jsonb_build_object('tipo', 'producto', 'producto_id', t_p2, 'cantidad', 2, 'precio_unitario_cop', 3000)));
+    t_cobro3 := t_row.id;
+    if t_row.numero is distinct from 3 then
+      failures := failures || ('T18 esperaba la CC numero 3, llegó ' || coalesce(t_row.numero::text, 'null'));
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select count(*) from public.movimientos_inventario where ref_id = t_cobro) <> t_n2 then
+      failures := failures || 'T18 la doble anulación dejó movimientos nuevos';
+    end if;
+    if (select cantidad from public.productos where id = t_p2) is distinct from 3 then
+      failures := failures || 'T18 la CC 3 no descontó 2 gasas';
+    end if;
+    update public.productos set archivado_at = now(), archivado_por = t_vet_admin where id = t_p2;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.anular_cobro(t_cobro3, 'Producto archivado');
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select cantidad from public.productos where id = t_p2) is distinct from 5
+       or (select estado from public.cobros where id = t_cobro3) is distinct from 'anulada' then
+      failures := failures || 'T18 anular con el producto archivado no devolvió el stock';
+    end if;
+  exception when others then
+    failures := failures || ('T18 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T19: una cotización no mueve stock (aunque pida más de lo que hay), vence en 15 días (D-23) y sigue
+  -- rechazando productos archivados (D-14). El cotizador (t_vet_q) deja una cotización solo con servicio.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into t_n2 from public.movimientos_inventario where producto_id = t_p1;
+    select cantidad into t_n3 from public.productos where id = t_p1;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cotizacion(gen_random_uuid(), t_cli,
+      jsonb_build_array(
+        jsonb_build_object('tipo', 'producto', 'producto_id', t_p1, 'cantidad', 20, 'precio_unitario_cop', 85000),
+        jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 50000)),
+      t_m);
+    t_cot3 := t_row.id;
+    if t_row.numero is distinct from 2 or t_row.ya_existia is distinct from false then
+      failures := failures || ('T19 esperaba la cotización numero 2 de su propio contador, llegó ' || coalesce(t_row.numero::text, 'null'));
+    end if;
+    begin
+      perform * from public.crear_cotizacion(gen_random_uuid(), t_cli,
+        jsonb_build_array(jsonb_build_object('tipo', 'producto', 'producto_id', t_p_arch, 'cantidad', 1, 'precio_unitario_cop', 1000)));
+      failures := failures || 'T19 una cotización con un producto archivado debía fallar con IN002';
+    exception
+      when sqlstate 'IN002' then null;
+      when others then failures := failures || ('T19 esperaba IN002 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_q, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform * from public.crear_cotizacion(gen_random_uuid(), t_cli2,
+      jsonb_build_array(jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 45000)));
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into t_row from public.cobros where id = t_cot3;
+    if t_row.tipo is distinct from 'cotizacion' or t_row.estado is distinct from 'abierta'
+       or t_row.valida_hasta is distinct from t_hoy + 15 or t_row.total_cop is distinct from 1750000 then
+      failures := failures || format('T19 cotización incorrecta: tipo=%s estado=%s valida_hasta=%s total=%s', t_row.tipo, t_row.estado, t_row.valida_hasta, t_row.total_cop);
+    end if;
+    if exists (select 1 from public.movimientos_inventario where ref_id = t_cot3)
+       or (select count(*) from public.movimientos_inventario where producto_id = t_p1) <> t_n2
+       or (select cantidad from public.productos where id = t_p1) is distinct from t_n3 then
+      failures := failures || 'T19 la cotización movió stock';
+    end if;
+    if (select count(*) from public.cobros where creado_por = t_vet_q and tipo = 'cotizacion') <> 1 then
+      failures := failures || 'T19 falta la cotización del cotizador';
+    end if;
+  exception when others then
+    failures := failures || ('T19 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T20: convertir una cotización (D-09): nueva CC con las líneas editadas, cotización convertida, stock al convertir;
+  -- convertir dos veces -> BC002; el reintento de la conversión es idempotente; anular una convertida -> BC002.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cotizacion(gen_random_uuid(), t_cli,
+      jsonb_build_array(
+        jsonb_build_object('tipo', 'producto', 'producto_id', t_p1, 'cantidad', 2, 'precio_unitario_cop', 85000),
+        jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 50000)),
+      t_m);
+    t_cot := t_row.id;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select ultimo into t_n from public.cobro_contadores where clinica_id = t_c and tipo = 'cuenta_cobro';
+    select cantidad into t_n2 from public.productos where id = t_p1;
+    t_clave2 := gen_random_uuid();
+    t_json := jsonb_build_array(jsonb_build_object('tipo', 'producto', 'producto_id', t_p1, 'cantidad', 1, 'precio_unitario_cop', 70000));
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cuenta_cobro(t_clave2, t_cli, t_json, t_m, null, null, t_cot);
+    t_cc_conv := t_row.id;
+    if t_row.numero is distinct from t_n + 1 or t_row.ya_existia is distinct from false then
+      failures := failures || format('T20 la conversión debía tomar la CC numero %s, llegó %s', t_n + 1, t_row.numero);
+    end if;
+    begin
+      perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli, t_json, t_m, null, null, t_cot);
+      failures := failures || 'T20 convertir dos veces debía fallar con BC002';
+    exception
+      when sqlstate 'BC002' then null;
+      when others then failures := failures || ('T20 esperaba BC002 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    select * into t_row from public.crear_cuenta_cobro(t_clave2, t_cli, t_json, t_m, null, null, t_cot);
+    if t_row.id is distinct from t_cc_conv or t_row.ya_existia is distinct from true then
+      failures := failures || 'T20 el reintento de la conversión no devolvió la misma CC con ya_existia';
+    end if;
+    begin
+      perform public.anular_cobro(t_cot, 'Ya no aplica');
+      failures := failures || 'T20 anular una cotización convertida debía fallar con BC002';
+    exception
+      when sqlstate 'BC002' then null;
+      when others then failures := failures || ('T20 esperaba BC002 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform public.anular_cobro(t_cot3, 'Cliente desistió');
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into t_row from public.cobros where id = t_cc_conv;
+    if t_row.cotizacion_origen_id is distinct from t_cot or t_row.total_cop is distinct from 70000 or t_row.tipo is distinct from 'cuenta_cobro' then
+      failures := failures || format('T20 CC convertida incorrecta: origen=%s total=%s', t_row.cotizacion_origen_id, t_row.total_cop);
+    end if;
+    select * into t_row from public.cobros where id = t_cot;
+    if t_row.estado is distinct from 'convertida' or t_row.convertida_en_id is distinct from t_cc_conv then
+      failures := failures || format('T20 la cotización quedó en %s / %s', t_row.estado, t_row.convertida_en_id);
+    end if;
+    if (select cantidad from public.productos where id = t_p1) is distinct from t_n2 - 1 then
+      failures := failures || 'T20 la conversión no descontó 1 unidad (o descontó de más en el reintento)';
+    end if;
+    if (select estado from public.cobros where id = t_cot3) is distinct from 'anulada'
+       or exists (select 1 from public.movimientos_inventario where ref_id = t_cot3) then
+      failures := failures || 'T20 anular una cotización abierta falló o creó movimientos';
+    end if;
+  exception when others then
+    failures := failures || ('T20 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T21: una visita (cita o consulta) solo tiene una CC activa (BC003); al anularla se puede volver a cobrar.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    t_json := jsonb_build_array(jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 50000));
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cuenta_cobro(gen_random_uuid(), t_cli, t_json, null, t_cita);
+    t_cc_cita := t_row.id;
+    begin
+      perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli, t_json, null, t_cita);
+      failures := failures || 'T21 cobrar dos veces la misma cita debía fallar con BC003';
+    exception
+      when sqlstate 'BC003' then
+        get stacked diagnostics t_sql = pg_exception_detail;
+        begin
+          if (t_sql::jsonb ->> 'numero') not like 'CC-%' then
+            failures := failures || ('T21 detail de BC003 sin número: ' || t_sql);
+          end if;
+        exception when others then
+          failures := failures || ('T21 el detail de BC003 no es json: ' || coalesce(t_sql, 'null'));
+        end;
+      when others then failures := failures || ('T21 esperaba BC003 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    begin
+      perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli, t_json, null, null, t_cons);
+      failures := failures || 'T21 cobrar la consulta de una cita ya cobrada debía fallar con BC003';
+    exception
+      when sqlstate 'BC003' then null;
+      when others then failures := failures || ('T21 esperaba BC003 (consulta) y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform public.anular_cobro(t_cc_cita, 'Se cobra con la consulta');
+    select * into t_row from public.crear_cuenta_cobro(gen_random_uuid(), t_cli, t_json, null, null, t_cons);
+    t_cc_cons := t_row.id;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into t_row from public.cobros where id = t_cc_cons;
+    if t_row.cita_id is distinct from t_cita or t_row.consulta_id is distinct from t_cons
+       or t_row.mascota_id is distinct from t_m or t_row.estado is distinct from 'pendiente' then
+      failures := failures || format('T21 la CC de la consulta quedó con cita=%s consulta=%s mascota=%s', t_row.cita_id, t_row.consulta_id, t_row.mascota_id);
+    end if;
+  exception when others then
+    failures := failures || ('T21 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T22: en solo lectura el colega lee pero no crea, paga ni anula (LP004 desde la guarda); el admin sí escribe.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes
+       set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null,
+           prueba_pro_hasta = t_hoy - 17, prueba_clinica_hasta = t_hoy - 16, prueba_clinica_usada = true, beta_hasta = null
+     where clinica_id = t_c;
+    t_json := jsonb_build_array(jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 50000));
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    if public.puede_escribir() then
+      failures := failures || 'T22 puede_escribir() debía ser false para el colega';
+    end if;
+    foreach t_sql in array array[
+      format('select * from public.crear_cuenta_cobro(%L::uuid, %L::uuid, %L::jsonb)', gen_random_uuid(), t_cli, t_json),
+      format('select * from public.crear_cotizacion(%L::uuid, %L::uuid, %L::jsonb)', gen_random_uuid(), t_cli, t_json),
+      format('select public.marcar_cobro_pagado(%L::uuid, ''efectivo'')', t_cc_cons),
+      format('select public.anular_cobro(%L::uuid, ''Solo lectura'')', t_cc_cons)
+    ] loop
+      begin
+        execute t_sql;
+        failures := failures || ('T22 debía fallar con LP004: ' || t_sql);
+      exception
+        when sqlstate 'LP004' then null;
+        when others then failures := failures || ('T22 esperaba LP004 y llegó ' || sqlstate || ' (' || t_sql || ')');
+      end;
+    end loop;
+    select count(*) into t_n from public.cobros where clinica_id = t_c;
+    if t_n <= 0 then
+      failures := failures || 'T22 el colega en solo lectura debía seguir leyendo los cobros';
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cotizacion(gen_random_uuid(), t_cli, t_json);
+    if t_row.id is null then
+      failures := failures || 'T22 el admin debía poder crear una cotización';
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T22 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T23: un autor retirado (solo cotizó) sigue visible; es_autor_en_mi_clinica conserva los 4 brazos previos (Pitfall 5).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.perfiles set activo = false where id = t_vet_q;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    if not public.es_autor_en_mi_clinica(t_vet_q) then
+      failures := failures || 'T23 es_autor_en_mi_clinica debía ser true para el cotizador retirado';
+    end if;
+    select count(*) into t_n from public.perfiles where id = t_vet_q and nombre = 'Smoke T Cotizador';
+    if t_n <> 1 then
+      failures := failures || ('T23 el admin debía ver al cotizador retirado (filas: ' || t_n || ')');
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select p.prosrc into t_sql from pg_proc p
+     where p.pronamespace = 'public'::regnamespace and p.proname = 'es_autor_en_mi_clinica';
+    foreach t_t in array array['citas', 'consultas', 'dosis_aplicadas', 'movimientos_inventario', 'cobros', 'clinica_servicios'] loop
+      if t_sql is null or position(t_t in t_sql) = 0 then
+        failures := failures || ('T23 es_autor_en_mi_clinica perdió el brazo de ' || t_t);
+      end if;
+    end loop;
+  exception when others then
+    failures := failures || ('T23 error inesperado: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------
