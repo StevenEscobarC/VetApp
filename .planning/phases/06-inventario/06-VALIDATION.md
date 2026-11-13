@@ -20,7 +20,7 @@ created: 2026-10-31
 | **Framework** | `flutter_test` (SDK) + fakes a mano en `test/helpers/` + `supabase/tests/rls_smoke_test.sql` (bloque `do $$` que termina siempre en `RAISE EXCEPTION`) + `supabase/tests/verify_live_schema.sh` (sondas anon) |
 | **Config file** | `analysis_options.yaml` (flutter_lints); el smoke test se pega en el SQL Editor |
 | **Quick run command** | `flutter analyze && flutter test test/<archivo>_test.dart` |
-| **Full suite command** | `flutter test` + pegar `rls_smoke_test.sql` completo (esperado `RLS SMOKE: PASS (258 checks)`: 238 + bloque S de 20) + `bash supabase/tests/verify_live_schema.sh` |
+| **Full suite command** | `flutter test` + pegar `rls_smoke_test.sql` completo (esperado `RLS SMOKE: PASS (261 checks)`: 238 + bloque S de 23; 258 hasta el gap closure 06-10) + `bash supabase/tests/verify_live_schema.sh` |
 | **Estimated runtime** | ~35 segundos (`flutter test`, línea base 856) |
 
 ---
@@ -29,7 +29,7 @@ created: 2026-10-31
 
 - **After every task commit:** `flutter analyze` + `flutter test` de los archivos del plan (tareas SQL: compuertas grep del bloque Fase 6)
 - **After every plan wave:** `flutter test` completo + compuertas grep de SQL
-- **Before `/gsd:verify-work`:** suite verde, `flutter analyze` limpio, smoke `PASS (258 checks)` pegado por el usuario, `LIVE_SCHEMA_OK`, QA en emulador (`vetapp-qa`)
+- **Before `/gsd:verify-work`:** suite verde, `flutter analyze` limpio, smoke `PASS (261 checks)` pegado por el usuario (tras re-aplicar el bloque de `mover_stock` de 06-10), `LIVE_SCHEMA_OK`, QA en emulador (`vetapp-qa`)
 - **Max feedback latency:** ~40 segundos
 
 ---
@@ -99,6 +99,7 @@ created: 2026-10-31
 | Ola 3 | Suite completa sobre `master` tras fusionar 06-06 y 06-07 y el arreglo (`1e16ee4`, 2026-11-12) | primera corrida tras la fusión: `1 issue` + `-1` (compilación); tras el arreglo: `flutter analyze` → `No issues found!` · `flutter test` → `+996: All tests passed!` | — |
 | 06-08 | `flutter analyze` + archivos del plan, commits en rojo antes de cada implementación (2026-11-12, fusionado en `18c0650`) | `DETALLE_INV_OK` · `EDITAR_ARCHIVAR_OK` · arreglo propio (Rule 1): un toque en un botón −1/+ deshabilitado ya no abre el detalle (`990d0b0`, prueba existente intacta) · QA en emulador → 06-09 (F6, F7) | producto_detail_screen 28, producto_form_screen 20, router_inventario_cross_shell 11, ajuste_rapido 11 (conteos tras el último commit de código) |
 | Ola 4 | Suite completa sobre `master` tras fusionar 06-08 (`18c0650`, 2026-11-12) | `flutter analyze` → `No issues found!` · `flutter test` → `+1034: All tests passed!` (coincide con lo reportado por el ejecutor) | — |
+| 06-10 (gap closure CR-01, WR-01, WR-02, WR-04) | Commit en rojo `fade4f1` (compilación fallida: `stockCambio`/`cantidadEsperada` no existían; smoke S21..S23 contra la firma vieja) → verde `9f06800` (2026-11-13, rama del ejecutor, sin fusionar) | ✅ CR-01 conteo con `p_cantidad_esperada` (IN004) · ✅ WR-01 `esErrorDeRed` por tipo (`http.ClientException` real + subclase) · ✅ WR-02 topes 100.000 / 1.000.000 en la hoja · ✅ WR-04 deshacer solo `origen = 'ajuste'` · smoke estático: 261 `checks := checks + 1`, una cabecera "Total esperado: 261." · `flutter analyze` → `No issues found!` · `flutter test` → `+1045: All tests passed!` · ❌ pendiente del usuario: re-aplicar `mover_stock` en vivo y pegar el smoke (`RLS SMOKE: PASS (261 checks)`) | ajuste_sheet 20, supabase_inventario_repository 22, inventario_invalidacion 12, ajuste_rapido 11 |
 
 ---
 
@@ -106,7 +107,7 @@ created: 2026-10-31
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Delta de esquema aplicado y smoke test en la nube | INV-01..03 | El usuario autoriza el apply y pega el smoke test (convención D-03 de Fase 1) | Aplicar el bloque Fase 6 con OK explícito; pegar `rls_smoke_test.sql` y registrar la línea literal `RLS SMOKE: PASS (258 checks)` |
+| Delta de esquema aplicado y smoke test en la nube | INV-01..03 | El usuario autoriza el apply y pega el smoke test (convención D-03 de Fase 1) | Aplicar el bloque Fase 6 con OK explícito; pegar `rls_smoke_test.sql` y registrar la línea literal `RLS SMOKE: PASS (261 checks)` (258 antes de 06-10) |
 | Alta, ajuste rápido, tarjeta de Inicio y filtro de bajos en emulador | INV-01..03 | Verificación visual/interactiva en dispositivo | `vetapp-qa` en el emulador Android (el usuario solo tiene iPhone) |
 | "Pedir por WhatsApp" con la hoja de compartir real | INV-02 | Integración externa | Abrir la hoja en el emulador; el envío real queda para un teléfono físico |
 | Concurrencia real de `mover_stock` (dos sesiones) | INV-03 | No se puede probar dentro de un único `do $$` | Opcional: dos pestañas del SQL Editor; cubierto por construcción (`FOR UPDATE`, verificado por grep) |
