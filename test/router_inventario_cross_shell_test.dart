@@ -241,9 +241,8 @@ void main() {
     testWidgets('tras un ajuste el pill y la tarjeta se refrescan', (
       tester,
     ) async {
-      final repo = FakeInventarioRepository(
-        productos: [productoDePrueba(id: 'a', cantidad: 2, minimo: 2)],
-      );
+      final producto = productoDePrueba(id: 'a', cantidad: 2, minimo: 2);
+      final repo = FakeInventarioRepository(productos: [producto]);
       await _abrirMas(tester, inventario: repo);
       expect(find.textContaining('bajo'), findsNothing);
 
