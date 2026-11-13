@@ -156,4 +156,66 @@ void main() {
       expect(formatearEdad(null), '');
     });
   });
+
+  group('COP y miles', () {
+    test('formatearMiles agrupa con punto', () {
+      expect(formatearMiles(0), '0');
+      expect(formatearMiles(999), '999');
+      expect(formatearMiles(1000), '1.000');
+      expect(formatearMiles(85000), '85.000');
+      expect(formatearMiles(1000000), '1.000.000');
+      expect(formatearMiles(-1000), '-1.000');
+    });
+
+    test('formatearCop', () {
+      expect(formatearCop(85000), r'$ 85.000');
+      expect(formatearCop(0), r'$ 0');
+    });
+
+    test('parsearCop vacío', () {
+      final r = parsearCop('  ');
+      expect(r.valor, isNull);
+      expect(r.error, isNull);
+    });
+
+    test('parsearCop acepta variantes enteras', () {
+      for (final t in ['85000', '85.000', r'$ 85.000', r'$85.000']) {
+        final r = parsearCop(t);
+        expect(r.valor, 85000, reason: t);
+        expect(r.error, isNull, reason: t);
+      }
+    });
+
+    test('parsearCop rechaza coma y no dígitos', () {
+      for (final t in ['85,5', '85.000,00', 'abc']) {
+        final r = parsearCop(t);
+        expect(r.valor, isNull, reason: t);
+        expect(r.error, 'Usa pesos enteros, sin coma.', reason: t);
+      }
+    });
+
+    test('parsearCop límite superior', () {
+      expect(parsearCop('100000001').error, 'El valor es demasiado alto.');
+      expect(parsearCop('100.000.000').valor, 100000000);
+    });
+  });
+
+  group('parsearFecha permitirFuturo', () {
+    test('por defecto rechaza futuro', () {
+      expect(parsearFecha('31/12/2099').error, 'La fecha no puede ser futura');
+    });
+
+    test('permitirFuturo acepta futuro', () {
+      final r = parsearFecha('31/12/2099', permitirFuturo: true);
+      expect(r.valor, DateTime(2099, 12, 31));
+      expect(r.error, isNull);
+    });
+
+    test('errores de formato iguales en ambos modos', () {
+      expect(parsearFecha('2021-03-05', permitirFuturo: true).error,
+          'Usa el formato dd/mm/aaaa');
+      expect(parsearFecha('31/02/2099', permitirFuturo: true).error,
+          'Usa el formato dd/mm/aaaa');
+    });
+  });
 }

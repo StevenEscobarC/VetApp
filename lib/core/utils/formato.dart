@@ -26,8 +26,13 @@ String formatearFecha(DateTime fecha) => _formatoFecha.format(fecha);
 /// `(valor: null, error: null)` (campo opcional sin tocar, per D-04) — un
 /// texto no vacío que no cumple el formato exacto, o que no es un día de
 /// calendario real (ej. 31 de febrero), o que cae en el futuro, devuelve
-/// `valor: null` con el [error] correspondiente en español.
-({DateTime? valor, String? error}) parsearFecha(String texto) {
+/// `valor: null` con el [error] correspondiente en español. Con
+/// [permitirFuturo] en `true` (ej. vencimiento de un producto) las fechas
+/// futuras son válidas; por defecto se rechazan, como en todo otro caller.
+({DateTime? valor, String? error}) parsearFecha(
+  String texto, {
+  bool permitirFuturo = false,
+}) {
   final t = texto.trim();
   if (t.isEmpty) return (valor: null, error: null);
 
@@ -48,7 +53,7 @@ String formatearFecha(DateTime fecha) => _formatoFecha.format(fecha);
 
   final hoy = DateTime.now();
   final hoySinHora = DateTime(hoy.year, hoy.month, hoy.day);
-  if (fecha.isAfter(hoySinHora)) {
+  if (!permitirFuturo && fecha.isAfter(hoySinHora)) {
     return (valor: null, error: 'La fecha no puede ser futura');
   }
 
@@ -115,4 +120,42 @@ String formatearEdad(int? anios) {
   if (anios == 0) return 'Menos de 1 año';
   if (anios == 1) return '1 año';
   return '$anios años';
+}
+
+/// Agrupa [n] con punto como separador de miles (`85000` -> `'85.000'`).
+/// Sin formateador con locale: la app nunca llama
+/// `initializeDateFormatting` (mismo motivo que [_formatoFecha]).
+String formatearMiles(int n) {
+  final digitos = n.abs().toString();
+  final agrupado = digitos.replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (_) => '.',
+  );
+  return n < 0 ? '-$agrupado' : agrupado;
+}
+
+/// Dinero en COP como entero, sin decimales ni IVA hasta la Fase 7 (D-16):
+/// `85000` -> `'\$ 85.000'`.
+String formatearCop(int pesos) => '\$ ${formatearMiles(pesos)}';
+
+const String _errorCopEntero = 'Usa pesos enteros, sin coma.';
+
+/// Interpreta [texto] como pesos enteros (D-16). Acepta `85000`, `85.000`,
+/// `$ 85.000` y `$85.000`; la coma decimal se rechaza (Colombia usa punto
+/// de miles). Vacío devuelve `(valor: null, error: null)`. Más de
+/// 100.000.000 se rechaza, igual que el CHECK del servidor.
+({int? valor, String? error}) parsearCop(String texto) {
+  final t = texto.trim();
+  if (t.isEmpty) return (valor: null, error: null);
+  if (t.contains(',')) return (valor: null, error: _errorCopEntero);
+
+  final limpio = t.replaceAll(RegExp(r'[\$\s.]'), '');
+  if (limpio.isEmpty || !RegExp(r'^\d+$').hasMatch(limpio)) {
+    return (valor: null, error: _errorCopEntero);
+  }
+  final valor = int.tryParse(limpio);
+  if (valor == null || valor > 100000000) {
+    return (valor: null, error: 'El valor es demasiado alto.');
+  }
+  return (valor: valor, error: null);
 }
