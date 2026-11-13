@@ -8,7 +8,6 @@ import 'package:vetapp/core/data/clock_provider.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/inventory/domain/entities/movimiento_stock.dart';
-import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/domain/inventario_failure.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/inventory/presentation/screens/inventario_screen.dart';
@@ -48,13 +47,11 @@ class _RepoDeshacerFalla extends FakeInventarioRepository {
   }
 }
 
-FakeInventarioRepository _repo({
-  int cantidad = 5,
-  Object? errorMover,
-}) => FakeInventarioRepository(
-  productos: [productoDePrueba(cantidad: cantidad)],
-  errorMover: errorMover,
-);
+FakeInventarioRepository _repo({int cantidad = 5, Object? errorMover}) =>
+    FakeInventarioRepository(
+      productos: [productoDePrueba(cantidad: cantidad)],
+      errorMover: errorMover,
+    );
 
 Future<void> _abrir(
   WidgetTester tester,
@@ -67,9 +64,7 @@ Future<void> _abrir(
   await tester.pumpWidget(
     routerHarness(
       initialLocation: '/',
-      routes: [
-        GoRoute(path: '/', builder: (_, _) => const InventarioScreen()),
-      ],
+      routes: [GoRoute(path: '/', builder: (_, _) => const InventarioScreen())],
       overrides: [
         ...planOverrides(plan: plan),
         authProfileProvider.overrideWith(
@@ -134,10 +129,14 @@ void main() {
       matching: find.byType(CircularProgressIndicator),
     );
     expect(spinner, findsOneWidget);
-    expect(tester.getSize(find.ancestor(
-      of: spinner,
-      matching: find.byType(SizedBox),
-    ).first).width, 20);
+    expect(
+      tester
+          .getSize(
+            find.ancestor(of: spinner, matching: find.byType(SizedBox)).first,
+          )
+          .width,
+      20,
+    );
 
     await tester.tap(find.byKey(_menos), warnIfMissed: false);
     await tester.pump();
@@ -149,7 +148,10 @@ void main() {
       tester.widget<OutlinedButton>(find.byKey(_menos)).onPressed,
       isNotNull,
     );
-    expect(tester.widget<OutlinedButton>(find.byKey(_mas)).onPressed, isNotNull);
+    expect(
+      tester.widget<OutlinedButton>(find.byKey(_mas)).onPressed,
+      isNotNull,
+    );
     expect(_movs(repo), hasLength(1));
   });
 
@@ -176,10 +178,7 @@ void main() {
   ) async {
     final semantics = tester.ensureSemantics();
     await _abrir(tester, _repo());
-    expect(
-      find.bySemanticsLabel('Descontar 1 de Amoxicilina'),
-      findsOneWidget,
-    );
+    expect(find.bySemanticsLabel('Descontar 1 de Amoxicilina'), findsOneWidget);
     expect(
       find.bySemanticsLabel('Agregar stock a Amoxicilina'),
       findsOneWidget,
@@ -209,7 +208,10 @@ void main() {
       testWidgets('${c.$1.name} muestra su mensaje y no ofrece Deshacer', (
         tester,
       ) async {
-        await _abrir(tester, _repo(errorMover: InventarioFailure('x', tipo: c.$1)));
+        await _abrir(
+          tester,
+          _repo(errorMover: InventarioFailure('x', tipo: c.$1)),
+        );
         await tester.tap(find.byKey(_menos));
         await tester.pumpAndSettle();
         expect(find.text(c.$2), findsOneWidget);

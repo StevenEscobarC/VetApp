@@ -5,6 +5,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../domain/entities/producto.dart';
+import 'ajuste_rapido_botones.dart';
 import 'insignia_stock.dart';
 
 /// Fila de la lista de inventario: nombre, mínimo / vencimiento, cantidad e
@@ -48,14 +49,16 @@ class ProductoFila extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final p = producto;
     final insignias = insigniasDe(p, hoy);
-    return Semantics(
-      label: '$_semantica.',
-      excludeSemantics: true,
-      child: AppCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    // La etiqueta resume nombre, cantidad e insignias; los botones de ajuste
+    // quedan fuera para exponerse como acciones separadas.
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Semantics(
+            label: '$_semantica.',
+            excludeSemantics: true,
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
@@ -103,16 +106,25 @@ class ProductoFila extends StatelessWidget {
                 ),
               ],
             ),
-            if (insignias.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: insignias,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: ExcludeSemantics(
+                  child: Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: insignias,
+                  ),
+                ),
               ),
+              const SizedBox(width: AppSpacing.sm),
+              AjusteRapidoBotones(producto: p),
             ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
