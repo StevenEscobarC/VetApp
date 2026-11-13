@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/inventory/domain/entities/movimiento_stock.dart';
-import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/domain/inventario_failure.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/inventory/presentation/widgets/ajuste_sheet.dart';
