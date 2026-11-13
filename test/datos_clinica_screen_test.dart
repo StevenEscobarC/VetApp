@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/utils/captura_foto.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
@@ -23,6 +24,7 @@ import 'package:vetapp/features/patients/presentation/providers/mascota_foto_pro
 import 'package:vetapp/features/team/presentation/equipo_routes.dart';
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 
+import 'helpers/fake_inventario.dart';
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_clinica.dart';
@@ -60,6 +62,7 @@ List<Override> _overrides(
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
     ...planOverrides(plan: plan),
+    inventarioRepositoryProvider.overrideWithValue(FakeInventarioRepository()),
   ];
 }
 

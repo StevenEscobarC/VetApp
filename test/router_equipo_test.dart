@@ -4,7 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vetapp/core/router/app_router.dart';
 import 'package:vetapp/features/team/presentation/screens/acceso_revocado_screen.dart';
 
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
+
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_inventario.dart';
+
+final _inventario = [
+  inventarioRepositoryProvider.overrideWithValue(FakeInventarioRepository()),
+];
 
 ProviderContainer _container(WidgetTester tester) =>
     ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
@@ -20,7 +27,7 @@ void main() {
   testWidgets('retired vet lands on /acceso-revocado and cannot leave', (
     tester,
   ) async {
-    await tester.pumpWidget(appUnderTest(profile: vetRetiradoProfile));
+    await tester.pumpWidget(appUnderTest(profile: vetRetiradoProfile, overrides: _inventario));
     await tester.pumpAndSettle();
     expect(find.byType(AccesoRevocadoScreen), findsOneWidget);
     expect(_ubicacion(tester), '/acceso-revocado');
@@ -33,7 +40,7 @@ void main() {
   });
 
   testWidgets('active vet never sees /acceso-revocado', (tester) async {
-    await tester.pumpWidget(appUnderTest(profile: vetProfile));
+    await tester.pumpWidget(appUnderTest(profile: vetProfile, overrides: _inventario));
     await tester.pumpAndSettle();
     expect(_ubicacion(tester), '/inicio');
 
@@ -44,7 +51,7 @@ void main() {
   });
 
   testWidgets('cliente keeps its /cliente redirect', (tester) async {
-    await tester.pumpWidget(appUnderTest(profile: clienteProfile));
+    await tester.pumpWidget(appUnderTest(profile: clienteProfile, overrides: _inventario));
     await tester.pumpAndSettle();
     expect(_ubicacion(tester), '/cliente');
     _ir(tester, '/acceso-revocado');

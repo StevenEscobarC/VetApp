@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
@@ -14,6 +15,7 @@ import 'package:vetapp/features/plan/presentation/providers/plan_providers.dart'
 import 'package:vetapp/features/plan/presentation/screens/mi_plan_screen.dart';
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 
+import 'helpers/fake_inventario.dart';
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_plan.dart';
@@ -54,6 +56,7 @@ List<Override> _overrides(FakePlanRepository repo) => [
     () => FakeAuthProfileNotifier(profile: vetAdminProfile),
   ),
   planRepositoryProvider.overrideWithValue(repo),
+  inventarioRepositoryProvider.overrideWithValue(FakeInventarioRepository()),
 ];
 
 void _vista(WidgetTester tester) {

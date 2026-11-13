@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/core/data/clock_provider.dart';
 import 'package:vetapp/core/router/app_router.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
@@ -22,6 +23,7 @@ import 'package:vetapp/features/vaccination/presentation/screens/carne_screen.da
 import 'package:vetapp/features/vaccination/presentation/screens/vacunas_pendientes_screen.dart';
 import 'package:vetapp/main.dart';
 
+import 'helpers/fake_inventario.dart';
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_clientes.dart';
@@ -93,6 +95,7 @@ Widget _app() {
       esClinicaMultiVetProvider.overrideWithValue(false),
       miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
       indicesColorVetProvider.overrideWithValue(const <String, int>{}),
+      inventarioRepositoryProvider.overrideWithValue(FakeInventarioRepository()),
       vacunaRepositoryProvider.overrideWithValue(
         FakeVacunaRepository(
           pendientesData: [_rocky],
