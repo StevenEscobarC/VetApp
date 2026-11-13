@@ -9,12 +9,12 @@ requires:
 provides:
   - "Fase 6 inventory schema live (productos, movimientos_inventario, 5 RPCs, RLS, guard on 9 tables)"
 requirements-completed: []
-completed: null
+completed: 2026-11-12
 ---
 
 # Plan 06-04: Apply the Fase 6 delta live and run the 258-check smoke
 
-**Task 1 and the apply are done. The 258-check smoke pasted by the user is PENDING; this plan is not claimed complete.**
+**Complete: delta applied live, anon probe `LIVE_F6_OK`, and the user pasted the 258-check smoke: `RLS SMOKE: PASS (258 checks) - cambios revertidos`.**
 
 ## Task 1: pre-apply static review (2026-11-12)
 
@@ -35,7 +35,11 @@ completed: null
   - `select count(*) from public.productos` → 0
   - `select count(*) from public.movimientos_inventario` → 0
   - `guard_solo_lectura` triggers → 9 tables: cita_mascotas, citas, clientes, consultas, dosis_aplicadas, mascota_pesos, mascotas, movimientos_inventario, productos
-- Smoke test (user pastes the ENTIRE `supabase/tests/rls_smoke_test.sql`): **PENDING**. Expected `RLS SMOKE: PASS (258 checks) - cambios revertidos`.
+- Smoke test pasted by the user (ENTIRE `supabase/tests/rls_smoke_test.sql`, first run, no fixes needed), literal line reported in chat on 2026-11-12:
+
+```
+RLS SMOKE: PASS (258 checks) - cambios revertidos
+```
 
 ## Task 3: live anon probe (2026-11-12, after the apply)
 

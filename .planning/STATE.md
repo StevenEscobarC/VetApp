@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 6 wave 1 done (06-01..03) — next: 06-04 live apply (needs user OK) and 06-05"
+stopped_at: "Phase 6 waves 1-2 done (06-01..05, smoke PASS 258) — next: wave 3 (06-06, 06-07)"
 last_updated: "2026-11-12T00:00:00.000Z"
-last_activity: 2026-11-12 -- Phase 6 wave 2: 06-04 applied live (smoke pending), 06-05 done
+last_activity: 2026-11-12 -- Phase 6 wave 2 closed (live smoke PASS 258)
 progress:
   total_phases: 11
   completed_phases: 7
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 06 (inventario) — EXECUTING
-Plan: 4 of 9 (ola 1 completa; ola 2: 06-05 hecho, 06-04 aplicado en vivo, smoke pendiente del usuario)
-Status: Ola 2 pendiente: 06-04 [BLOCKING] aplicar el esquema en vivo con OK del usuario y pegar el smoke de 258 checks; 06-05 primera rebanada de app
+Plan: 5 of 9 (olas 1 y 2 completas; smoke en vivo PASS 258)
+Status: Ola 3 lista: 06-06 ajuste rápido y 06-07 aviso de stock bajo
 Last activity: 2026-11-12 -- Phase 6 wave 1 executed (3/9 plans)
 
 Progress: [████░░░░░] 44% (4 de 9 fases completas; Fase 5 sin discutir)
