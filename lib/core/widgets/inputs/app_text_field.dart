@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 /// per the design system's accessibility rule, labels are never
 /// placeholder-only. Set [hideLabel] to skip the visible label (e.g. search
 /// fields whose placeholder already states its purpose) while keeping the
-/// [Semantics] label for screen readers.
+/// [Semantics] label for screen readers. The optional [textInputAction],
+/// [onFieldSubmitted], [focusNode], [enabled], [textAlign] and [prefixText]
+/// serve one-hand numeric flows (keyboard next/done, centered quantity).
 class AppTextField extends StatelessWidget {
   const AppTextField({
     super.key,
@@ -25,7 +27,20 @@ class AppTextField extends StatelessWidget {
     this.inputFormatters,
     this.maxLength,
     this.autofocus = false,
+    this.textInputAction,
+    this.onFieldSubmitted,
+    this.focusNode,
+    this.enabled = true,
+    this.textAlign = TextAlign.start,
+    this.prefixText,
   });
+
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
+  final FocusNode? focusNode;
+  final bool enabled;
+  final TextAlign textAlign;
+  final String? prefixText;
 
   final IconData? prefixIcon;
   final TextCapitalization textCapitalization;
@@ -67,7 +82,13 @@ class AppTextField extends StatelessWidget {
             inputFormatters: inputFormatters,
             maxLength: maxLength,
             autofocus: autofocus,
+            textInputAction: textInputAction,
+            onFieldSubmitted: onFieldSubmitted,
+            focusNode: focusNode,
+            enabled: enabled,
+            textAlign: textAlign,
             decoration: InputDecoration(
+              prefixText: prefixText,
               prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
               counterText: maxLength == null ? null : '',
               hintText: hintText,
