@@ -76,8 +76,10 @@ void main() {
       expect(c.pagada, isFalse);
       expect(c.anulada, isFalse);
       expect(
-        _cobro(tipo: TipoCobro.cotizacion, estado: EstadoCobro.abierta)
-            .numeroTexto,
+        _cobro(
+          tipo: TipoCobro.cotizacion,
+          estado: EstadoCobro.abierta,
+        ).numeroTexto,
         'COT-0012',
       );
       expect(_cobro(estado: EstadoCobro.pagada).pagada, isTrue);
@@ -133,8 +135,9 @@ void main() {
         );
       }
       expect(
-        _cobro(validaHasta: DateTime.utc(2026, 11, 10))
-            .vencida(DateTime(2026, 12, 1)),
+        _cobro(
+          validaHasta: DateTime.utc(2026, 11, 10),
+        ).vencida(DateTime(2026, 12, 1)),
         isFalse,
       );
     });
