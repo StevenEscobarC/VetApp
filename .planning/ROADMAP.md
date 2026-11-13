@@ -27,7 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-10-03)
 - [x] **Phase 5.1: Planes y límites** (INSERTED) - Suscripción por clínica: límites de pacientes/miembros, pantalla Mi plan (sin pago en la app), oferta Clínica al invitar
  (completed 2026-10-31)
-- [ ] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo
+- [x] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo (completed 2026-11-13)
 - [ ] **Phase 7: Facturación** - Cotizaciones/facturas en PDF con descuento automático de inventario
 - [ ] **Phase 8: Dashboard y Diseño Visual** - Resumen operativo real y diseño terracota/crema aplicado a toda la app
 - [ ] **Phase 9: Directorio de Veterinarias** - El cliente explora, busca y califica las clínicas de la plataforma, con reseñas públicas
@@ -338,7 +338,7 @@ Plans:
   2. El veterinario recibe una alerta cuando un producto cae por debajo del umbral de stock mínimo
   3. El veterinario puede ajustar manualmente la cantidad de un producto
 
-**Plans:** 8/9 plans executed
+**Plans:** 10/10 plans complete (incl. 06-10 gap closure)
 
 Plans:
 **Wave 1**
@@ -363,7 +363,8 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 06-09-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca, UAT vetapp-qa en emulador y aprobación
+- [x] 06-09-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca, UAT vetapp-qa en emulador y aprobación
+- [x] 06-10 (gap closure del code review) — conteo con cantidad esperada (IN004), deshacer solo ajustes, error de red por tipo, topes de la hoja; smoke 261 checks en vivo
 **UI hint**: yes
 
 ### Phase 7: Facturación
@@ -410,7 +411,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 3. Historia Clínica | 6/6 | Complete    | 2026-10-01 |
 | 4. Agenda y Citas | 11/11 | Complete    | 2026-10-01 |
 | 5. Vacunación y Desparasitación | 17/17 | Complete    | 2026-10-03 |
-| 6. Inventario | 0/TBD | Not started | - |
+| 6. Inventario | 10/10 | Complete    | 2026-11-13 |
 | 7. Facturación | 0/TBD | Not started | - |
 | 8. Dashboard y Diseño Visual | 0/TBD | Not started | - |
 | 9. Directorio de Veterinarias | 0/TBD | Not started | - |

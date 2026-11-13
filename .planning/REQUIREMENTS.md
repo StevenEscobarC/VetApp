@@ -75,9 +75,9 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 
 ### Inventario (INV)
 
-- [ ] **INV-01**: El veterinario puede registrar un producto/insumo con nombre, cantidad y umbral de stock mínimo
-- [ ] **INV-02**: El veterinario recibe alerta cuando un producto cae por debajo del umbral de stock mínimo
-- [ ] **INV-03**: El veterinario puede ajustar manualmente la cantidad de un producto
+- [x] **INV-01**: El veterinario puede registrar un producto/insumo con nombre, cantidad y umbral de stock mínimo
+- [x] **INV-02**: El veterinario recibe alerta cuando un producto cae por debajo del umbral de stock mínimo
+- [x] **INV-03**: El veterinario puede ajustar manualmente la cantidad de un producto
 
 ### Facturación (BILL)
 
@@ -158,7 +158,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | TEAM-01..05 | Phase 4.1 — Equipo de la clínica | Complete |
 | VAC-01..05 | Phase 5 — Vacunación y Desparasitación | Complete |
 | PLAN-01..06 | Phase 5.1 — Planes y límites | Pending |
-| INV-01..03 | Phase 6 — Inventario | Pending |
+| INV-01..03 | Phase 6 — Inventario | Complete |
 | BILL-01..04 | Phase 7 — Facturación | Pending |
 | DASH-01..04 | Phase 8 — Dashboard y Diseño Visual | Pending |
 | DIR-01..06 | Phase 9 — Directorio de Veterinarias | Pending |

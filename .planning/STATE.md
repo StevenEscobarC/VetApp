@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Phase 6 waves 1-4 done (8/9) — next: 06-09 close"
-last_updated: "2026-11-12T00:00:00.000Z"
-last_activity: 2026-11-12 -- Phase 6 wave 4 merged (06-08), +1034 tests
+status: completed
+stopped_at: "Phase 6 complete (10/10, verified, signed off) — next: Phase 7 Facturación"
+last_updated: "2026-11-13T00:00:00.000Z"
+last_activity: 2026-11-13 -- Phase 6 closed: 06-09 + gap closure 06-10, smoke 261 PASS, +1045 tests, VERIFICATION passed
 progress:
   total_phases: 11
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 72
   completed_plans: 72
   percent: 64
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** El veterinario puede llevar toda su consulta — pacientes, historia clínica, agenda — desde el celular, sin depender de un computador ni de una recepcionista.
-**Current focus:** Phase 6 — Inventario (ejecutando)
+**Current focus:** Phase 7 — Facturación (sin empezar)
 
 ## Current Position
 
-Phase: 06 (inventario) — EXECUTING
-Plan: 8 of 9 (olas 1-4 completas)
-Status: Ola 5: 06-09 cierre (gate, sonda, auditoría de marca, QA en emulador con setup del usuario VET-54, visto bueno VET-55)
-Last activity: 2026-11-12 -- Phase 6 wave 1 executed (3/9 plans)
+Phase: 06 (inventario) — COMPLETE
+Plan: 10 of 10 (06-09 cierre + 06-10 gap closure)
+Status: Fase 6 cerrada y verificada (VERIFICATION passed 3/3); siguiente: discutir/planear la Fase 7
+Last activity: 2026-11-13 -- Phase 6 closed (smoke 261 PASS, +1045 tests, usuario: "Aprobado")
 
 Progress: [████░░░░░] 44% (4 de 9 fases completas; Fase 5 sin discutir)
 
