@@ -13,6 +13,7 @@ import 'package:vetapp/features/inventory/domain/entities/movimiento_stock.dart'
 import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/inventory/presentation/screens/inventario_screen.dart';
+import 'package:vetapp/features/inventory/presentation/screens/producto_detail_screen.dart';
 import 'package:vetapp/features/inventory/presentation/screens/producto_form_screen.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/features/team/domain/miembro.dart';
@@ -122,6 +123,47 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(_ubicacion(tester), '/inventario');
     expect(find.byType(InventarioScreen), findsOneWidget);
+  });
+
+  testWidgets('tocar una fila abre una sola página /inventario/p1 y Atrás '
+      'vuelve a la lista; /inventario/nuevo sigue siendo el formulario', (
+    tester,
+  ) async {
+    await _abrirMas(tester);
+    await tester.tap(find.text('Inventario'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Amoxicilina'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(_ubicacion(tester), '/inventario/p1');
+    expect(find.byType(ProductoDetailScreen), findsOneWidget);
+
+    _container(tester).read(routerProvider).pop();
+    await tester.pumpAndSettle();
+    expect(_ubicacion(tester), '/inventario');
+    expect(find.byType(ProductoDetailScreen), findsNothing);
+    expect(find.byType(InventarioScreen), findsOneWidget);
+
+    _container(tester).read(routerProvider).push('/inventario/nuevo');
+    await tester.pumpAndSettle();
+    expect(find.byType(ProductoFormScreen), findsOneWidget);
+    expect(find.byType(ProductoDetailScreen), findsNothing);
+  });
+
+  testWidgets('editar desde el detalle abre una sola página '
+      '/inventario/p1/editar', (tester) async {
+    await _abrirMas(tester);
+    await tester.tap(find.text('Inventario'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Amoxicilina'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Editar producto'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(_ubicacion(tester), '/inventario/p1/editar');
+    expect(find.byType(ProductoFormScreen), findsOneWidget);
   });
 
   testWidgets('la fila de Más: icono, alto mínimo, chevron y orden entre '
