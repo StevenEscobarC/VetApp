@@ -3737,7 +3737,7 @@ drop trigger if exists protocolos_validar_plan on public.protocolos_vacunacion;
 create trigger protocolos_validar_plan before insert or update on public.protocolos_vacunacion for each row execute function public.protocolos_validar_plan();
 
 -- LP004 (D-02/D-12, decisión bloqueada 3): el veterinario que excede los cupos del plan queda en
--- solo lectura. Guarda en las 9 tablas de escritura (clínica e inventario: productos y movimientos_inventario, Fase 6); NO hay guarda en carne_enlaces ni en
+-- solo lectura. Guarda en las 13 tablas de escritura (clínica; inventario: productos y movimientos_inventario, Fase 6; facturación: cobros, cobro_items, clinica_servicios y cobro_contadores, Fase 7); NO hay guarda en carne_enlaces ni en
 -- vacuna_alertas (compartir el carné y gestionar alertas siguen permitidos) y marcar el recordatorio
 -- de una cita (recordatorio_enviado_at) tampoco se bloquea. Es trigger y no policy restrictiva para
 -- que UPDATE/DELETE fallen con LP004 en vez de afectar 0 filas (Pitfall 7) y para cubrir también las
@@ -4543,5 +4543,787 @@ revoke all on function public.mover_stock(uuid, int, text, text, uuid, text, uui
 grant execute on function public.mover_stock(uuid, int, text, text, uuid, text, uuid, int) to authenticated;
 revoke all on function public.inventario_resumen() from public, anon;
 grant execute on function public.inventario_resumen() to authenticated;
+
+-- ===== Fase 7: Facturación (delta idempotente) =====
+-- Reemplaza la nota de la Fase 6 ("Fase 7 reutiliza mover_stock ampliando p_origen"): mover_stock NO se toca y
+-- sigue aceptando solo origen 'ajuste' (WR-04: deshacer solo revierte ajustes manuales). La facturación mueve
+-- stock con el helper privado _aplicar_movimiento_stock (origen 'factura', sin grant a authenticated), dentro
+-- de la misma transacción que crea o anula el documento.
+-- Numeración: tabla cobro_contadores (insert ... on conflict do update), una fila por clínica y tipo; NUNCA un
+-- SEQUENCE, que quema números en cada rollback. El contador, el encabezado, los ítems y el stock van en el mismo
+-- sub-bloque: si algo falla (IN001/IN002/23514) el número tampoco se consume (sin huecos).
+-- Idempotencia: cada documento lleva clave_idempotencia (uuid del cliente), única por clínica; el reintento con
+-- la misma clave devuelve el mismo id y número con ya_existia = true y no mueve stock otra vez (D-21, WR-03).
+-- Ninguna de las 4 tablas acepta escritura directa de authenticated (sin policies de escritura y con los
+-- privilegios revocados); cobro_contadores ni siquiera se puede leer.
+-- Decisión registrada: las RPC son security definer con search_path fijado y chequeos explícitos de
+-- es_veterinario() + mi_clinica_id() (como las de inventario), NO invoker: con permisos del llamador habría que
+-- abrir policies de escritura y cualquier veterinario podría cambiar total, número o stock por PostgREST.
+
+create table if not exists public.clinica_servicios (
+  id uuid primary key default gen_random_uuid(),
+  clinica_id uuid not null references public.clinicas(id) on delete cascade,
+  nombre text not null check (char_length(btrim(nombre)) between 1 and 60),
+  precio_cop int not null check (precio_cop between 0 and 100000000),
+  creado_por uuid not null references public.perfiles(id) on delete restrict,
+  archivado_at timestamptz null,
+  archivado_por uuid null references public.perfiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (id, clinica_id)
+);
+
+-- Un solo documento con tipo: cotización (abierta/convertida/anulada) o cuenta de cobro (pendiente/pagada/anulada).
+-- cliente/mascota/cita/consulta con on delete set null + snapshots de nombre (Pitfall 11): borrar un cliente
+-- nunca borra un documento emitido.
+create table if not exists public.cobros (
+  id uuid primary key default gen_random_uuid(),
+  clinica_id uuid not null references public.clinicas(id) on delete cascade,
+  tipo text not null check (tipo in ('cotizacion', 'cuenta_cobro')),
+  numero int not null check (numero > 0),
+  estado text not null,
+  clave_idempotencia uuid not null,
+  fecha date not null,
+  cliente_id uuid null references public.clientes(id) on delete set null,
+  cliente_nombre text not null check (char_length(btrim(cliente_nombre)) between 1 and 120),
+  cliente_cedula text null check (cliente_cedula is null or char_length(cliente_cedula) <= 20),
+  mascota_id uuid null references public.mascotas(id) on delete set null,
+  mascota_nombre text null check (mascota_nombre is null or char_length(mascota_nombre) <= 80),
+  cita_id uuid null references public.citas(id) on delete set null,
+  consulta_id uuid null references public.consultas(id) on delete set null,
+  total_cop int not null check (total_cop between 1 and 999999999),
+  metodo_pago text null check (metodo_pago is null or metodo_pago in ('efectivo', 'nequi', 'daviplata', 'transferencia', 'tarjeta', 'otro')),
+  pagada_el date null,
+  pagado_por uuid null references public.perfiles(id) on delete set null,
+  valida_hasta date null,
+  cotizacion_origen_id uuid null constraint cobros_cotizacion_origen_fkey references public.cobros(id) on delete set null,
+  convertida_en_id uuid null constraint cobros_convertida_en_fkey references public.cobros(id) on delete set null,
+  creado_por uuid not null constraint cobros_creado_por_perfil_fkey references public.perfiles(id) on delete restrict,
+  anulada_at timestamptz null,
+  anulada_por uuid null constraint cobros_anulada_por_perfil_fkey references public.perfiles(id) on delete set null,
+  motivo_anulacion text null check (motivo_anulacion is null or char_length(motivo_anulacion) between 3 and 200),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint cobros_id_clinica_uq unique (id, clinica_id),
+  constraint cobros_numero_uq unique (clinica_id, tipo, numero),
+  constraint cobros_clave_uq unique (clinica_id, clave_idempotencia),
+  constraint cobros_estado_por_tipo check (
+    (tipo = 'cotizacion' and estado in ('abierta', 'convertida', 'anulada'))
+    or (tipo = 'cuenta_cobro' and estado in ('pendiente', 'pagada', 'anulada'))
+  ),
+  constraint cobros_pago_consistente check (
+    (metodo_pago is null) = (pagada_el is null)
+    and (estado <> 'pagada' or metodo_pago is not null)
+    and (estado <> 'pendiente' or metodo_pago is null)
+    and (tipo = 'cuenta_cobro' or metodo_pago is null)
+  ),
+  constraint cobros_validez_cotizacion check ((tipo = 'cotizacion') = (valida_hasta is not null)),
+  constraint cobros_conversion_consistente check ((estado = 'convertida') = (convertida_en_id is not null)),
+  constraint cobros_anulacion_consistente check (
+    (estado = 'anulada') = (anulada_at is not null)
+    and (estado = 'anulada') = (motivo_anulacion is not null)
+  )
+);
+
+-- Líneas: descripción y precio copiados al emitir (D-07, D-14); la línea nunca cambia el precio base.
+create table if not exists public.cobro_items (
+  id uuid primary key default gen_random_uuid(),
+  cobro_id uuid not null,
+  clinica_id uuid not null,
+  orden int not null check (orden between 1 and 50),
+  tipo text not null check (tipo in ('servicio', 'producto', 'otro')),
+  descripcion text not null check (char_length(btrim(descripcion)) between 1 and 120),
+  cantidad int not null check (cantidad between 1 and 100000),
+  precio_unitario_cop int not null check (precio_unitario_cop between 0 and 100000000),
+  producto_id uuid null references public.productos(id) on delete set null,
+  servicio_id uuid null references public.clinica_servicios(id) on delete set null,
+  created_at timestamptz not null default now(),
+  check ((tipo = 'producto' or producto_id is null) and (tipo = 'servicio' or servicio_id is null)),
+  unique (cobro_id, orden)
+);
+
+do $$ begin
+  alter table public.cobro_items
+    add constraint cobro_items_cobro_misma_clinica_fkey foreign key (cobro_id, clinica_id)
+    references public.cobros(id, clinica_id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+
+-- Contadores por clínica y tipo (sin policies; solo las RPC definer los tocan).
+create table if not exists public.cobro_contadores (
+  clinica_id uuid not null references public.clinicas(id) on delete cascade,
+  tipo text not null check (tipo in ('cotizacion', 'cuenta_cobro')),
+  ultimo int not null default 0,
+  primary key (clinica_id, tipo)
+);
+
+-- Datos para el documento: cédula del cliente (escrita por el update de clientes ya existente) y NIT de la clínica.
+alter table public.clientes add column if not exists cedula text;
+
+alter table public.clientes drop constraint if exists clientes_cedula_formato;
+alter table public.clientes add constraint clientes_cedula_formato
+  check (cedula is null or cedula ~ '^[0-9]{5,12}$');
+
+alter table public.clinicas add column if not exists nit text;
+
+alter table public.clinicas drop constraint if exists clinicas_nit_formato;
+alter table public.clinicas add constraint clinicas_nit_formato
+  check (nit is null or nit ~ '^[0-9]{5,12}(-[0-9])?$');
+
+create unique index if not exists clinica_servicios_nombre_activo_uq
+  on public.clinica_servicios (clinica_id, lower(btrim(nombre))) where archivado_at is null;
+-- Una visita (cita o consulta) tiene a lo sumo una cuenta de cobro no anulada (BC003).
+create unique index if not exists cobros_cita_activa_uq
+  on public.cobros (cita_id) where cita_id is not null and tipo = 'cuenta_cobro' and estado <> 'anulada';
+create unique index if not exists cobros_consulta_activa_uq
+  on public.cobros (consulta_id) where consulta_id is not null and tipo = 'cuenta_cobro' and estado <> 'anulada';
+create index if not exists cobros_lista_idx
+  on public.cobros (clinica_id, tipo, fecha desc, numero desc);
+create index if not exists cobro_items_cobro_idx
+  on public.cobro_items (cobro_id);
+
+drop trigger if exists cobros_tocar_updated_at on public.cobros;
+create trigger cobros_tocar_updated_at before update on public.cobros
+  for each row execute function public.tocar_updated_at();
+
+drop trigger if exists clinica_servicios_tocar_updated_at on public.clinica_servicios;
+create trigger clinica_servicios_tocar_updated_at before update on public.clinica_servicios
+  for each row execute function public.tocar_updated_at();
+
+-- RLS: solo lectura para veterinarios de la clínica; ninguna policy ni privilegio de escritura.
+alter table public.clinica_servicios enable row level security;
+alter table public.cobros enable row level security;
+alter table public.cobro_items enable row level security;
+alter table public.cobro_contadores enable row level security;
+
+drop policy if exists clinica_servicios_select on public.clinica_servicios;
+create policy clinica_servicios_select on public.clinica_servicios for select to authenticated
+  using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+drop policy if exists cobros_select on public.cobros;
+create policy cobros_select on public.cobros for select to authenticated
+  using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+drop policy if exists cobro_items_select on public.cobro_items;
+create policy cobro_items_select on public.cobro_items for select to authenticated
+  using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+revoke all on table public.clinica_servicios from anon;
+revoke all on table public.cobros from anon;
+revoke all on table public.cobro_items from anon;
+revoke all on table public.cobro_contadores from anon;
+revoke insert, update, delete, truncate on table public.clinica_servicios from authenticated;
+revoke insert, update, delete, truncate on table public.cobros from authenticated;
+revoke insert, update, delete, truncate on table public.cobro_items from authenticated;
+revoke insert, update, delete, truncate on table public.cobro_contadores from authenticated;
+revoke select on table public.cobro_contadores from authenticated;
+
+-- Helper privado: número visible ('CC-0012', 'COT-0004'; desde 10000 sin relleno, lpad truncaría).
+create or replace function public._numero_cobro(p_tipo text, p_numero int)
+returns text
+language sql
+immutable
+security definer set search_path = public
+as $$
+  select case when p_tipo = 'cotizacion' then 'COT-' else 'CC-' end
+    || case when p_numero < 10000 then lpad(p_numero::text, 4, '0') else p_numero::text end
+$$;
+
+revoke all on function public._numero_cobro(text, int) from public, anon, authenticated;
+
+-- Helper privado: un movimiento de stock de facturación (copia el bloqueo / sin negativos / libro de mover_stock).
+-- Solo lo llaman las RPC definer de esta sección; origen fijo 'factura'. Al anular (p_permitir_archivado) se
+-- devuelve stock aunque el producto se haya archivado después (Pitfall 3).
+create or replace function public._aplicar_movimiento_stock(
+  p_clinica uuid,
+  p_producto uuid,
+  p_delta int,
+  p_motivo text,
+  p_ref uuid,
+  p_nota text,
+  p_deshace uuid,
+  p_permitir_archivado boolean
+)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_p public.productos%rowtype;
+  v_nueva int;
+  v_mov uuid;
+begin
+  if p_delta is null or p_delta = 0 then
+    raise exception 'Movimiento de stock vacío.' using errcode = 'check_violation';
+  end if;
+
+  select * into v_p from public.productos
+   where id = p_producto and clinica_id = p_clinica
+   for update;
+  if not found or (v_p.archivado_at is not null and not coalesce(p_permitir_archivado, false)) then
+    raise exception 'Producto no disponible.' using errcode = 'IN002',
+      detail = json_build_object('producto_id', p_producto, 'producto', v_p.nombre)::text;
+  end if;
+
+  v_nueva := v_p.cantidad + p_delta;
+  if v_nueva < 0 then
+    raise exception 'No hay suficiente stock de % (quedan %).', v_p.nombre, v_p.cantidad using errcode = 'IN001',
+      detail = json_build_object('producto_id', v_p.id, 'producto', v_p.nombre, 'quedan', v_p.cantidad, 'unidad', v_p.unidad)::text;
+  end if;
+
+  update public.productos set cantidad = v_nueva where id = p_producto and clinica_id = p_clinica;
+
+  insert into public.movimientos_inventario
+    (clinica_id, producto_id, delta, cantidad_resultante, motivo, origen, ref_id, nota, deshace_id, veterinario_id)
+  values
+    (p_clinica, p_producto, p_delta, v_nueva, p_motivo, 'factura', p_ref, nullif(btrim(p_nota), ''), p_deshace, auth.uid())
+  returning id into v_mov;
+
+  return v_mov;
+end;
+$$;
+
+revoke all on function public._aplicar_movimiento_stock(uuid, uuid, int, text, uuid, text, uuid, boolean) from public, anon, authenticated;
+
+-- Helper privado: valida TODO el payload de líneas antes de escribir y devuelve el total (calculado en bigint,
+-- Pitfall 7). Un producto bien formado pero archivado, inexistente o ajeno es IN002 (sin filtrar si existe en
+-- otra clínica); cualquier otra forma inválida es check_violation.
+create or replace function public._total_items_cobro(p_clinica uuid, p_items jsonb)
+returns int
+language plpgsql
+stable
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_uuid_re constant text := '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+  v_e jsonb;
+  v_tipo text;
+  v_cant numeric;
+  v_precio numeric;
+  v_pid uuid;
+  v_nombre text;
+  v_total bigint := 0;
+begin
+  if p_items is null or jsonb_typeof(p_items) <> 'array'
+     or jsonb_array_length(p_items) < 1 or jsonb_array_length(p_items) > 50 then
+    raise exception 'Revisa las líneas del cobro.' using errcode = 'check_violation';
+  end if;
+
+  for v_e in select value from jsonb_array_elements(p_items) loop
+    if jsonb_typeof(v_e) <> 'object' then
+      raise exception 'Revisa las líneas del cobro.' using errcode = 'check_violation';
+    end if;
+    v_tipo := v_e ->> 'tipo';
+    if v_tipo is null or v_tipo not in ('servicio', 'producto', 'otro') then
+      raise exception 'Revisa las líneas del cobro.' using errcode = 'check_violation';
+    end if;
+
+    if jsonb_typeof(v_e -> 'cantidad') is distinct from 'number'
+       or jsonb_typeof(v_e -> 'precio_unitario_cop') is distinct from 'number' then
+      raise exception 'Revisa las líneas del cobro.' using errcode = 'check_violation';
+    end if;
+    v_cant := (v_e ->> 'cantidad')::numeric;
+    v_precio := (v_e ->> 'precio_unitario_cop')::numeric;
+    if v_cant <> trunc(v_cant) or v_cant < 1 or v_cant > 100000
+       or v_precio <> trunc(v_precio) or v_precio < 0 or v_precio > 100000000 then
+      raise exception 'Revisa las líneas del cobro.' using errcode = 'check_violation';
+    end if;
+
+    -- Un id solo puede venir en la línea de su tipo (mismo contrato que el check de cobro_items).
+    if (v_tipo <> 'producto' and jsonb_typeof(v_e -> 'producto_id') is not null and jsonb_typeof(v_e -> 'producto_id') <> 'null')
+       or (v_tipo <> 'servicio' and jsonb_typeof(v_e -> 'servicio_id') is not null and jsonb_typeof(v_e -> 'servicio_id') <> 'null') then
+      raise exception 'Revisa las líneas del cobro.' using errcode = 'check_violation';
+    end if;
+
+    if v_tipo = 'producto' then
+      if jsonb_typeof(v_e -> 'producto_id') is distinct from 'string' or (v_e ->> 'producto_id') !~ v_uuid_re then
+        raise exception 'Revisa las líneas del cobro.' using errcode = 'check_violation';
+      end if;
+      v_pid := (v_e ->> 'producto_id')::uuid;
+      if not exists (
+        select 1 from public.productos pr
+         where pr.id = v_pid and pr.clinica_id = p_clinica and pr.archivado_at is null
+      ) then
+        select pr.nombre into v_nombre from public.productos pr where pr.id = v_pid and pr.clinica_id = p_clinica;
+        raise exception 'Producto no disponible.' using errcode = 'IN002',
+          detail = json_build_object('producto_id', v_pid, 'producto', v_nombre)::text;
+      end if;
+    elsif v_tipo = 'servicio' and jsonb_typeof(v_e -> 'servicio_id') is not null and jsonb_typeof(v_e -> 'servicio_id') <> 'null' then
+      if jsonb_typeof(v_e -> 'servicio_id') <> 'string' or (v_e ->> 'servicio_id') !~ v_uuid_re
+         or not exists (
+           select 1 from public.clinica_servicios s
+            where s.id = (v_e ->> 'servicio_id')::uuid and s.clinica_id = p_clinica
+         ) then
+        raise exception 'Revisa las líneas del cobro.' using errcode = 'check_violation';
+      end if;
+    else
+      if jsonb_typeof(v_e -> 'descripcion') is distinct from 'string'
+         or char_length(btrim(v_e ->> 'descripcion')) not between 1 and 120 then
+        raise exception 'Revisa las líneas del cobro.' using errcode = 'check_violation';
+      end if;
+    end if;
+
+    v_total := v_total + v_cant::bigint * v_precio::bigint;
+  end loop;
+
+  if v_total < 1 or v_total > 999999999 then
+    raise exception 'El total debe ser mayor que $ 0 y menor que $ 1.000.000.000.' using errcode = 'check_violation';
+  end if;
+  return v_total::int;
+end;
+$$;
+
+revoke all on function public._total_items_cobro(uuid, jsonb) from public, anon, authenticated;
+
+-- Helper privado: inserta las líneas (ya validadas por _total_items_cobro) con orden = posición y nombres
+-- copiados de la BD; si p_descontar, descuenta el stock agregado por producto en orden de producto_id (sin
+-- deadlocks entre dos cobros concurrentes, Pitfall 2).
+create or replace function public._insertar_items_cobro(
+  p_clinica uuid,
+  p_cobro uuid,
+  p_items jsonb,
+  p_descontar boolean,
+  p_nota text
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_r record;
+begin
+  insert into public.cobro_items
+    (cobro_id, clinica_id, orden, tipo, descripcion, cantidad, precio_unitario_cop, producto_id, servicio_id)
+  select
+    p_cobro,
+    p_clinica,
+    x.ord::int,
+    x.e ->> 'tipo',
+    case
+      when x.e ->> 'tipo' = 'producto' then
+        (select pr.nombre from public.productos pr where pr.id = (x.e ->> 'producto_id')::uuid and pr.clinica_id = p_clinica)
+      when x.e ->> 'tipo' = 'servicio' and x.e ->> 'servicio_id' is not null then
+        (select s.nombre from public.clinica_servicios s where s.id = (x.e ->> 'servicio_id')::uuid and s.clinica_id = p_clinica)
+      else btrim(x.e ->> 'descripcion')
+    end,
+    (x.e ->> 'cantidad')::numeric::int,
+    (x.e ->> 'precio_unitario_cop')::numeric::int,
+    case when x.e ->> 'tipo' = 'producto' then (x.e ->> 'producto_id')::uuid end,
+    case when x.e ->> 'tipo' = 'servicio' then (x.e ->> 'servicio_id')::uuid end
+  from jsonb_array_elements(p_items) with ordinality as x(e, ord);
+
+  if p_descontar then
+    for v_r in
+      select (x.e ->> 'producto_id')::uuid as producto_id, sum((x.e ->> 'cantidad')::numeric)::int as cantidad
+        from jsonb_array_elements(p_items) as x(e)
+       where x.e ->> 'tipo' = 'producto'
+       group by 1
+       order by producto_id
+    loop
+      perform public._aplicar_movimiento_stock(p_clinica, v_r.producto_id, -v_r.cantidad, 'venta', p_cobro, p_nota, null, false);
+    end loop;
+  end if;
+end;
+$$;
+
+revoke all on function public._insertar_items_cobro(uuid, uuid, jsonb, boolean, text) from public, anon, authenticated;
+
+-- RPC: crear_cuenta_cobro (emite una CC; con p_cotizacion_id convierte una cotización abierta, D-09).
+-- Orden de bloqueos: la cotización, luego el contador, luego los productos (en orden de producto_id).
+drop function if exists public.crear_cuenta_cobro(uuid, uuid, jsonb, uuid, uuid, uuid, uuid);
+create or replace function public.crear_cuenta_cobro(
+  p_clave uuid,
+  p_cliente_id uuid,
+  p_items jsonb,
+  p_mascota_id uuid default null,
+  p_cita_id uuid default null,
+  p_consulta_id uuid default null,
+  p_cotizacion_id uuid default null
+)
+returns table (id uuid, numero int, ya_existia boolean)
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_prev public.cobros%rowtype;
+  v_cot public.cobros%rowtype;
+  v_cli_nombre text;
+  v_cli_cedula text;
+  v_cons_mascota uuid;
+  v_cons_cita uuid;
+  v_mascota uuid := p_mascota_id;
+  v_mascota_nombre text;
+  v_cita uuid := p_cita_id;
+  v_otro int;
+  v_total int;
+  v_numero int;
+  v_id uuid;
+  v_constraint text;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede cobrar.' using errcode = 'insufficient_privilege';
+  end if;
+  if p_clave is null then
+    raise exception 'Falta la clave del cobro.' using errcode = 'check_violation';
+  end if;
+
+  -- Idempotencia (D-21): antes de cualquier validación que pueda cambiar entre reintentos.
+  select * into v_prev from public.cobros c where c.clinica_id = v_clinica and c.clave_idempotencia = p_clave;
+  if found then
+    if v_prev.tipo <> 'cuenta_cobro' then
+      raise exception 'Esa clave ya se usó en otro documento.' using errcode = 'check_violation';
+    end if;
+    return query select v_prev.id, v_prev.numero, true;
+    return;
+  end if;
+
+  select cl.nombre, cl.cedula into v_cli_nombre, v_cli_cedula
+    from public.clientes cl where cl.id = p_cliente_id and cl.clinica_id = v_clinica;
+  if not found then
+    raise exception 'Revisa el cliente del cobro.' using errcode = 'check_violation';
+  end if;
+
+  if p_consulta_id is not null then
+    select co.mascota_id, co.cita_id into v_cons_mascota, v_cons_cita
+      from public.consultas co
+      join public.mascotas m on m.id = co.mascota_id
+     where co.id = p_consulta_id and m.clinica_id = v_clinica;
+    if not found
+       or (p_mascota_id is not null and p_mascota_id is distinct from v_cons_mascota)
+       or (p_cita_id is not null and p_cita_id is distinct from v_cons_cita) then
+      raise exception 'Revisa la consulta del cobro.' using errcode = 'check_violation';
+    end if;
+    v_mascota := coalesce(p_mascota_id, v_cons_mascota);
+    v_cita := coalesce(p_cita_id, v_cons_cita);
+  end if;
+
+  if v_mascota is not null then
+    select m.nombre into v_mascota_nombre
+      from public.mascotas m
+     where m.id = v_mascota and m.clinica_id = v_clinica and m.dueno_id = p_cliente_id;
+    if not found then
+      raise exception 'Revisa la mascota del cobro.' using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if v_cita is not null then
+    perform 1 from public.citas ci where ci.id = v_cita and ci.clinica_id = v_clinica and ci.cliente_id = p_cliente_id;
+    if not found then
+      raise exception 'Revisa la cita del cobro.' using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if v_cita is not null or p_consulta_id is not null then
+    select c.numero into v_otro
+      from public.cobros c
+     where c.clinica_id = v_clinica and c.tipo = 'cuenta_cobro' and c.estado <> 'anulada'
+       and ((v_cita is not null and c.cita_id = v_cita) or (p_consulta_id is not null and c.consulta_id = p_consulta_id))
+     limit 1;
+    if found then
+      raise exception 'Esta visita ya tiene la cuenta de cobro %.', public._numero_cobro('cuenta_cobro', v_otro)
+        using errcode = 'BC003', detail = json_build_object('numero', public._numero_cobro('cuenta_cobro', v_otro))::text;
+    end if;
+  end if;
+
+  if p_cotizacion_id is not null then
+    select * into v_cot from public.cobros c
+     where c.id = p_cotizacion_id and c.clinica_id = v_clinica and c.tipo = 'cotizacion'
+     for update;
+    if not found then
+      raise exception 'La cotización no existe.' using errcode = 'BC001';
+    end if;
+    if v_cot.estado <> 'abierta' then
+      raise exception 'La cotización ya no está abierta.' using errcode = 'BC002';
+    end if;
+  end if;
+
+  v_total := public._total_items_cobro(v_clinica, p_items);
+
+  -- Contador, encabezado, líneas, stock y conversión en un solo sub-bloque: cualquier error lo revierte todo,
+  -- también el número (sin huecos, Pitfall 1).
+  begin
+    insert into public.cobro_contadores (clinica_id, tipo, ultimo) values (v_clinica, 'cuenta_cobro', 1)
+    on conflict (clinica_id, tipo) do update set ultimo = cobro_contadores.ultimo + 1
+    returning ultimo into v_numero;
+
+    insert into public.cobros
+      (clinica_id, tipo, numero, estado, clave_idempotencia, fecha, cliente_id, cliente_nombre, cliente_cedula,
+       mascota_id, mascota_nombre, cita_id, consulta_id, total_cop, cotizacion_origen_id, creado_por)
+    values
+      (v_clinica, 'cuenta_cobro', v_numero, 'pendiente', p_clave, public._hoy_bogota(), p_cliente_id, btrim(v_cli_nombre), v_cli_cedula,
+       v_mascota, v_mascota_nombre, v_cita, p_consulta_id, v_total, p_cotizacion_id, auth.uid())
+    returning id into v_id;
+
+    perform public._insertar_items_cobro(v_clinica, v_id, p_items, true, public._numero_cobro('cuenta_cobro', v_numero));
+
+    if p_cotizacion_id is not null then
+      update public.cobros set estado = 'convertida', convertida_en_id = v_id
+       where id = p_cotizacion_id and clinica_id = v_clinica;
+    end if;
+  exception when unique_violation then
+    get stacked diagnostics v_constraint = constraint_name;
+    -- Un reintento idéntico y concurrente ganó: su trabajo está completo y el nuestro se revirtió.
+    select * into v_prev from public.cobros c where c.clinica_id = v_clinica and c.clave_idempotencia = p_clave;
+    if found and v_prev.tipo = 'cuenta_cobro' then
+      return query select v_prev.id, v_prev.numero, true;
+      return;
+    end if;
+    if v_constraint in ('cobros_cita_activa_uq', 'cobros_consulta_activa_uq') then
+      select c.numero into v_otro
+        from public.cobros c
+       where c.clinica_id = v_clinica and c.tipo = 'cuenta_cobro' and c.estado <> 'anulada'
+         and ((v_cita is not null and c.cita_id = v_cita) or (p_consulta_id is not null and c.consulta_id = p_consulta_id))
+       limit 1;
+      raise exception 'Esta visita ya tiene la cuenta de cobro %.', public._numero_cobro('cuenta_cobro', v_otro)
+        using errcode = 'BC003', detail = json_build_object('numero', public._numero_cobro('cuenta_cobro', v_otro))::text;
+    end if;
+    raise;
+  end;
+
+  return query select v_id, v_numero, false;
+end;
+$$;
+
+-- RPC: crear_cotizacion (no mueve stock, D-11; vence a los 15 días, D-23; productos archivados o ajenos -> IN002, D-14).
+drop function if exists public.crear_cotizacion(uuid, uuid, jsonb, uuid);
+create or replace function public.crear_cotizacion(
+  p_clave uuid,
+  p_cliente_id uuid,
+  p_items jsonb,
+  p_mascota_id uuid default null
+)
+returns table (id uuid, numero int, ya_existia boolean)
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_prev public.cobros%rowtype;
+  v_cli_nombre text;
+  v_cli_cedula text;
+  v_mascota_nombre text;
+  v_total int;
+  v_numero int;
+  v_hoy date := public._hoy_bogota();
+  v_id uuid;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede cotizar.' using errcode = 'insufficient_privilege';
+  end if;
+  if p_clave is null then
+    raise exception 'Falta la clave de la cotización.' using errcode = 'check_violation';
+  end if;
+
+  select * into v_prev from public.cobros c where c.clinica_id = v_clinica and c.clave_idempotencia = p_clave;
+  if found then
+    if v_prev.tipo <> 'cotizacion' then
+      raise exception 'Esa clave ya se usó en otro documento.' using errcode = 'check_violation';
+    end if;
+    return query select v_prev.id, v_prev.numero, true;
+    return;
+  end if;
+
+  select cl.nombre, cl.cedula into v_cli_nombre, v_cli_cedula
+    from public.clientes cl where cl.id = p_cliente_id and cl.clinica_id = v_clinica;
+  if not found then
+    raise exception 'Revisa el cliente de la cotización.' using errcode = 'check_violation';
+  end if;
+
+  if p_mascota_id is not null then
+    select m.nombre into v_mascota_nombre
+      from public.mascotas m
+     where m.id = p_mascota_id and m.clinica_id = v_clinica and m.dueno_id = p_cliente_id;
+    if not found then
+      raise exception 'Revisa la mascota de la cotización.' using errcode = 'check_violation';
+    end if;
+  end if;
+
+  v_total := public._total_items_cobro(v_clinica, p_items);
+
+  begin
+    insert into public.cobro_contadores (clinica_id, tipo, ultimo) values (v_clinica, 'cotizacion', 1)
+    on conflict (clinica_id, tipo) do update set ultimo = cobro_contadores.ultimo + 1
+    returning ultimo into v_numero;
+
+    insert into public.cobros
+      (clinica_id, tipo, numero, estado, clave_idempotencia, fecha, cliente_id, cliente_nombre, cliente_cedula,
+       mascota_id, mascota_nombre, total_cop, valida_hasta, creado_por)
+    values
+      (v_clinica, 'cotizacion', v_numero, 'abierta', p_clave, v_hoy, p_cliente_id, btrim(v_cli_nombre), v_cli_cedula,
+       p_mascota_id, v_mascota_nombre, v_total, v_hoy + 15, auth.uid())
+    returning id into v_id;
+
+    perform public._insertar_items_cobro(v_clinica, v_id, p_items, false, null);
+  exception when unique_violation then
+    select * into v_prev from public.cobros c where c.clinica_id = v_clinica and c.clave_idempotencia = p_clave;
+    if found and v_prev.tipo = 'cotizacion' then
+      return query select v_prev.id, v_prev.numero, true;
+      return;
+    end if;
+    raise;
+  end;
+
+  return query select v_id, v_numero, false;
+end;
+$$;
+
+-- RPC: marcar_cobro_pagado (solo CC no anulada; si ya está pagada no cambia nada; fecha entre la emisión y hoy).
+drop function if exists public.marcar_cobro_pagado(uuid, text, date);
+create or replace function public.marcar_cobro_pagado(
+  p_id uuid,
+  p_metodo text,
+  p_fecha date default null
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_c public.cobros%rowtype;
+  v_hoy date := public._hoy_bogota();
+  v_fecha date;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede registrar pagos.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_c from public.cobros c where c.id = p_id and c.clinica_id = v_clinica for update;
+  if not found or v_c.tipo <> 'cuenta_cobro' or v_c.estado = 'anulada' then
+    raise exception 'La cuenta de cobro no existe o está anulada.' using errcode = 'BC001';
+  end if;
+  if v_c.estado = 'pagada' then
+    return;
+  end if;
+
+  if p_metodo is null or p_metodo not in ('efectivo', 'nequi', 'daviplata', 'transferencia', 'tarjeta', 'otro') then
+    raise exception 'Método de pago no válido.' using errcode = 'check_violation';
+  end if;
+  v_fecha := coalesce(p_fecha, v_hoy);
+  if v_fecha < v_c.fecha or v_fecha > v_hoy then
+    raise exception 'La fecha de pago debe estar entre la emisión y hoy.' using errcode = 'check_violation';
+  end if;
+
+  update public.cobros
+     set estado = 'pagada', metodo_pago = p_metodo, pagada_el = v_fecha, pagado_por = auth.uid()
+   where id = p_id and clinica_id = v_clinica;
+end;
+$$;
+
+-- RPC: anular_cobro (CC o cotización; solo el admin o quien la emitió; la CC devuelve el stock desde el libro de
+-- movimientos con 'deshacer' + deshace_id, D-13/D-19; el número se conserva y el pago queda para auditoría).
+drop function if exists public.anular_cobro(uuid, text);
+create or replace function public.anular_cobro(
+  p_id uuid,
+  p_motivo text
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_c public.cobros%rowtype;
+  v_motivo text := btrim(coalesce(p_motivo, ''));
+  v_m record;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede anular.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_c from public.cobros c where c.id = p_id and c.clinica_id = v_clinica for update;
+  if not found or v_c.estado = 'anulada' then
+    raise exception 'El documento no existe o ya está anulado.' using errcode = 'BC001';
+  end if;
+  if v_c.estado = 'convertida' then
+    raise exception 'La cotización ya se convirtió en cuenta de cobro.' using errcode = 'BC002';
+  end if;
+  if not (public.es_admin_clinica() or v_c.creado_por = auth.uid()) then
+    raise exception 'Solo el administrador o quien la emitió puede anularla.' using errcode = 'insufficient_privilege';
+  end if;
+  if char_length(v_motivo) not between 3 and 200 then
+    raise exception 'El motivo debe tener entre 3 y 200 caracteres.' using errcode = 'check_violation';
+  end if;
+
+  if v_c.tipo = 'cuenta_cobro' then
+    for v_m in
+      select mi.id, mi.producto_id, mi.delta
+        from public.movimientos_inventario mi
+       where mi.clinica_id = v_clinica and mi.origen = 'factura' and mi.ref_id = p_id and mi.motivo = 'venta'
+       order by producto_id
+    loop
+      perform public._aplicar_movimiento_stock(v_clinica, v_m.producto_id, -v_m.delta, 'deshacer', p_id,
+        'Anulada ' || public._numero_cobro(v_c.tipo, v_c.numero), v_m.id, true);
+    end loop;
+  end if;
+
+  update public.cobros
+     set estado = 'anulada', anulada_at = now(), anulada_por = auth.uid(), motivo_anulacion = v_motivo
+   where id = p_id and clinica_id = v_clinica;
+end;
+$$;
+
+-- Solo lectura (D-14): guard_solo_lectura también sobre facturación (corre bajo las RPC definer -> LP004).
+drop trigger if exists guard_solo_lectura on public.cobros;
+create trigger guard_solo_lectura before insert or update or delete on public.cobros for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.cobro_items;
+create trigger guard_solo_lectura before insert or update or delete on public.cobro_items for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.clinica_servicios;
+create trigger guard_solo_lectura before insert or update or delete on public.clinica_servicios for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.cobro_contadores;
+create trigger guard_solo_lectura before insert or update or delete on public.cobro_contadores for each row execute function public.guard_solo_lectura();
+
+-- Autoría visible: quien emitió, cobró o anuló un documento, o creó un servicio, sigue visible para su clínica
+-- aunque se retire (redefine la de Fase 6 conservando sus 4 brazos, Pitfall 5).
+create or replace function public.es_autor_en_mi_clinica(p_id uuid)
+returns boolean language sql stable security definer set search_path = public
+as $$ select
+  exists (
+    select 1 from public.citas c
+    where c.clinica_id = public.mi_clinica_id() and c.veterinario_id = p_id
+  )
+  or exists (
+    select 1 from public.consultas co
+    join public.mascotas m on m.id = co.mascota_id
+    where co.veterinario_id = p_id and m.clinica_id = public.mi_clinica_id()
+  )
+  or exists (
+    select 1 from public.dosis_aplicadas d where d.clinica_id = public.mi_clinica_id() and d.veterinario_id = p_id
+  )
+  or exists (
+    select 1 from public.movimientos_inventario m where m.clinica_id = public.mi_clinica_id() and m.veterinario_id = p_id
+  )
+  or exists (
+    select 1 from public.cobros c where c.clinica_id = public.mi_clinica_id()
+      and p_id in (c.creado_por, c.pagado_por, c.anulada_por)
+  )
+  or exists (
+    select 1 from public.clinica_servicios s where s.clinica_id = public.mi_clinica_id() and s.creado_por = p_id
+  )
+$$;
+
+revoke all on function public.es_autor_en_mi_clinica(uuid) from public, anon;
+grant execute on function public.es_autor_en_mi_clinica(uuid) to authenticated;
+
+-- Grants de las 4 RPC de facturación (solo authenticated).
+revoke all on function public.crear_cuenta_cobro(uuid, uuid, jsonb, uuid, uuid, uuid, uuid) from public, anon;
+grant execute on function public.crear_cuenta_cobro(uuid, uuid, jsonb, uuid, uuid, uuid, uuid) to authenticated;
+revoke all on function public.crear_cotizacion(uuid, uuid, jsonb, uuid) from public, anon;
+grant execute on function public.crear_cotizacion(uuid, uuid, jsonb, uuid) to authenticated;
+revoke all on function public.marcar_cobro_pagado(uuid, text, date) from public, anon;
+grant execute on function public.marcar_cobro_pagado(uuid, text, date) to authenticated;
+revoke all on function public.anular_cobro(uuid, text) from public, anon;
+grant execute on function public.anular_cobro(uuid, text) to authenticated;
 
 notify pgrst, 'reload schema';
