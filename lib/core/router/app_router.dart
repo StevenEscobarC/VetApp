@@ -17,6 +17,7 @@ import '../../features/patients/presentation/pacientes_routes.dart';
 import '../../features/plan/presentation/plan_routes.dart';
 import '../../features/team/presentation/equipo_routes.dart';
 import '../../features/team/presentation/screens/acceso_revocado_screen.dart';
+import '../../features/inventory/presentation/inventario_routes.dart';
 import '../../features/vaccination/presentation/vacunacion_routes.dart';
 import '../../features/vaccination/presentation/protocolos_routes.dart';
 
@@ -90,6 +91,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const AccesoRevocadoScreen(),
       ),
       ...vacunacionRoutes,
+      ...inventarioRoutes,
       citaNuevaRaizRoute,
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
