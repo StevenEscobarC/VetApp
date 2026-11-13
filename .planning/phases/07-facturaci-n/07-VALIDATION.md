@@ -143,10 +143,13 @@ created: 2026-11-13
 
 | Plan | Comandos | Resultado | Pruebas | Fecha | Commit |
 |------|----------|-----------|---------|-------|--------|
+| 07-01 | smoke T1..T23 + SQL Fase 7A; gates del plan | `SMOKE_T_A_OK` · `SCHEMA_F7A_TABLAS_OK` · `SCHEMA_F7A_OK`; Postgres local desechable: `RLS SMOKE: FAIL (63 de 284 checks)` antes → `RLS SMOKE: PASS (284 checks) - cambios revertidos` después; `mover_stock` idéntico | smoke 284 (en vivo en 07-08) | 2026-11-13 | `eea80bb` |
+| 07-02 | TDD por tarea; `flutter analyze` + `flutter test` | `DOMINIO_COBRO_OK` · `REPO_COBROS_OK` · `CONTRATO_COBROS_OK` | cobro 14, supabase_cobros_repository 29, cobros_invalidacion 19 | 2026-11-13 | `0e7ff17` |
+| 07-03 | TDD por tarea; `flutter analyze` + `flutter test` | `HELPERS_CLAVE_LETRAS_OK` · `PUBSPEC_UNCHANGED` · `HELPERS_WA_DOC_OK` | helpers +47 (clave, letras, whatsapp, formato) | 2026-11-13 | `3225cb5` |
+| Ola 1 (master) | gate integrado | `No issues found!` · `00:38 +1154: All tests passed!` | suite completa | 2026-11-13 | `eea80bb` |
 
 ---
 
-| Ola 1 (2026-11-13) | 07-01 `SMOKE_T_A_OK` · `SCHEMA_F7A_TABLAS_OK` · `SCHEMA_F7A_OK`; smoke en Postgres local desechable: `RLS SMOKE: FAIL (63 de 284 checks)` antes del SQL → `RLS SMOKE: PASS (284 checks) - cambios revertidos` después; `mover_stock` idéntico (fusionado `eea80bb`) · 07-02 `DOMINIO_COBRO_OK` · `REPO_COBROS_OK` · `CONTRATO_COBROS_OK` (fusionado `0e7ff17`) · 07-03 `HELPERS_CLAVE_LETRAS_OK` · `PUBSPEC_UNCHANGED` · `HELPERS_WA_DOC_OK` (fusionado `3225cb5`) | Gate integrado en master: `No issues found!` · `00:38 +1154: All tests passed!` | Commits en rojo antes de cada implementación en los 3 planes; smoke en vivo pendiente de 07-08 (291 tras 07-04) |
 
 ## Validation Sign-Off
 
