@@ -18,7 +18,7 @@
 | F4 Stock bajo: badge, tarjeta Inicio, pastilla Más, borde (INV-02) | 06-09-PLAN Task 2 | PASS |
 | F5 Pedir por WhatsApp, hoja de compartir (INV-02) | 06-09-PLAN Task 2 | PASS (sin enviar; envío real queda para teléfono físico) |
 | F6 Historial, doble toque, −1 en 0, Uso bloqueado (INV-03) | 06-09-PLAN Task 2 | PASS |
-| F7 Colega y solo lectura (D-13/D-14) | 06-09-PLAN Task 2 | PENDIENTE (autorización del usuario para SQL de soporte) |
+| F7 Colega y solo lectura (D-13/D-14) | 06-09-PLAN Task 2 | BLOCKED (la app sigue con puede_escribir=true; sin candados ni LimitePlanSheet; ver sección F7) |
 | F8 Modo avión (D-12) | 06-09-PLAN Task 2 | FAIL (copy distinto al esperado; la cantidad no cambió) |
 | F9 Archivar "Amoxicilina QA" | 06-09-PLAN Task 2 | PASS (parte de archivar) |
 | F9 restaurar planes y verificar clínica del usuario | 06-09-PLAN Task 2 | PENDIENTE (autorización del usuario para SQL de soporte) |
@@ -72,9 +72,14 @@ Pedido de QA Clinica 51:
 - Con stock 0, "+" > Uso > 1: aparece `No puedes dejar el stock por debajo de 0.` y `Aplicar ajuste` queda deshabilitado.
 - Evidencia: `qa/06-F6-doble-tap.png`, `qa/06-F6-historial.png`, `qa/06-F6-uso-bloqueado.png`.
 
-## F7 PENDIENTE (autorización del usuario para SQL de soporte)
+## F7 BLOCKED (precondicion de solo lectura no efectiva en la app)
 
-No ejecutado: necesita colega por código de invitación y poner la clínica QA en solo lectura con SQL de soporte sobre el plan. Por tanto no se registra si LimitePlanSheet aparece por la ruta del servidor LP004.
+Pasos: app a segundo plano y de vuelta (monkey LAUNCHER), pestañas Inicio y Más, Más > Mi plan (que relee el plan), Más > Inventario.
+- Esperado: candados en FAB "Nuevo producto", −1 y +, y "Editar producto"; LimitePlanSheet al tocar.
+- Observado: Mi plan muestra `Plan Gratis`, `Activo`, "Tu prueba terminó el 28/10/2026", `50 de 50 pacientes`, `2 de 1 veterinarios`; NO muestra estado de solo lectura. En Inventario el FAB muestra el icono "+" y −1/+ sin candado. Al tocar −1 la escritura SE EJECUTO (20 -> 19, snackbar `Descontaste 1 frasco de Ivermectina QA. Ahora hay 19.`), es decir el servidor devolvio puede_escribir=true y no rechazo con LP004. Se pulso `Deshacer`: stock de vuelta a 20 (queda un movimiento extra de ajuste en el historial de Ivermectina QA).
+- Conclusion: no se pudo probar candados, LimitePlanSheet (cliente ni LP004), ni lista/detalle/WhatsApp bajo solo lectura. Hipotesis: el SQL de soporte no dejo la clinica en solo lectura (o el plan vencido degrada a Gratis con puede_escribir=true; `plan_providers.dart:46-47` depende de `puede_escribir` del RPC `miPlan`, `mi_plan.dart:85`). El orquestador debe verificar con SELECT la fila de plan/RPC mi_plan de "QA Clinica 51" y reintentar F7. No se pudo comprobar por SQL (prohibido para QA).
+- Desviacion: las comprobaciones propias del colega (minimo y precios de solo lectura con el helper de admin, sin "Archivar producto") no se corrieron en el emulador porque no hay contrasena de la cuenta colega. Las cubren los tests de widget de `producto_form_screen`.
+- Evidencia: `qa/06-F7-mas-plan.png`, `qa/06-F7-mi-plan.png`, `qa/06-F7-inventario.png`, `qa/06-F7-tap-menos1.png`, `qa/06-F7-deshecho-20.png`.
 
 ## F8 FAIL
 
@@ -97,6 +102,18 @@ Detalle de "Amoxicilina QA" (stock 0) > Archivar producto: diálogo `Archivar pr
 - Modo avión: activado en F8 y desactivado de inmediato (`airplane_mode_on=0` confirmado). Restaurado.
 - Sin `pm clear`, sin cambios de zona horaria ni de permisos. La sesión QA existente se reutilizó.
 - App instalada y ejecutada con `flutter run` (proceso en segundo plano, log en el scratchpad); sigue en ejecución en el emulador.
+- F7: el −1 de prueba (20->19) se deshizo con Deshacer; stock final 20.
 - Datos en el proyecto vivo: "Amoxicilina QA" archivada, "Ivermectina QA" activa en "QA Clinica 51".
 
-QA: FAIL — F8 muestra el mensaje genérico en vez de "Sin conexión" (esErrorDeRed no reconoce _ClientSocketException); además F7 y la restauración de F9 siguen pendientes de autorización del usuario
+## Nota del orquestador sobre F7 (2026-11-13)
+
+- **Causa del BLOCKED:** `puede_escribir()` (`supabase/schema.sql:3464`) deja en solo lectura solo al miembro cuya posición supera los cupos. El orden es admin primero y luego antigüedad. Con plan vencido (`miembros_max = 1`), el admin conserva la escritura y el bloqueado es el colega. Esto es lo diseñado en D-02/D-12, no un bug. F7 debe correrse con la sesión del colega, y no hay contraseña disponible de la cuenta colega `qa.vet51.colega@example.com`. No se restablecieron credenciales.
+- **Cobertura del servidor:** el bloque S del smoke (R44: `guard_solo_lectura` en 9 tablas, incluidas `productos` y `movimientos_inventario`) pasó en vivo (`RLS SMOKE: PASS (258 checks)`). Los candados y `LimitePlanSheet` del cliente los cubren los tests de widget de inventario.
+- **SQL de soporte (autorizado por el usuario: "Autorizo")** sobre `clinica_planes` de QA Clinica 51:
+  - **Fila antes:** `beta`, `miembros_max = 5`, `pagado_hasta = null`, `prueba_pro_hasta = 2026-10-29`, `prueba_clinica_hasta = 2026-10-14`, `prueba_clinica_usada = true`.
+  - **Cambio a vencido:** `gratis`, `miembros_max = 1`.
+  - **Restauración:** la fila volvió exactamente a la de antes, confirmado con `returning`.
+  - Solo se tocó esa fila (`where clinica_id = <QA Clinica 51>`). La clínica del usuario no se tocó.
+- **Datos:** el −1 y el Deshacer de esta prueba dejaron dos movimientos extra en el historial de "Ivermectina QA" (stock final 20).
+
+QA: FAIL — F7 bloqueado (la clínica no quedó en solo lectura: −1 escribió sin candado ni LP004) y F8 pendiente del arreglo de WR-01
