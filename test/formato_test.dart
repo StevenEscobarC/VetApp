@@ -218,4 +218,66 @@ void main() {
           'Usa el formato dd/mm/aaaa');
     });
   });
+
+  group('cédula y NIT', () {
+    const errorCedula = 'Revisa la cédula: debe tener entre 5 y 12 números.';
+    const errorNit =
+        'Usa solo números y, si es NIT, el guion del dígito de verificación.';
+
+    test('normalizarCedula quita puntos', () {
+      final r = normalizarCedula('1.020.304.050');
+      expect(r.valor, '1020304050');
+      expect(r.error, isNull);
+    });
+
+    test('normalizarCedula vacío no es error', () {
+      final r = normalizarCedula('');
+      expect(r.valor, isNull);
+      expect(r.error, isNull);
+    });
+
+    test('normalizarCedula rechaza cortas y no numéricas', () {
+      for (final t in ['1234', '12ab5']) {
+        final r = normalizarCedula(t);
+        expect(r.valor, isNull, reason: t);
+        expect(r.error, errorCedula, reason: t);
+      }
+    });
+
+    test('formatearCedula agrupa con puntos', () {
+      expect(formatearCedula('1020304050'), '1.020.304.050');
+      expect(formatearCedula('12345'), '12.345');
+    });
+
+    test('normalizarNit con dígito de verificación', () {
+      final r = normalizarNit('900.123.456-7');
+      expect(r.valor, '900123456-7');
+      expect(r.error, isNull);
+    });
+
+    test('normalizarNit acepta cédula sin guion', () {
+      final r = normalizarNit('1020304050');
+      expect(r.valor, '1020304050');
+      expect(r.error, isNull);
+    });
+
+    test('normalizarNit vacío no es error', () {
+      final r = normalizarNit('');
+      expect(r.valor, isNull);
+      expect(r.error, isNull);
+    });
+
+    test('normalizarNit rechaza formatos inválidos', () {
+      for (final t in ['900-12', '9001234567890']) {
+        final r = normalizarNit(t);
+        expect(r.valor, isNull, reason: t);
+        expect(r.error, errorNit, reason: t);
+      }
+    });
+
+    test('formatearNit agrupa y conserva el dígito', () {
+      expect(formatearNit('900123456-7'), '900.123.456-7');
+      expect(formatearNit('1020304050'), '1.020.304.050');
+    });
+  });
 }
