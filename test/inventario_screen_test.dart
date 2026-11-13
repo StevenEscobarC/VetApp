@@ -247,7 +247,14 @@ void main() {
 
   testWidgets('FAB Nuevo producto navega a /inventario/nuevo', (tester) async {
     await _abrir(tester, _repoTodos());
-    expect(find.byIcon(Icons.add), findsOneWidget);
+    // Los botones "+" de las filas también usan Icons.add: se acota al FAB.
+    expect(
+      find.descendant(
+        of: find.byType(FloatingActionButton),
+        matching: find.byIcon(Icons.add),
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Nuevo producto'));
     await tester.pumpAndSettle();
     expect(find.text('PANTALLA NUEVO'), findsOneWidget);
@@ -258,8 +265,15 @@ void main() {
     final semantics = tester.ensureSemantics();
     await _abrir(tester, _repoTodos(), plan: planSoloLectura);
 
-    expect(find.byIcon(Icons.lock_outline), findsOneWidget);
-    expect(find.byIcon(Icons.add), findsNothing);
+    final fab = find.byType(FloatingActionButton);
+    expect(
+      find.descendant(of: fab, matching: find.byIcon(Icons.lock_outline)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: fab, matching: find.byIcon(Icons.add)),
+      findsNothing,
+    );
     expect(
       tester.getSemantics(find.byType(FloatingActionButton)).label,
       'Nuevo producto, bloqueado, solo lectura',
