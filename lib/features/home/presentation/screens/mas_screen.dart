@@ -10,6 +10,7 @@ import '../../../../core/widgets/cards/app_card.dart';
 import '../../../appointments/presentation/providers/recordatorios_providers.dart';
 import '../../../appointments/presentation/screens/recordatorios_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../inventory/presentation/inventario_routes.dart';
 import '../../../plan/presentation/plan_textos.dart';
 import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../../plan/presentation/widgets/plan_insignia.dart';
@@ -144,6 +145,26 @@ class MasScreen extends ConsumerWidget {
                       const Icon(Icons.chevron_right),
                     ],
                   ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              onTap: () => context.push(rutaInventario()),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Row(
+                  children: [
+                    const Icon(Icons.inventory_2_outlined),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Inventario',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
                 ),
               ),
             ),

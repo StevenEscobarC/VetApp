@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import 'screens/inventario_screen.dart';
+import 'screens/producto_form_screen.dart';
 
 /// Ruta del alta de producto.
 const String kRutaNuevoProducto = '/inventario/nuevo';
@@ -11,6 +12,10 @@ const String kRutaNuevoProducto = '/inventario/nuevo';
 /// rama del shell duplica la página del shell en el Navigator raíz (G5).
 final List<GoRoute> inventarioRoutes = [
   GoRoute(path: '/inventario', builder: (_, _) => const InventarioScreen()),
+  GoRoute(
+    path: kRutaNuevoProducto,
+    builder: (_, _) => const ProductoFormScreen(),
+  ),
 ];
 
 /// Lista de inventario; con [bajos] abre con el filtro "Bajos" (lo lee 06-07).

@@ -140,7 +140,7 @@ void main() {
     );
     expect(tester.getSize(fila).height, greaterThanOrEqualTo(56));
 
-    final y = (String t) => tester.getTopLeft(find.text(t)).dy;
+    double y(String t) => tester.getTopLeft(find.text(t)).dy;
     expect(y('Mi plan'), lessThan(y('Inventario')));
     expect(y('Inventario'), lessThan(y('Recordatorios')));
   });

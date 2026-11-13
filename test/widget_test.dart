@@ -85,6 +85,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // La fila de Inventario empuja Recordatorios fuera de la vista inicial.
+    await tester.ensureVisible(find.text('Recordatorios'));
+    await tester.pumpAndSettle();
     expect(find.text('Recordatorios'), findsOneWidget);
     expect(find.text('1 hora antes'), findsOneWidget);
 
