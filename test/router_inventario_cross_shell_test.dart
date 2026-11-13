@@ -9,6 +9,8 @@ import 'package:vetapp/features/appointments/presentation/providers/citas_provid
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clients/presentation/providers/clientes_providers.dart';
+import 'package:vetapp/features/inventory/domain/entities/movimiento_stock.dart';
+import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/inventory/presentation/screens/inventario_screen.dart';
 import 'package:vetapp/features/inventory/presentation/screens/producto_form_screen.dart';
@@ -32,7 +34,7 @@ import 'helpers/fake_vacunas.dart';
 /// `StatefulShellRoute`. Usa el `routerProvider` real (con `AppShell`), no el
 /// `routerHarness` plano que ocultaría una página de shell duplicada.
 
-Widget _app() {
+Widget _app({FakeInventarioRepository? inventario}) {
   SharedPreferences.setMockInitialValues({});
   return ProviderScope(
     retry: (retryCount, error) => null,
@@ -52,7 +54,7 @@ Widget _app() {
       miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
       indicesColorVetProvider.overrideWithValue(const <String, int>{}),
       inventarioRepositoryProvider.overrideWithValue(
-        FakeInventarioRepository(productos: [productoDePrueba()]),
+        inventario ?? FakeInventarioRepository(productos: [productoDePrueba()]),
       ),
       vacunaRepositoryProvider.overrideWithValue(FakeVacunaRepository()),
       clockProvider.overrideWithValue(() => DateTime.utc(2026, 10, 31, 17)),
@@ -69,11 +71,14 @@ String _ubicacion(WidgetTester tester) => _container(
   tester,
 ).read(routerProvider).routerDelegate.currentConfiguration.last.matchedLocation;
 
-Future<void> _abrirMas(WidgetTester tester) async {
+Future<void> _abrirMas(
+  WidgetTester tester, {
+  FakeInventarioRepository? inventario,
+}) async {
   tester.view.physicalSize = const Size(800, 3000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(_app());
+  await tester.pumpWidget(_app(inventario: inventario));
   await tester.pumpAndSettle();
   _container(tester).read(routerProvider).go('/mas');
   await tester.pumpAndSettle();
@@ -143,5 +148,110 @@ void main() {
     double y(String t) => tester.getTopLeft(find.text(t)).dy;
     expect(y('Mi plan'), lessThan(y('Inventario')));
     expect(y('Inventario'), lessThan(y('Recordatorios')));
+  });
+
+  testWidgets('Inicio > tarjeta de stock bajo abre una sola lista en Bajos y '
+      'Atrás vuelve a Inicio', (tester) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        inventario: FakeInventarioRepository(
+          productos: [
+            productoDePrueba(id: 'a', nombre: 'Amoxicilina', cantidad: 0),
+            productoDePrueba(id: 'b', nombre: 'Zinc', cantidad: 9),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    _container(tester).read(routerProvider).go('/inicio');
+    await tester.pumpAndSettle();
+    expect(_ubicacion(tester), '/inicio');
+
+    await tester.tap(find.text('1 producto con stock bajo'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(InventarioScreen), findsOneWidget);
+    expect(_ubicacion(tester), '/inventario');
+    // Preseleccionó Bajos: Zinc (no bajo) no aparece en la lista.
+    expect(find.text('Amoxicilina'), findsOneWidget);
+    expect(find.text('Zinc'), findsNothing);
+
+    _container(tester).read(routerProvider).pop();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(_ubicacion(tester), '/inicio');
+    expect(find.byType(InventarioScreen), findsNothing);
+  });
+
+  group('pill de Más', () {
+    Finder pill(String texto) => find.text(texto);
+
+    testWidgets('muestra "2 bajos" con trending_down y semántica compuesta', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _abrirMas(
+        tester,
+        inventario: FakeInventarioRepository(
+          resumenData: const ResumenInventario(bajos: 2),
+        ),
+      );
+      expect(pill('2 bajos'), findsOneWidget);
+      final fila = find.ancestor(
+        of: find.text('Inventario'),
+        matching: find.byType(Card),
+      );
+      expect(
+        find.descendant(of: fila, matching: find.byIcon(Icons.trending_down)),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('Inventario, 2 bajos'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('singular y sin pill con 0 bajos', (tester) async {
+      await _abrirMas(
+        tester,
+        inventario: FakeInventarioRepository(
+          resumenData: const ResumenInventario(bajos: 1),
+        ),
+      );
+      expect(pill('1 bajo'), findsOneWidget);
+    });
+
+    testWidgets('sin bajos no hay pill', (tester) async {
+      await _abrirMas(tester, inventario: FakeInventarioRepository());
+      expect(find.textContaining('bajo'), findsNothing);
+      expect(find.byIcon(Icons.trending_down), findsNothing);
+    });
+
+    testWidgets('con error la fila queda sin pill', (tester) async {
+      await _abrirMas(
+        tester,
+        inventario: FakeInventarioRepository(errorResumen: Exception('red')),
+      );
+      expect(find.text('Inventario'), findsOneWidget);
+      expect(find.byIcon(Icons.trending_down), findsNothing);
+    });
+
+    testWidgets('tras un ajuste el pill y la tarjeta se refrescan', (
+      tester,
+    ) async {
+      final repo = FakeInventarioRepository(
+        productos: [productoDePrueba(id: 'a', cantidad: 2, minimo: 2)],
+      );
+      await _abrirMas(tester, inventario: repo);
+      expect(find.textContaining('bajo'), findsNothing);
+
+      await _container(tester)
+          .read(inventarioActionsProvider)
+          .ajustar(producto: producto, delta: -1, motivo: MotivoMovimiento.uso);
+      await tester.pumpAndSettle();
+      expect(pill('1 bajo'), findsOneWidget);
+    });
   });
 }

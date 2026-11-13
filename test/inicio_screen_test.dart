@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
@@ -270,4 +271,59 @@ void main() {
       expect(find.text('¿A quién vacuna?'), findsOneWidget);
     });
   });
+
+  testWidgets('tarjeta de stock bajo en Inicio navega a Bajos', (tester) async {
+    await tester.pumpWidget(
+      _appInicioConInventario(
+        FakeInventarioRepository(
+          resumenData: const ResumenInventario(bajos: 2),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 productos con stock bajo'), findsOneWidget);
+    // La tarjeta de vacunas sigue presente.
+    expect(find.text('Vacunas pendientes'), findsOneWidget);
+
+    await tester.tap(find.text('2 productos con stock bajo'));
+    await tester.pumpAndSettle();
+    expect(find.text('PANTALLA INVENTARIO bajos'), findsOneWidget);
+  });
+
+  testWidgets('sin bajos Inicio no muestra la tarjeta de stock', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appInicioConInventario(FakeInventarioRepository()),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('stock bajo'), findsNothing);
+  });
+}
+
+Widget _appInicioConInventario(FakeInventarioRepository inventario) {
+  return routerHarness(
+    initialLocation: '/',
+    routes: [
+      GoRoute(path: '/', builder: (_, _) => const InicioScreen()),
+      GoRoute(
+        path: '/inventario',
+        builder: (_, state) =>
+            Text('PANTALLA INVENTARIO ${state.uri.queryParameters['filtro']}'),
+      ),
+    ],
+    overrides: [
+      ...planOverrides(),
+      authProfileProvider.overrideWith(
+        () => FakeAuthProfileNotifier(profile: vetProfile),
+      ),
+      vacunaRepositoryProvider.overrideWithValue(FakeVacunaRepository()),
+      inventarioRepositoryProvider.overrideWithValue(inventario),
+      mascotaRepositoryProvider.overrideWithValue(FakeMascotaRepository()),
+      mascotaFotoDatasourceProvider.overrideWithValue(
+        FakeMascotaFotoDatasource(),
+      ),
+    ],
+  );
 }
