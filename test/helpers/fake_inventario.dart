@@ -187,12 +187,14 @@ class FakeInventarioRepository implements SupabaseInventarioRepository {
     required int delta,
     required MotivoMovimiento motivo,
     String? deshaceId,
+    int? cantidadEsperada,
   }) async {
     _log('moverStock', {
       'productoId': productoId,
       'delta': delta,
       'motivo': motivo,
       'deshaceId': deshaceId,
+      'cantidadEsperada': cantidadEsperada,
     });
     final gate = bloqueoMover;
     if (gate != null) await gate.future;
@@ -202,6 +204,15 @@ class FakeInventarioRepository implements SupabaseInventarioRepository {
       throw const InventarioFailure(
         'Ese producto ya no está disponible. Actualiza la lista.',
         tipo: ErrorInventario.noDisponible,
+      );
+    }
+    // Como el servidor (IN004): el conteo se rechaza si el stock cambió.
+    if (cantidadEsperada != null &&
+        cantidadEsperada != _productos[i].cantidad) {
+      throw const InventarioFailure(
+        'El stock cambió mientras contabas. Revisa la cantidad actual e '
+        'intenta de nuevo.',
+        tipo: ErrorInventario.stockCambio,
       );
     }
     if (deshaceId != null &&

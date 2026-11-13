@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io' as io;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:vetapp/core/errors/limite_plan.dart';
@@ -9,9 +11,15 @@ import 'package:vetapp/features/inventory/domain/entities/movimiento_stock.dart'
 import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/domain/inventario_failure.dart';
 
-class SocketException implements Exception {}
+/// Como `_ClientSocketException` de `package:http`: subclase privada de
+/// [http.ClientException], cuyo `runtimeType` no se llama `ClientException`.
+class _SubclaseClientException extends http.ClientException {
+  _SubclaseClientException() : super('Connection failed');
+}
 
-class ClientException implements Exception {}
+/// Excepción cuyo nombre contiene `SocketException` sin ser la de `dart:io`
+/// (p. ej. la variante web o una envoltura).
+class _MiSocketException implements Exception {}
 
 PostgrestException _pg(String code, {String? hint}) => PostgrestException(
   message: 'texto crudo del servidor',
@@ -31,6 +39,11 @@ void main() {
         ErrorInventario.noDisponible,
       ),
       'IN003': ('Ese ajuste ya se deshizo.', ErrorInventario.yaDeshecho),
+      'IN004': (
+        'El stock cambió mientras contabas. Revisa la cantidad actual e '
+            'intenta de nuevo.',
+        ErrorInventario.stockCambio,
+      ),
       '23505': (
         'Ya tienes un producto con ese nombre.',
         ErrorInventario.nombreDuplicado,
@@ -76,8 +89,21 @@ void main() {
   group('esErrorDeRed', () {
     test('verdadero para timeout y tipos de red', () {
       expect(esErrorDeRed(TimeoutException('x')), isTrue);
-      expect(esErrorDeRed(SocketException()), isTrue);
-      expect(esErrorDeRed(ClientException()), isTrue);
+      expect(esErrorDeRed(const io.SocketException('x')), isTrue);
+      expect(esErrorDeRed(http.ClientException('x')), isTrue);
+      expect(
+        esErrorDeRed(http.ClientException('x', Uri.parse('https://x.co'))),
+        isTrue,
+      );
+    });
+    test('verdadero para subclases de ClientException (_ClientSocketException)',
+        () {
+      final e = _SubclaseClientException();
+      expect(e.runtimeType.toString(), isNot('ClientException'));
+      expect(esErrorDeRed(e), isTrue);
+    });
+    test('verdadero si el nombre del tipo contiene SocketException', () {
+      expect(esErrorDeRed(_MiSocketException()), isTrue);
     });
     test('falso para otros', () {
       expect(esErrorDeRed(const FormatException()), isFalse);
@@ -105,6 +131,18 @@ void main() {
       expect(p['p_motivo'], 'vencido_danado');
       expect(p['p_delta'], -2);
       expect(p['p_deshace_id'], isNull);
+      expect(p.containsKey('p_cantidad_esperada'), isFalse);
+    });
+    test('paramsMoverStock con cantidad esperada (conteo, CR-01)', () {
+      final p = SupabaseInventarioRepository.paramsMoverStock(
+        productoId: 'p1',
+        delta: -3,
+        motivo: MotivoMovimiento.conteo,
+        cantidadEsperada: 13,
+      );
+      expect(p['p_cantidad_esperada'], 13);
+      expect(p['p_delta'], -3);
+      expect(p['p_motivo'], 'conteo');
     });
     test('paramsCrearProducto', () {
       final p = SupabaseInventarioRepository.paramsCrearProducto(

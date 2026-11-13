@@ -31,6 +31,7 @@ class _RepoDeshacerFalla extends FakeInventarioRepository {
     required int delta,
     required MotivoMovimiento motivo,
     String? deshaceId,
+    int? cantidadEsperada,
   }) {
     if (motivo == MotivoMovimiento.deshacer) {
       throw const InventarioFailure(
@@ -43,6 +44,7 @@ class _RepoDeshacerFalla extends FakeInventarioRepository {
       delta: delta,
       motivo: motivo,
       deshaceId: deshaceId,
+      cantidadEsperada: cantidadEsperada,
     );
   }
 }

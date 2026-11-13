@@ -34,7 +34,7 @@
 -- retirar (T6), autoría visible (D-13), citas por veterinario (D-07) y consultas FK restrict (D-06).
 -- Fase 5 (bloque Q, 48 checks): vacunación — aislamiento, solo-append, cálculo derivado, alertas, enlace público, logo de la clínica.
 -- Fase 5.1 (bloque R, 45 checks): planes y límites — plan efectivo, asignar_plan solo service_role, límite de 50, prueba Clínica y cupos, solo lectura, logo/protocolos.
--- Fase 6 (bloque S, 20 checks): inventario — aislamiento, solo-append, mover_stock atómico sin negativos, deshacer, solo admin, resumen de stock bajo, solo lectura, autoría. Total esperado: 258.
+-- Fase 6 (bloque S, 23 checks): inventario — aislamiento, solo-append, mover_stock atómico sin negativos, deshacer (solo de ajustes), conteo con cantidad esperada (IN004), solo admin, resumen de stock bajo, solo lectura, autoría. Total esperado: 261.
 
 do $$
 declare
@@ -164,6 +164,7 @@ declare
   s_mov uuid;
   s_mov2 uuid;
   s_mov_alta uuid;
+  s_pc uuid;
   s_row record;
   s_n int;
   s_n2 int;
@@ -4356,7 +4357,7 @@ begin
 
   -------------------------------------------------------------------------
   -- ===== S: Inventario (Fase 6) =====
-  -- S1..S20. Fixtures propios (s_*): nunca vet_a/vet_b, cuyo plan se muta en bloques previos.
+  -- S1..S23. Fixtures propios (s_*): nunca vet_a/vet_b, cuyo plan se muta en bloques previos.
   -- Cada regreso a postgres limpia request.jwt.claims. Todo se revierte al final.
   -------------------------------------------------------------------------
   perform set_config('role', 'postgres', true);
@@ -4439,7 +4440,7 @@ begin
       'public.crear_producto(text,text,int,int,text,date,int,int)',
       'public.actualizar_producto(uuid,text,text,date,int,int,int)',
       'public.archivar_producto(uuid)',
-      'public.mover_stock(uuid,int,text,text,uuid,text,uuid)',
+      'public.mover_stock(uuid,int,text,text,uuid,text,uuid,int)',
       'public.inventario_resumen()'
     ] loop
       if has_function_privilege('anon', s_t, 'execute') then
@@ -4997,6 +4998,84 @@ begin
     end if;
   exception when others then
     failures := failures || ('S20 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S21: conteo con la cantidad esperada correcta aplica el delta (CR-01).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    s_pc := public.crear_producto('Smoke S Conteo', 'unidad', 7);
+    select * into s_row from public.mover_stock(s_pc, 3, 'conteo', 'ajuste', null, null, null, 7);
+    if s_row.cantidad_nueva is distinct from 10 then
+      failures := failures || ('S21 conteo con esperada correcta debía dejar 10, dejó ' || coalesce(s_row.cantidad_nueva::text, 'null'));
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_pc;
+    if s_row.cantidad is distinct from 10 then
+      failures := failures || ('S21 cantidad esperada 10, hay ' || s_row.cantidad);
+    end if;
+  exception when others then
+    failures := failures || ('S21 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S22: conteo con una cantidad esperada vieja falla con IN004 y no cambia nada (CR-01).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n2 from public.movimientos_inventario where producto_id = s_pc;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform * from public.mover_stock(s_pc, -2, 'conteo', 'ajuste', null, null, null, 7);
+      failures := failures || 'S22 conteo con esperada 7 (hay 10) debía fallar con IN004';
+    exception
+      when sqlstate 'IN004' then null;
+      when others then failures := failures || ('S22 esperaba IN004 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_pc;
+    select count(*) into s_n from public.movimientos_inventario where producto_id = s_pc;
+    if s_row.cantidad is distinct from 10 or s_n <> s_n2 then
+      failures := failures || format('S22 el conteo rechazado cambió datos: cantidad=%s movimientos=%s (antes %s)', s_row.cantidad, s_n, s_n2);
+    end if;
+  exception when others then
+    failures := failures || ('S22 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S23: solo se deshacen ajustes; el movimiento de alta no se puede deshacer aunque sea el inverso exacto (WR-04).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select id into s_mov_alta from public.movimientos_inventario where producto_id = s_pc and origen = 'alta';
+    select count(*) into s_n2 from public.movimientos_inventario where producto_id = s_pc;
+    if s_mov_alta is null then
+      failures := failures || 'S23 falta el movimiento de alta del producto de conteo';
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform * from public.mover_stock(s_pc, -7, 'deshacer', 'ajuste', null, null, s_mov_alta);
+      failures := failures || 'S23 deshacer un alta debía fallar con check_violation';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('S23 esperaba check_violation y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_pc;
+    select count(*) into s_n from public.movimientos_inventario where producto_id = s_pc;
+    if s_row.cantidad is distinct from 10 or s_n <> s_n2 then
+      failures := failures || format('S23 el deshacer rechazado cambió datos: cantidad=%s movimientos=%s (antes %s)', s_row.cantidad, s_n, s_n2);
+    end if;
+  exception when others then
+    failures := failures || ('S23 error inesperado: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------
