@@ -1,9 +1,9 @@
 ---
 phase: 6
 slug: inventario
-status: draft
+status: approved
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-10-31
 ---
 
@@ -63,7 +63,7 @@ created: 2026-10-31
 | 06-08-T2 | 06-08 | 4 | INV-01, INV-03 | T-06-33, T-06-35 | Editar: mínimo/precios solo admin; archivar solo admin, sin borrar | widget + suite | `flutter test test/producto_form_screen_test.dart test/producto_detail_screen_test.dart` + `flutter test` -> `EDITAR_ARCHIVAR_OK` | ✅ | ✅ green |
 | 06-09-T1 | 06-09 | 5 | INV-01..03 | T-06-38 | Gate integrado, sonda en vivo, greps de capas/seguridad, auditoría de marca, docs | suite + script | -> `PHASE6_GATE_OK` | ✅ | ✅ green (`LIVE_SCHEMA_OK`, greps vacíos, analyze limpio, +1045, APK debug, `BRAND: PASS`) |
 | 06-09-T2 | 06-09 | 5 | INV-01..03 | T-06-37, T-06-39 | UAT en emulador contra el proyecto vivo (F1..F9) | manual (vetapp-qa) | -> `QA_REPORT_OK` + `QA: PASS` | ✅ | ⚠️ F1-F6, F8 (re-QA), F9 PASS; F7 sin correr (sesión del colega) |
-| 06-09-T3 | 06-09 | 5 | INV-01..03 | T-06-40 | Visto bueno del usuario | manual (usuario) | -> `SIGNOFF_RECORDED` + respuesta literal | ✅ | ⬜ pendiente del usuario |
+| 06-09-T3 | 06-09 | 5 | INV-01..03 | T-06-40 | Visto bueno del usuario | manual (usuario) | -> `SIGNOFF_RECORDED` + respuesta literal | ✅ | ✅ aprobado ("Aprobado", 2026-11-13) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -116,14 +116,14 @@ created: 2026-10-31
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 40s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 40s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** aprobado por el usuario el 2026-11-13 (respuesta literal en el chat: "Aprobado"). F7 en vivo (sesión del colega) se aceptó cubierto por el smoke R44 (servidor) y los tests de widget (cliente). Deuda abierta del review: WR-03, WR-05, WR-06 e IN-01..08.
 
 ## Cierre 06-09 y gap closure 06-10 (2026-11-13)
 
