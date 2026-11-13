@@ -435,4 +435,66 @@ void main() {
       );
     });
   });
+
+  group('pedido por WhatsApp', () {
+    testWidgets('en Bajos muestra botón y ayuda; compartir registra el texto', (
+      tester,
+    ) async {
+      final compartidor = FakeCompartidor();
+      await _abrir(tester, _repoTodos(), bajos: true, compartidor: compartidor);
+      expect(find.text('Pedir por WhatsApp'), findsOneWidget);
+      expect(
+        find.text('Pedimos lo necesario para llegar al doble del mínimo.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Pedir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(compartidor.compartidos, [
+        'Pedido de Clínica Patitas:\n'
+            '- Amoxicilina: pedir 3 frascos (quedan 1)\n'
+            '- Gasas: pedir 6 cajas (quedan 0)',
+      ]);
+    });
+
+    testWidgets('un error al compartir muestra el snackbar', (tester) async {
+      final compartidor = FakeCompartidor(error: Exception('sin hoja'));
+      await _abrir(tester, _repoTodos(), bajos: true, compartidor: compartidor);
+      await tester.tap(find.text('Pedir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No pudimos abrir el menú de compartir.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('no aparece en Todos ni en Bajos vacío', (tester) async {
+      await _abrir(tester, _repoTodos());
+      expect(find.text('Pedir por WhatsApp'), findsNothing);
+    });
+
+    testWidgets('Bajos vacío no ofrece pedido', (tester) async {
+      await _abrir(
+        tester,
+        FakeInventarioRepository(productos: [_suero]),
+        bajos: true,
+      );
+      expect(find.text('Nada por reabastecer'), findsOneWidget);
+      expect(find.text('Pedir por WhatsApp'), findsNothing);
+    });
+
+    testWidgets('funciona en solo lectura sin candado', (tester) async {
+      final compartidor = FakeCompartidor();
+      await _abrir(
+        tester,
+        _repoTodos(),
+        plan: planSoloLectura,
+        bajos: true,
+        compartidor: compartidor,
+      );
+      await tester.tap(find.text('Pedir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(compartidor.compartidos, hasLength(1));
+      expect(find.text('Tu cuenta está en solo lectura'), findsNothing);
+    });
+  });
 }
