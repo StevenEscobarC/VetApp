@@ -2,7 +2,7 @@
 phase: 6
 slug: inventario
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-10-31
 ---
@@ -61,8 +61,8 @@ created: 2026-10-31
 | 06-07-T3 | 06-07 | 3 | INV-02 | T-06-31, T-06-32 | Tarjeta de Inicio solo con bajos > 0 (oculta en carga/error), pastilla en Más, Inicio -> Bajos sin duplicar shell | widget/router + suite | `flutter test test/stock_bajo_card_test.dart test/inicio_screen_test.dart test/router_inventario_cross_shell_test.dart` + `flutter test` -> `ALERTA_INV_OK` | ✅ | ✅ green |
 | 06-08-T1 | 06-08 | 4 | INV-03 | T-06-34, T-06-36 | Detalle, ajustes, historial con autor (últimos 50), candados | widget/router | `flutter test test/producto_detail_screen_test.dart test/router_inventario_cross_shell_test.dart` -> `DETALLE_INV_OK` | ✅ | ✅ green |
 | 06-08-T2 | 06-08 | 4 | INV-01, INV-03 | T-06-33, T-06-35 | Editar: mínimo/precios solo admin; archivar solo admin, sin borrar | widget + suite | `flutter test test/producto_form_screen_test.dart test/producto_detail_screen_test.dart` + `flutter test` -> `EDITAR_ARCHIVAR_OK` | ✅ | ✅ green |
-| 06-09-T1 | 06-09 | 5 | INV-01..03 | T-06-38 | Gate integrado, sonda en vivo, greps de capas/seguridad, auditoría de marca, docs | suite + script | -> `PHASE6_GATE_OK` | ✅ | ⬜ pending |
-| 06-09-T2 | 06-09 | 5 | INV-01..03 | T-06-37, T-06-39 | UAT en emulador contra el proyecto vivo (F1..F9) | manual (vetapp-qa) | -> `QA_REPORT_OK` + `QA: PASS` | ❌ (se crea) | ⬜ pending |
+| 06-09-T1 | 06-09 | 5 | INV-01..03 | T-06-38 | Gate integrado, sonda en vivo, greps de capas/seguridad, auditoría de marca, docs | suite + script | -> `PHASE6_GATE_OK` | ✅ | ✅ green (`LIVE_SCHEMA_OK`, greps vacíos, analyze limpio, +1045, APK debug, `BRAND: PASS`) |
+| 06-09-T2 | 06-09 | 5 | INV-01..03 | T-06-37, T-06-39 | UAT en emulador contra el proyecto vivo (F1..F9) | manual (vetapp-qa) | -> `QA_REPORT_OK` + `QA: PASS` | ✅ | ⚠️ F1-F6, F8 (re-QA), F9 PASS; F7 sin correr (sesión del colega) |
 | 06-09-T3 | 06-09 | 5 | INV-01..03 | T-06-40 | Visto bueno del usuario | manual (usuario) | -> `SIGNOFF_RECORDED` + respuesta literal | ✅ | ⬜ pendiente del usuario |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
@@ -124,3 +124,18 @@ created: 2026-10-31
 - [ ] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
+
+## Cierre 06-09 y gap closure 06-10 (2026-11-13)
+
+| Ítem | Evidencia |
+|---|---|
+| Sonda anónima | `LIVE_SCHEMA_OK`. Las 5 RPC protegidas (401) y coinciden con las llamadas en `supabase_inventario_repository.dart`. |
+| Greps de capas y seguridad | Sin resultados en los 5: `supabase_flutter` en domain/presentation, `DateTime.now()`, escrituras directas, `double` en domain y `<= minimo`. |
+| Gate | `No issues found!` · `All tests passed!` (+1034 antes de 06-10; +1045 tras fusionar 06-10 en `e3e0904`). |
+| APK debug | `√ Built buildpp\outputslutter-apkpp-debug.apk`. |
+| Marca | `06-BRAND-AUDIT.md`: `BRAND: PASS` (0 BLOCKER, 2 WARN). |
+| Code review | `06-REVIEW.md`: 1 CRITICAL y 6 WARNING. CR-01, WR-01, WR-02 y WR-04 se cerraron en 06-10. WR-03, WR-05, WR-06 e INFO quedan como deuda. |
+| 06-10 en vivo | `apply_migration` de `mover_stock` con 8 argumentos y smoke `RLS SMOKE: PASS (261 checks) - cambios revertidos`. |
+| QA en emulador | `06-QA-REPORT.md`: F1-F6 y F9 (archivar) PASS. F8 FAIL → PASS en la re-QA tras 06-10. Conteo (CR-01) y tope (WR-02) PASS en vivo. F7 sin correr porque solo lectura aplica al colega y no hay sesión del colega; servidor cubierto por el smoke (R44) y cliente por tests de widget. |
+| Docs de dominio | `modelo-dominio.md` §9 y arquitecto `SKILL.md` §3/§7 (excepción `security definer`). |
+

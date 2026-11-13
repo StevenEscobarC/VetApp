@@ -19,7 +19,7 @@
 | F5 Pedir por WhatsApp, hoja de compartir (INV-02) | 06-09-PLAN Task 2 | PASS (sin enviar; envío real queda para teléfono físico) |
 | F6 Historial, doble toque, −1 en 0, Uso bloqueado (INV-03) | 06-09-PLAN Task 2 | PASS |
 | F7 Colega y solo lectura (D-13/D-14) | 06-09-PLAN Task 2 | BLOCKED (la app sigue con puede_escribir=true; sin candados ni LimitePlanSheet; ver sección F7) |
-| F8 Modo avión (D-12) | 06-09-PLAN Task 2 | FAIL (copy distinto al esperado; la cantidad no cambió) |
+| F8 Modo avión (D-12) | 06-09-PLAN Task 2 | PASS (re-QA 06-10, caso 1; el FAIL original de 06-09 quedó corregido) |
 | F9 Archivar "Amoxicilina QA" | 06-09-PLAN Task 2 | PASS (parte de archivar) |
 | F9 restaurar planes y verificar clínica del usuario | 06-09-PLAN Task 2 | PENDIENTE (autorización del usuario para SQL de soporte) |
 
@@ -116,4 +116,31 @@ Detalle de "Amoxicilina QA" (stock 0) > Archivar producto: diálogo `Archivar pr
   - Solo se tocó esa fila (`where clinica_id = <QA Clinica 51>`). La clínica del usuario no se tocó.
 - **Datos:** el −1 y el Deshacer de esta prueba dejaron dos movimientos extra en el historial de "Ivermectina QA" (stock final 20).
 
-QA: FAIL — F7 bloqueado (la clínica no quedó en solo lectura: −1 escribió sin candado ni LP004) y F8 pendiente del arreglo de WR-01
+## Re-QA 06-10
+
+- Fecha: 2026-11-13. Build: debug de master (`e3e0904`, gap closure 06-10), reinstalado con `flutter run`. Misma sesión admin de QA Clinica 51, sin cerrar sesión.
+
+### R1 (F8 de nuevo) PASS
+
+Modo avión activado (`airplane_mode_on=1`), −1 sobre "Ivermectina QA" (20).
+- Observado: snackbar `Sin conexión. El ajuste no se guardó. Inténtalo de nuevo cuando tengas señal.` (exacto al esperado). La fila siguió en 20.
+- Modo avión desactivado (`airplane_mode_on=0`), pull-to-refresh: `Ivermectina QA, 20 frascos...`, sin cambios.
+- Evidencia: `qa/06-R-C1-sin-conexion.png`, `qa/06-R-C1-tras-reconectar.png`.
+
+### R2 (Conteo, CR-01) PASS
+
+- Hoja de ajuste > Conteo: el campo arranca con 20 y muestra `Es la misma cantidad que hay ahora.` con Aplicar deshabilitado. Se escribió 17: `Quedarán 17 frascos`, Aplicar habilitado. Al aplicar (sin diálogo de confirmación, diferencia de 3): snackbar `Stock de Ivermectina QA corregido a 17.` con Deshacer; la lista mostró `17 frascos`.
+- Segundo conteo a 20: `Quedarán 20 frascos`; snackbar `Stock de Ivermectina QA corregido a 20.`; lista `20 frascos`. Cantidad final exactamente la contada.
+- Movimientos anotados (historial del detalle, más reciente primero): `+3 frascos · Conteo. Quedaron 20 · 3:49 p. m.`, `−3 frascos · Conteo. Quedaron 17 · 3:48 p. m.`, ambos de QA Admin Cincuentayuno. Producto final en 20.
+- Evidencia: `qa/06-R-C2-conteo-17.png`, `qa/06-R-C2-aplicado-17.png`, `qa/06-R-C2-historial.png`.
+
+### R3 (Topes, WR-02) PASS
+
+Hoja > Compra, cantidad 100001: mensaje `El ajuste máximo es 100.000.` y `Aplicar ajuste` con `enabled="false"`. No se aplicó; hoja cancelada, producto sigue en 20.
+- Evidencia: `qa/06-R-C3-tope.png`.
+
+### Cambios al dispositivo (re-QA)
+
+- Modo avión activado y desactivado en R1; confirmado `airplane_mode_on=0` al final. Sin pm clear, zona horaria ni permisos. App sigue corriendo con `flutter run`.
+
+QA: BLOCKED — solo F7 (sesión del colega) queda pendiente del visto bueno del usuario
