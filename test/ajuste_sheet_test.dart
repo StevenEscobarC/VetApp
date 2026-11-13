@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/inventory/domain/entities/movimiento_stock.dart';
+import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/domain/inventario_failure.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/inventory/presentation/widgets/ajuste_sheet.dart';
@@ -22,6 +23,7 @@ Future<void> _abrir(
   WidgetTester tester,
   FakeInventarioRepository repo, {
   MotivoMovimiento motivo = MotivoMovimiento.compra,
+  Producto? producto,
 }) async {
   tester.view.physicalSize = const Size(800, 3000);
   tester.view.devicePixelRatio = 1;
@@ -37,7 +39,7 @@ Future<void> _abrir(
               child: TextButton(
                 onPressed: () => mostrarAjusteSheet(
                   context,
-                  producto: _amoxi,
+                  producto: producto ?? _amoxi,
                   motivoInicial: motivo,
                 ),
                 child: const Text('Abrir'),
@@ -399,5 +401,108 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Ajustar stock'), findsNothing);
     expect(_movs(repo), isEmpty);
+  });
+
+  group('conteo con stock desactualizado (CR-01)', () {
+    testWidgets('el conteo envía la cantidad esperada; los demás motivos no', (
+      tester,
+    ) async {
+      final repo = _repo();
+      await _abrir(tester, repo, motivo: MotivoMovimiento.conteo);
+      await _escribir(tester, '3');
+      await _aplicarAjuste(tester);
+      expect(_movs(repo).single.args['cantidadEsperada'], 5);
+      expect(_movs(repo).single.args['delta'], -2);
+
+      final repo2 = _repo();
+      await _abrir(tester, repo2);
+      await _escribir(tester, '2');
+      await _aplicarAjuste(tester);
+      expect(_movs(repo2).single.args['cantidadEsperada'], isNull);
+    });
+
+    testWidgets('si el stock cambió (IN004) no mueve nada, avisa y muestra la '
+        'cantidad fresca; al reintentar fija lo contado', (tester) async {
+      // La hoja se abre con 5 (copia vieja); en el servidor ya hay 8.
+      final repo = FakeInventarioRepository(
+        productos: [productoDePrueba(cantidad: 8)],
+      );
+      await _abrir(tester, repo, motivo: MotivoMovimiento.conteo);
+      expect(find.text('Amoxicilina · hay 5 frascos'), findsOneWidget);
+
+      await _escribir(tester, '7');
+      await _aplicarAjuste(tester);
+
+      expect(
+        find.text(
+          'El stock cambió mientras contabas. Revisa la cantidad actual e '
+          'intenta de nuevo.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Ajustar stock'), findsOneWidget);
+      expect(find.text('Amoxicilina · hay 8 frascos'), findsOneWidget);
+      expect((await repo.producto('p1'))!.cantidad, 8);
+      expect(_movs(repo).single.args['cantidadEsperada'], 5);
+
+      // Lo contado se conserva y se puede reaplicar sobre la cantidad fresca.
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        '7',
+      );
+      expect(_aplicarHabilitado(tester), isTrue);
+      await _aplicarAjuste(tester);
+      final ultimo = _movs(repo).last;
+      expect(ultimo.args['delta'], -1);
+      expect(ultimo.args['cantidadEsperada'], 8);
+      expect((await repo.producto('p1'))!.cantidad, 7);
+      expect(find.text('Stock de Amoxicilina corregido a 7.'), findsOneWidget);
+    });
+  });
+
+  group('topes del servidor (WR-02)', () {
+    testWidgets('un ajuste de más de 100.000 no se puede aplicar', (
+      tester,
+    ) async {
+      final repo = _repo();
+      await _abrir(tester, repo);
+      await _escribir(tester, '100001');
+      expect(find.text('El ajuste máximo es 100.000.'), findsOneWidget);
+      expect(_aplicarHabilitado(tester), isFalse);
+
+      await _escribir(tester, '100000');
+      expect(find.text('El ajuste máximo es 100.000.'), findsNothing);
+      expect(_aplicarHabilitado(tester), isTrue);
+    });
+
+    testWidgets('un conteo que mueve más de 100.000 no se puede aplicar', (
+      tester,
+    ) async {
+      await _abrir(tester, _repo(), motivo: MotivoMovimiento.conteo);
+      await _escribir(tester, '100006');
+      expect(find.text('El ajuste máximo es 100.000.'), findsOneWidget);
+      expect(_aplicarHabilitado(tester), isFalse);
+
+      await _escribir(tester, '100005');
+      expect(_aplicarHabilitado(tester), isTrue);
+    });
+
+    testWidgets('una compra que deja más de 1.000.000 no se puede aplicar', (
+      tester,
+    ) async {
+      final grande = productoDePrueba(cantidad: 950000);
+      final repo = FakeInventarioRepository(productos: [grande]);
+      await _abrir(tester, repo, producto: grande);
+      await _escribir(tester, '50001');
+      expect(find.text('El stock no puede superar 1.000.000.'), findsOneWidget);
+      expect(_aplicarHabilitado(tester), isFalse);
+      await tester.tap(_aplicar);
+      await tester.pumpAndSettle();
+      expect(_movs(repo), isEmpty);
+
+      await _escribir(tester, '50000');
+      expect(find.text('El stock no puede superar 1.000.000.'), findsNothing);
+      expect(_aplicarHabilitado(tester), isTrue);
+    });
   });
 }

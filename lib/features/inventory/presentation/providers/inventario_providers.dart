@@ -122,11 +122,19 @@ class InventarioActions {
     invalidarInventario(_ref, productoId: id);
   }
 
+  /// [cantidadEsperada] es la cantidad sobre la que se calculó un conteo; si
+  /// el servidor ya tiene otra, falla con [ErrorInventario.stockCambio].
   Future<ResultadoAjuste> ajustar({
     required Producto producto,
     required int delta,
     required MotivoMovimiento motivo,
-  }) => _mover(productoId: producto.id, delta: delta, motivo: motivo);
+    int? cantidadEsperada,
+  }) => _mover(
+    productoId: producto.id,
+    delta: delta,
+    motivo: motivo,
+    cantidadEsperada: cantidadEsperada,
+  );
 
   /// Revierte un movimiento con su inverso (`deshacer`, solo-append).
   Future<ResultadoAjuste> deshacer({
@@ -145,6 +153,7 @@ class InventarioActions {
     required int delta,
     required MotivoMovimiento motivo,
     String? deshaceId,
+    int? cantidadEsperada,
   }) async {
     try {
       final r = await _repo.moverStock(
@@ -152,13 +161,15 @@ class InventarioActions {
         delta: delta,
         motivo: motivo,
         deshaceId: deshaceId,
+        cantidadEsperada: cantidadEsperada,
       );
       invalidarInventario(_ref, productoId: productoId);
       return r;
     } on InventarioFailure catch (e) {
       // La UI dice "Actualiza la lista": el estado local ya no es fiable.
       if (e.tipo == ErrorInventario.stockInsuficiente ||
-          e.tipo == ErrorInventario.noDisponible) {
+          e.tipo == ErrorInventario.noDisponible ||
+          e.tipo == ErrorInventario.stockCambio) {
         invalidarInventario(_ref, productoId: productoId);
       }
       rethrow;

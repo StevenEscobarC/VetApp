@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/data/limite_plan_postgrest.dart';
@@ -15,6 +16,9 @@ const String kMensajeSinConexion =
     'Sin conexión. No se guardaron los cambios. Inténtalo de nuevo cuando tengas señal.';
 const String kMensajeSinConexionAjuste =
     'Sin conexión. El ajuste no se guardó. Inténtalo de nuevo cuando tengas señal.';
+const String kMensajeStockCambio =
+    'El stock cambió mientras contabas. Revisa la cantidad actual e intenta de '
+    'nuevo.';
 
 /// Acceso concreto a Supabase para el inventario de la clínica.
 ///
@@ -122,11 +126,14 @@ class SupabaseInventarioRepository {
     await _client.rpc('archivar_producto', params: {'p_id': id});
   }, 'No pudimos archivar el producto. Intenta de nuevo.');
 
+  /// Con [cantidadEsperada] (conteo físico) el servidor rechaza con IN004 si
+  /// la cantidad ya no es esa, en vez de aplicar un delta sobre un dato viejo.
   Future<ResultadoAjuste> moverStock({
     required String productoId,
     required int delta,
     required MotivoMovimiento motivo,
     String? deshaceId,
+    int? cantidadEsperada,
   }) => _run(
     () async {
       final p = paramsMoverStock(
@@ -134,6 +141,7 @@ class SupabaseInventarioRepository {
         delta: delta,
         motivo: motivo,
         deshaceId: deshaceId,
+        cantidadEsperada: cantidadEsperada,
       );
       final r = await _client.rpc('mover_stock', params: p);
       final f = _filas(r).first;
@@ -217,6 +225,7 @@ class SupabaseInventarioRepository {
     required int delta,
     required MotivoMovimiento motivo,
     String? deshaceId,
+    int? cantidadEsperada,
   }) => {
     'p_producto_id': productoId,
     'p_delta': delta,
@@ -225,6 +234,9 @@ class SupabaseInventarioRepository {
     'p_ref_id': null,
     'p_nota': null,
     'p_deshace_id': deshaceId,
+    // Solo se envía cuando hay valor: así los demás ajustes no dependen de
+    // que la firma nueva ya esté aplicada en la base.
+    'p_cantidad_esperada': ?cantidadEsperada,
   };
 }
 
@@ -279,6 +291,7 @@ ErrorInventario _tipoDe(PostgrestException e, LimitePlan? limite) {
     'IN001' => ErrorInventario.stockInsuficiente,
     'IN002' => ErrorInventario.noDisponible,
     'IN003' => ErrorInventario.yaDeshecho,
+    'IN004' => ErrorInventario.stockCambio,
     '23505' => ErrorInventario.nombreDuplicado,
     '42501' => ErrorInventario.sinPermiso,
     '23514' => ErrorInventario.datosInvalidos,
@@ -297,6 +310,7 @@ String mensajeErrorInventario(PostgrestException e) {
     ErrorInventario.noDisponible =>
       'Ese producto ya no está disponible. Actualiza la lista.',
     ErrorInventario.yaDeshecho => 'Ese ajuste ya se deshizo.',
+    ErrorInventario.stockCambio => kMensajeStockCambio,
     ErrorInventario.nombreDuplicado => 'Ya tienes un producto con ese nombre.',
     ErrorInventario.sinPermiso =>
       'Solo el administrador de la clínica puede hacer esto.',
@@ -306,11 +320,13 @@ String mensajeErrorInventario(PostgrestException e) {
   };
 }
 
-/// Fallos de conectividad. Sin importar la libreria de IO (el scaffold web debe compilar): se
-/// reconoce por el nombre del tipo.
+/// Fallos de conectividad. `http.ClientException` se reconoce por tipo, así
+/// que cubre sus subclases privadas (`_ClientSocketException` de `IOClient`,
+/// el caso típico de "sin señal") y sobrevive a `--obfuscate`. Sin importar la
+/// librería de IO (el target web debe compilar), un `SocketException` suelto
+/// se reconoce porque su tipo contiene ese nombre.
 @visibleForTesting
 bool esErrorDeRed(Object e) {
-  if (e is TimeoutException) return true;
-  final nombre = e.runtimeType.toString();
-  return nombre == 'SocketException' || nombre == 'ClientException';
+  if (e is TimeoutException || e is http.ClientException) return true;
+  return e.runtimeType.toString().contains('SocketException');
 }

@@ -163,6 +163,50 @@ void main() {
     expect(_veces(repo, 'productos'), 3);
   });
 
+  test('conteo con stock desactualizado (IN004) falla sin mover e invalida '
+      'para mostrar la cantidad fresca', () async {
+    final repo = repoBase(); // en el "servidor" hay 5
+    final c = _contenedor(repo);
+    await _cargar(c);
+    await expectLater(
+      c
+          .read(inventarioActionsProvider)
+          .ajustar(
+            producto: productoDePrueba(cantidad: 8),
+            delta: -1,
+            motivo: MotivoMovimiento.conteo,
+            cantidadEsperada: 8,
+          ),
+      throwsA(
+        isA<InventarioFailure>().having(
+          (e) => e.tipo,
+          'tipo',
+          ErrorInventario.stockCambio,
+        ),
+      ),
+    );
+    final enviado = repo.llamadas.lastWhere((l) => l.metodo == 'moverStock');
+    expect(enviado.args['cantidadEsperada'], 8);
+    await _recargar(c);
+    _esperaRecarga(repo);
+    expect((await c.read(productosProvider.future)).single.cantidad, 5);
+  });
+
+  test('ajustar sin cantidad esperada no la envía', () async {
+    final repo = repoBase();
+    final c = _contenedor(repo);
+    await _cargar(c);
+    await c
+        .read(inventarioActionsProvider)
+        .ajustar(
+          producto: productoDePrueba(),
+          delta: 2,
+          motivo: MotivoMovimiento.compra,
+        );
+    final enviado = repo.llamadas.lastWhere((l) => l.metodo == 'moverStock');
+    expect(enviado.args['cantidadEsperada'], isNull);
+  });
+
   test('otros fallos NO invalidan', () async {
     final repo = FakeInventarioRepository(
       productos: [productoDePrueba()],

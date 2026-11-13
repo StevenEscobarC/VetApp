@@ -4391,7 +4391,11 @@ end;
 $$;
 
 -- RPC: mover_stock (única vía para cambiar la cantidad; fila bloqueada, sin negativos, libro append-only).
+-- p_cantidad_esperada (concurrencia optimista del conteo físico, CR-01): si no es null y difiere de la
+-- cantidad bloqueada, IN004 sin mover nada. Deshacer solo revierte ajustes manuales (origen 'ajuste',
+-- WR-04): nunca un alta ni, desde la Fase 7, una salida de factura o dosis.
 drop function if exists public.mover_stock(uuid, int, text, text, uuid, text, uuid);
+drop function if exists public.mover_stock(uuid, int, text, text, uuid, text, uuid, int);
 create or replace function public.mover_stock(
   p_producto_id uuid,
   p_delta int,
@@ -4399,7 +4403,8 @@ create or replace function public.mover_stock(
   p_origen text default 'ajuste',
   p_ref_id uuid default null,
   p_nota text default null,
-  p_deshace_id uuid default null
+  p_deshace_id uuid default null,
+  p_cantidad_esperada int default null
 )
 returns table (movimiento_id uuid, cantidad_nueva int)
 language plpgsql
@@ -4437,10 +4442,14 @@ begin
     raise exception 'Producto no disponible.' using errcode = 'IN002';
   end if;
 
+  if p_cantidad_esperada is not null and v_p.cantidad <> p_cantidad_esperada then
+    raise exception 'El stock cambió mientras contabas. Revisa la cantidad actual e intenta de nuevo.' using errcode = 'IN004';
+  end if;
+
   if p_motivo = 'deshacer' then
     select * into v_o from public.movimientos_inventario
      where id = p_deshace_id and clinica_id = v_clinica and producto_id = p_producto_id;
-    if not found or v_o.motivo = 'deshacer' or p_delta <> -v_o.delta then
+    if not found or v_o.origen <> 'ajuste' or v_o.motivo = 'deshacer' or p_delta <> -v_o.delta then
       raise exception 'Solo se puede deshacer el inverso exacto de un ajuste del mismo producto.' using errcode = 'check_violation';
     end if;
     if exists (select 1 from public.movimientos_inventario m where m.deshace_id = p_deshace_id) then
@@ -4530,8 +4539,8 @@ revoke all on function public.actualizar_producto(uuid, text, text, date, int, i
 grant execute on function public.actualizar_producto(uuid, text, text, date, int, int, int) to authenticated;
 revoke all on function public.archivar_producto(uuid) from public, anon;
 grant execute on function public.archivar_producto(uuid) to authenticated;
-revoke all on function public.mover_stock(uuid, int, text, text, uuid, text, uuid) from public, anon;
-grant execute on function public.mover_stock(uuid, int, text, text, uuid, text, uuid) to authenticated;
+revoke all on function public.mover_stock(uuid, int, text, text, uuid, text, uuid, int) from public, anon;
+grant execute on function public.mover_stock(uuid, int, text, text, uuid, text, uuid, int) to authenticated;
 revoke all on function public.inventario_resumen() from public, anon;
 grant execute on function public.inventario_resumen() to authenticated;
 
