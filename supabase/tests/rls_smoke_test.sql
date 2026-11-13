@@ -33,7 +33,8 @@
 -- aisladas por clínica, último admin, auto-retiro (D-14), reasignación de citas (D-15), acceso cortado al
 -- retirar (T6), autoría visible (D-13), citas por veterinario (D-07) y consultas FK restrict (D-06).
 -- Fase 5 (bloque Q, 48 checks): vacunación — aislamiento, solo-append, cálculo derivado, alertas, enlace público, logo de la clínica.
--- Fase 5.1 (bloque R, 45 checks): planes y límites — plan efectivo, asignar_plan solo service_role, límite de 50, prueba Clínica y cupos, solo lectura, logo/protocolos. Total esperado: 238.
+-- Fase 5.1 (bloque R, 45 checks): planes y límites — plan efectivo, asignar_plan solo service_role, límite de 50, prueba Clínica y cupos, solo lectura, logo/protocolos.
+-- Fase 6 (bloque S, 20 checks): inventario — aislamiento, solo-append, mover_stock atómico sin negativos, deshacer, solo admin, resumen de stock bajo, solo lectura, autoría. Total esperado: 258.
 
 do $$
 declare
@@ -147,6 +148,29 @@ declare
   r_proto text;
   r_arr text[];
   r_d date;
+  -- Fase 6 (bloque S)
+  s_hoy date;
+  s_vet_admin uuid := gen_random_uuid();
+  s_vet_col uuid := gen_random_uuid();
+  s_vet_otro uuid := gen_random_uuid();
+  s_vet_res uuid := gen_random_uuid();
+  s_c uuid;
+  s_c_otro uuid;
+  s_c_res uuid;
+  s_p1 uuid;
+  s_p2 uuid;
+  s_p3 uuid;
+  s_pi uuid;
+  s_mov uuid;
+  s_mov2 uuid;
+  s_mov_alta uuid;
+  s_row record;
+  s_n int;
+  s_n2 int;
+  s_cod text;
+  s_t text;
+  s_p text;
+  s_sql text;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -4267,7 +4291,7 @@ begin
     failures := failures || ('R43 error inesperado: ' || sqlerrm);
   end;
 
-  -- R44: anon sin acceso y triggers de la fase en su sitio (guarda en exactamente 7 tablas).
+  -- R44: anon sin acceso y triggers de la fase en su sitio (guarda en exactamente 9 tablas).
   checks := checks + 1;
   begin
     perform set_config('role', 'postgres', true);
@@ -4292,9 +4316,9 @@ begin
       join pg_class c on c.oid = t.tgrelid
       join pg_namespace n on n.oid = c.relnamespace
      where t.tgname = 'guard_solo_lectura' and not t.tgisinternal and n.nspname = 'public';
-    if r_arr is null or cardinality(r_arr) <> 7
-       or not (r_arr <@ array['cita_mascotas', 'citas', 'clientes', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas']
-               and array['cita_mascotas', 'citas', 'clientes', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas'] <@ r_arr) then
+    if r_arr is null or cardinality(r_arr) <> 9
+       or not (r_arr <@ array['cita_mascotas', 'citas', 'clientes', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas', 'movimientos_inventario', 'productos']
+               and array['cita_mascotas', 'citas', 'clientes', 'consultas', 'dosis_aplicadas', 'mascota_pesos', 'mascotas', 'movimientos_inventario', 'productos'] <@ r_arr) then
       failures := failures || ('R44 guard_solo_lectura está en: ' || coalesce(array_to_string(r_arr, ','), 'ninguna tabla'));
     end if;
   exception when others then
@@ -4328,6 +4352,651 @@ begin
     end if;
   exception when others then
     failures := failures || ('R45 error inesperado: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- ===== S: Inventario (Fase 6) =====
+  -- S1..S20. Fixtures propios (s_*): nunca vet_a/vet_b, cuyo plan se muta en bloques previos.
+  -- Cada regreso a postgres limpia request.jwt.claims. Todo se revierte al final.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', '', true);
+
+  -- Setup S (no cuenta en checks): admin, otro admin, admin del resumen y un colega no admin de la clínica S.
+  begin
+    s_hoy := public._hoy_bogota();
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values
+      (s_vet_admin, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-s-admin@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke S Admin', 'clinica_nombre', 'Smoke Clinica S Admin'),
+       now(), now()),
+      (s_vet_otro, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-s-otro@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke S Otro', 'clinica_nombre', 'Smoke Clinica S Otro'),
+       now(), now()),
+      (s_vet_res, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-s-res@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke S Resumen', 'clinica_nombre', 'Smoke Clinica S Resumen'),
+       now(), now());
+    select clinica_id into s_c from public.perfiles where id = s_vet_admin;
+    select clinica_id into s_c_otro from public.perfiles where id = s_vet_otro;
+    select clinica_id into s_c_res from public.perfiles where id = s_vet_res;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select g.codigo into s_cod from public.generar_invitacion_clinica() g;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values (s_vet_col, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+            'smoke-s-col@vetapp.invalid',
+            jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke S Colega', 'codigo_invitacion', s_cod),
+            now(), now());
+  exception when others then
+    failures := failures || ('SETUPS error inesperado: ' || sqlerrm);
+  end;
+
+  -- S1: estructura de las dos tablas.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    foreach s_t in array array['productos', 'movimientos_inventario'] loop
+      if not exists (select 1 from pg_class c where c.oid = ('public.' || s_t)::regclass and c.relrowsecurity) then
+        failures := failures || ('S1 ' || s_t || ' sin RLS habilitado');
+      end if;
+      select count(*) into s_n from pg_policies p where p.schemaname = 'public' and p.tablename = s_t;
+      if s_n <> 1 or not exists (select 1 from pg_policies p where p.schemaname = 'public' and p.tablename = s_t and p.cmd = 'SELECT') then
+        failures := failures || ('S1 ' || s_t || ' debe tener exactamente una policy SELECT (hay ' || s_n || ')');
+      end if;
+    end loop;
+    if not exists (select 1 from pg_constraint where conname = 'productos_cantidad_no_negativa')
+       or not exists (select 1 from pg_constraint where conname = 'movimientos_producto_misma_clinica_fkey')
+       or not exists (select 1 from pg_constraint where conname = 'movimientos_veterinario_perfil_fkey')
+       or not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'productos_clinica_nombre_activo_uq') then
+      failures := failures || 'S1 faltan constraints o el índice único parcial de nombre';
+    end if;
+  exception when others then
+    failures := failures || ('S1 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S2: privilegios (anon nada, authenticated sin escritura directa, RPC solo authenticated).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    foreach s_t in array array['public.productos', 'public.movimientos_inventario'] loop
+      if has_table_privilege('anon', s_t, 'SELECT') then
+        failures := failures || ('S2 anon tiene SELECT sobre ' || s_t);
+      end if;
+      foreach s_p in array array['INSERT', 'UPDATE', 'DELETE'] loop
+        if has_table_privilege('authenticated', s_t, s_p) then
+          failures := failures || ('S2 authenticated tiene ' || s_p || ' sobre ' || s_t);
+        end if;
+      end loop;
+    end loop;
+    foreach s_t in array array[
+      'public.crear_producto(text,text,int,int,text,date,int,int)',
+      'public.actualizar_producto(uuid,text,text,date,int,int,int)',
+      'public.archivar_producto(uuid)',
+      'public.mover_stock(uuid,int,text,text,uuid,text,uuid)',
+      'public.inventario_resumen()'
+    ] loop
+      if has_function_privilege('anon', s_t, 'execute') then
+        failures := failures || ('S2 anon puede ejecutar ' || s_t);
+      end if;
+      if not has_function_privilege('authenticated', s_t, 'execute') then
+        failures := failures || ('S2 authenticated no puede ejecutar ' || s_t);
+      end if;
+    end loop;
+  exception when others then
+    failures := failures || ('S2 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S3: las 5 RPC son security definer con search_path fijado; mover_stock bloquea la fila.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n from pg_proc p
+     where p.pronamespace = 'public'::regnamespace
+       and p.proname in ('crear_producto', 'actualizar_producto', 'archivar_producto', 'mover_stock', 'inventario_resumen')
+       and p.prosecdef and p.proconfig is not null and 'search_path=public' = any (p.proconfig);
+    if s_n <> 5 then
+      failures := failures || ('S3 esperaba 5 RPC security definer con search_path=public, hay ' || s_n);
+    end if;
+    if not exists (
+      select 1 from pg_proc p
+      where p.pronamespace = 'public'::regnamespace and p.proname = 'mover_stock' and p.prosrc ilike '%for update%'
+    ) then
+      failures := failures || 'S3 mover_stock no bloquea la fila con for update';
+    end if;
+  exception when others then
+    failures := failures || ('S3 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S4: crear producto con stock inicial genera un movimiento de alta; sin stock no genera ninguno.
+  checks := checks + 1;
+  begin
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    s_p1 := public.crear_producto('Amoxicilina 500', 'frasco', 5);
+    s_p2 := public.crear_producto('Gasas', 'unidad', 0);
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_p1;
+    if s_row.clinica_id is distinct from s_c or s_row.cantidad is distinct from 5 or s_row.minimo is distinct from 2
+       or s_row.categoria is distinct from 'medicamento' or s_row.creado_por is distinct from s_vet_admin then
+      failures := failures || format('S4 producto mal creado: clinica=%s cantidad=%s minimo=%s categoria=%s', s_row.clinica_id, s_row.cantidad, s_row.minimo, s_row.categoria);
+    end if;
+    select count(*) into s_n from public.movimientos_inventario where producto_id = s_p1;
+    select * into s_row from public.movimientos_inventario where producto_id = s_p1 limit 1;
+    if s_n <> 1 or s_row.motivo is distinct from 'alta' or s_row.origen is distinct from 'alta'
+       or s_row.delta is distinct from 5 or s_row.cantidad_resultante is distinct from 5
+       or s_row.veterinario_id is distinct from s_vet_admin then
+      failures := failures || format('S4 movimiento de alta incorrecto: n=%s motivo=%s origen=%s delta=%s resultante=%s', s_n, s_row.motivo, s_row.origen, s_row.delta, s_row.cantidad_resultante);
+    end if;
+    select count(*) into s_n from public.movimientos_inventario where producto_id = s_p2;
+    if s_n <> 0 then
+      failures := failures || 'S4 un producto con cantidad 0 no debía generar movimiento';
+    end if;
+  exception when others then
+    failures := failures || ('S4 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S5: el nombre activo es único por clínica sin distinguir mayúsculas ni espacios.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n2 from public.productos where clinica_id = s_c;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform public.crear_producto('  AMOXICILINA 500 ', 'frasco', 1);
+      failures := failures || 'S5 el nombre duplicado debía fallar con unique_violation';
+    exception
+      when unique_violation then null;
+      when others then failures := failures || ('S5 error inesperado en duplicado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n from public.productos where clinica_id = s_c;
+    if s_n <> s_n2 then
+      failures := failures || 'S5 el duplicado dejó un producto nuevo';
+    end if;
+  exception when others then
+    failures := failures || ('S5 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S6: validación de entrada de crear_producto (check_violation).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n2 from public.productos where clinica_id = s_c;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach s_sql in array array[
+      'select public.crear_producto(''   '', ''frasco'', 1)',
+      'select public.crear_producto(''Smoke S V1'', ''litro'', 1)',
+      'select public.crear_producto(''Smoke S V2'', ''frasco'', -1)',
+      'select public.crear_producto(''Smoke S V3'', ''frasco'', 1, -1)',
+      'select public.crear_producto(''Smoke S V4'', ''frasco'', 1, 2, ''medicamento'', null, -5)'
+    ] loop
+      begin
+        execute s_sql;
+        failures := failures || ('S6 debía fallar con check_violation: ' || s_sql);
+      exception
+        when check_violation then null;
+        when others then failures := failures || ('S6 error inesperado (' || s_sql || '): ' || sqlerrm);
+      end;
+    end loop;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n from public.productos where clinica_id = s_c;
+    if s_n <> s_n2 then
+      failures := failures || 'S6 una validación fallida dejó un producto nuevo';
+    end if;
+  exception when others then
+    failures := failures || ('S6 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S7: un CLIENTE no puede usar ninguna RPC de inventario.
+  checks := checks + 1;
+  begin
+    perform set_config('request.jwt.claims', json_build_object('sub', cliente_c_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach s_sql in array array[
+      'select public.crear_producto(''Smoke S Cliente'', ''unidad'', 1)',
+      format('select * from public.mover_stock(%L, 1, ''compra'')', s_p1),
+      'select * from public.inventario_resumen()'
+    ] loop
+      begin
+        execute s_sql;
+        failures := failures || ('S7 el CLIENTE no debía poder: ' || s_sql);
+      exception
+        when insufficient_privilege then null;
+        when others then failures := failures || ('S7 error inesperado (' || s_sql || '): ' || sqlerrm);
+      end;
+    end loop;
+  exception when others then
+    failures := failures || ('S7 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S8: aislamiento entre clínicas (con control positivo).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_otro, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into s_n from public.productos where clinica_id = s_c;
+    select count(*) into s_n2 from public.movimientos_inventario where clinica_id = s_c;
+    if s_n <> 0 or s_n2 <> 0 then
+      failures := failures || format('S8 otra clínica ve productos=%s movimientos=%s de la clínica S', s_n, s_n2);
+    end if;
+    select count(*) into s_n from public.productos;
+    if s_n <> 0 then
+      failures := failures || ('S8 el veterinario de otra clínica ve ' || s_n || ' productos visibles');
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into s_n from public.productos where clinica_id = s_c;
+    if s_n < 1 then
+      failures := failures || 'S8 control positivo: el admin no ve sus propios productos';
+    end if;
+  exception when others then
+    failures := failures || ('S8 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S9: IDOR, un veterinario de otra clínica recibe IN002 sin fugar existencia.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n2 from public.movimientos_inventario where producto_id = s_p1;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_otro, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach s_sql in array array[
+      format('select * from public.mover_stock(%L, 1, ''compra'')', s_p1),
+      format('select public.actualizar_producto(%L, ''X'', ''otro'', null, 2, null, null)', s_p1),
+      format('select public.archivar_producto(%L)', s_p1)
+    ] loop
+      begin
+        execute s_sql;
+        failures := failures || ('S9 debía fallar con IN002: ' || s_sql);
+      exception
+        when sqlstate 'IN002' then null;
+        when others then failures := failures || ('S9 esperaba IN002 y llegó ' || sqlstate || ' (' || s_sql || ')');
+      end;
+    end loop;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_p1;
+    select count(*) into s_n from public.movimientos_inventario where producto_id = s_p1;
+    if s_row.cantidad is distinct from 5 or s_n <> s_n2 then
+      failures := failures || format('S9 el IDOR modificó datos: cantidad=%s movimientos=%s (antes %s)', s_row.cantidad, s_n, s_n2);
+    end if;
+  exception when others then
+    failures := failures || ('S9 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S10: un colega no admin ajusta stock; queda registrado quién y cuánto quedó.
+  checks := checks + 1;
+  begin
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into s_row from public.mover_stock(s_p1, -2, 'uso');
+    s_mov := s_row.movimiento_id;
+    if s_row.cantidad_nueva is distinct from 3 or s_mov is null then
+      failures := failures || format('S10 mover_stock devolvió cantidad_nueva=%s movimiento=%s', s_row.cantidad_nueva, s_mov);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_p1;
+    if s_row.cantidad is distinct from 3 then
+      failures := failures || ('S10 cantidad esperada 3, hay ' || s_row.cantidad);
+    end if;
+    select * into s_row from public.movimientos_inventario where id = s_mov;
+    if s_row.delta is distinct from -2 or s_row.cantidad_resultante is distinct from 3 or s_row.motivo is distinct from 'uso'
+       or s_row.origen is distinct from 'ajuste' or s_row.veterinario_id is distinct from s_vet_col then
+      failures := failures || format('S10 movimiento incorrecto: delta=%s resultante=%s motivo=%s origen=%s', s_row.delta, s_row.cantidad_resultante, s_row.motivo, s_row.origen);
+    end if;
+  exception when others then
+    failures := failures || ('S10 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S11: sin stock suficiente falla con IN001 y no cambia nada.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n2 from public.movimientos_inventario where producto_id = s_p1;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform * from public.mover_stock(s_p1, -10, 'uso');
+      failures := failures || 'S11 mover_stock -10 con stock 3 debía fallar con IN001';
+    exception
+      when sqlstate 'IN001' then null;
+      when others then failures := failures || ('S11 error inesperado: ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_p1;
+    select count(*) into s_n from public.movimientos_inventario where producto_id = s_p1;
+    if s_row.cantidad is distinct from 3 or s_n <> s_n2 then
+      failures := failures || format('S11 el stock insuficiente cambió datos: cantidad=%s movimientos=%s (antes %s)', s_row.cantidad, s_n, s_n2);
+    end if;
+  exception when others then
+    failures := failures || ('S11 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S12: validación de mover_stock (check_violation).
+  checks := checks + 1;
+  begin
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach s_sql in array array[
+      format('select * from public.mover_stock(%L, 0, ''compra'')', s_p1),
+      format('select * from public.mover_stock(%L, 100001, ''compra'')', s_p1),
+      format('select * from public.mover_stock(%L, 1, ''robo'')', s_p1),
+      format('select * from public.mover_stock(%L, 1, ''alta'')', s_p1),
+      format('select * from public.mover_stock(%L, -1, ''venta'')', s_p1),
+      format('select * from public.mover_stock(%L, 1, ''compra'', ''factura'')', s_p1),
+      format('select * from public.mover_stock(%L, 1, ''deshacer'')', s_p1)
+    ] loop
+      begin
+        execute s_sql;
+        failures := failures || ('S12 debía fallar con check_violation: ' || s_sql);
+      exception
+        when check_violation then null;
+        when others then failures := failures || ('S12 error inesperado (' || s_sql || '): ' || sqlerrm);
+      end;
+    end loop;
+  exception when others then
+    failures := failures || ('S12 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S13: deshacer un ajuste (una sola vez, solo su inverso exacto, solo del mismo producto).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select id into s_mov_alta from public.movimientos_inventario where producto_id = s_p1 and motivo = 'alta';
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into s_row from public.mover_stock(s_p1, 2, 'deshacer', 'ajuste', null, null, s_mov);
+    if s_row.cantidad_nueva is distinct from 5 then
+      failures := failures || ('S13 deshacer debía dejar 5, dejó ' || s_row.cantidad_nueva);
+    end if;
+    select * into s_row from public.movimientos_inventario where id = s_row.movimiento_id;
+    if s_row.deshace_id is distinct from s_mov then
+      failures := failures || 'S13 el movimiento de deshacer no referencia al original';
+    end if;
+    begin
+      perform * from public.mover_stock(s_p1, 2, 'deshacer', 'ajuste', null, null, s_mov);
+      failures := failures || 'S13 deshacer dos veces debía fallar con IN003';
+    exception
+      when sqlstate 'IN003' then null;
+      when others then failures := failures || ('S13 segundo deshacer: error inesperado: ' || sqlerrm);
+    end;
+    begin
+      perform * from public.mover_stock(s_p1, 3, 'deshacer', 'ajuste', null, null, s_mov_alta);
+      failures := failures || 'S13 deshacer con delta que no es el inverso debía fallar con check_violation';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('S13 delta no inverso: error inesperado: ' || sqlerrm);
+    end;
+    select * into s_row from public.mover_stock(s_p2, 4, 'compra');
+    s_mov2 := s_row.movimiento_id;
+    begin
+      perform * from public.mover_stock(s_p1, -4, 'deshacer', 'ajuste', null, null, s_mov2);
+      failures := failures || 'S13 deshacer un movimiento de otro producto debía fallar con check_violation';
+    exception
+      when check_violation then null;
+      when others then failures := failures || ('S13 otro producto: error inesperado: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('S13 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S14: ninguna escritura directa sobre las tablas (ni el admin), solo vía RPC.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n2 from public.movimientos_inventario where clinica_id = s_c;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach s_sql in array array[
+      format('update public.productos set cantidad = 99 where id = %L', s_p1),
+      format('insert into public.productos (clinica_id, nombre, unidad, creado_por) values (%L, ''Smoke S Directo'', ''unidad'', %L)', s_c, s_vet_admin),
+      format('update public.movimientos_inventario set delta = 1 where clinica_id = %L', s_c),
+      format('delete from public.movimientos_inventario where clinica_id = %L', s_c),
+      format('insert into public.movimientos_inventario (clinica_id, producto_id, delta, cantidad_resultante, motivo, veterinario_id) values (%L, %L, 1, 6, ''compra'', %L)', s_c, s_p1, s_vet_admin)
+    ] loop
+      begin
+        execute s_sql;
+        get diagnostics s_n = row_count;
+        if s_n > 0 then
+          failures := failures || ('S14 la escritura directa afectó filas: ' || s_sql);
+        end if;
+      exception
+        when insufficient_privilege then null;
+        when others then failures := failures || ('S14 error inesperado (' || s_sql || '): ' || sqlerrm);
+      end;
+    end loop;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_p1;
+    select count(*) into s_n from public.movimientos_inventario where clinica_id = s_c;
+    if s_row.cantidad is distinct from 5 or s_n <> s_n2 then
+      failures := failures || format('S14 las escrituras directas dejaron rastro: cantidad=%s movimientos=%s (antes %s)', s_row.cantidad, s_n, s_n2);
+    end if;
+  exception when others then
+    failures := failures || ('S14 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S15: un movimiento no puede apuntar a un producto de otra clínica (FK compuesta).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    begin
+      insert into public.movimientos_inventario (clinica_id, producto_id, delta, cantidad_resultante, motivo, veterinario_id)
+      values (s_c_otro, s_p1, 1, 1, 'compra', s_vet_admin);
+      failures := failures || 'S15 un movimiento con producto de otra clínica debía fallar con foreign_key_violation';
+    exception
+      when foreign_key_violation then null;
+      when others then failures := failures || ('S15 error inesperado en el insert: ' || sqlerrm);
+    end;
+  exception when others then
+    failures := failures || ('S15 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S16: mínimo, precios y archivar son solo del administrador; nombre, categoría y vencimiento los edita cualquiera.
+  checks := checks + 1;
+  begin
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach s_sql in array array[
+      format('select public.actualizar_producto(%L, ''Amoxicilina 500'', ''medicamento'', null, 4, null, null)', s_p1),
+      format('select public.actualizar_producto(%L, ''Amoxicilina 500'', ''medicamento'', null, 2, 85000, null)', s_p1),
+      format('select public.archivar_producto(%L)', s_p1)
+    ] loop
+      begin
+        execute s_sql;
+        failures := failures || ('S16 el colega no admin no debía poder: ' || s_sql);
+      exception
+        when insufficient_privilege then null;
+        when others then failures := failures || ('S16 error inesperado (' || s_sql || '): ' || sqlerrm);
+      end;
+    end loop;
+    perform public.actualizar_producto(s_p1, 'Amoxicilina 500 mg', 'insumo', s_hoy + 60, 2, null, null);
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_p1;
+    if s_row.minimo is distinct from 2 or s_row.precio_venta_cop is not null or s_row.archivado_at is not null then
+      failures := failures || format('S16 los intentos denegados cambiaron datos: minimo=%s precio=%s', s_row.minimo, s_row.precio_venta_cop);
+    end if;
+    if s_row.nombre is distinct from 'Amoxicilina 500 mg' or s_row.categoria is distinct from 'insumo'
+       or s_row.vencimiento is distinct from s_hoy + 60 then
+      failures := failures || format('S16 la edición permitida no se aplicó: nombre=%s categoria=%s vencimiento=%s', s_row.nombre, s_row.categoria, s_row.vencimiento);
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.actualizar_producto(s_p1, 'Amoxicilina 500 mg', 'insumo', s_hoy + 60, 4, 85000, 40000);
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_p1;
+    if s_row.minimo is distinct from 4 or s_row.precio_venta_cop is distinct from 85000 or s_row.costo_cop is distinct from 40000 then
+      failures := failures || format('S16 el admin no pudo cambiar mínimo y precios: minimo=%s venta=%s costo=%s', s_row.minimo, s_row.precio_venta_cop, s_row.costo_cop);
+    end if;
+  exception when others then
+    failures := failures || ('S16 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S17: archivar (solo admin) saca el producto de operación, libera el nombre y conserva el historial.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into s_n2 from public.movimientos_inventario where producto_id = s_p1;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.archivar_producto(s_p1);
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select * into s_row from public.productos where id = s_p1;
+    if s_row.archivado_at is null or s_row.archivado_por is distinct from s_vet_admin then
+      failures := failures || 'S17 el producto no quedó archivado por el admin';
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    foreach s_sql in array array[
+      format('select * from public.mover_stock(%L, 1, ''compra'')', s_p1),
+      format('select public.actualizar_producto(%L, ''Otro'', ''otro'', null, 2, null, null)', s_p1)
+    ] loop
+      begin
+        execute s_sql;
+        failures := failures || ('S17 un producto archivado debía fallar con IN002: ' || s_sql);
+      exception when others then
+        if sqlstate is distinct from 'IN002' then
+          failures := failures || ('S17 esperaba IN002 y llegó ' || sqlstate || ' (' || s_sql || ')');
+        end if;
+      end;
+    end loop;
+    s_p3 := public.crear_producto('Amoxicilina 500 mg', 'frasco', 1);
+    select count(*) into s_n from public.movimientos_inventario where producto_id = s_p1;
+    if s_n <> s_n2 then
+      failures := failures || format('S17 el historial del producto archivado cambió: %s (antes %s)', s_n, s_n2);
+    end if;
+  exception when others then
+    failures := failures || ('S17 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S18: resumen de stock bajo / por vencer / vencidos (bordes incluidos).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_res, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.crear_producto('Smoke S A', 'unidad', 1, 2);
+    perform public.crear_producto('Smoke S B', 'unidad', 2, 2);
+    perform public.crear_producto('Smoke S C', 'unidad', 0, 0);
+    perform public.crear_producto('Smoke S D', 'unidad', 0, 3);
+    perform public.crear_producto('Smoke S E', 'unidad', 5, 1, 'medicamento', s_hoy + 30);
+    perform public.crear_producto('Smoke S F', 'unidad', 5, 1, 'medicamento', s_hoy + 31);
+    perform public.crear_producto('Smoke S G', 'unidad', 5, 1, 'medicamento', s_hoy);
+    perform public.crear_producto('Smoke S H', 'unidad', 5, 1, 'medicamento', s_hoy - 1);
+    s_pi := public.crear_producto('Smoke S I', 'unidad', 0, 5);
+    perform public.archivar_producto(s_pi);
+    select * into s_row from public.inventario_resumen();
+    if s_row.bajos is distinct from 2 or s_row.por_vencer is distinct from 2 or s_row.vencidos is distinct from 1 then
+      failures := failures || format('S18 resumen esperado 2/2/1, llegó bajos=%s por_vencer=%s vencidos=%s', s_row.bajos, s_row.por_vencer, s_row.vencidos);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_otro, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into s_row from public.inventario_resumen();
+    if s_row.bajos is distinct from 0 or s_row.por_vencer is distinct from 0 or s_row.vencidos is distinct from 0 then
+      failures := failures || format('S18 otra clínica ve resumen %s/%s/%s', s_row.bajos, s_row.por_vencer, s_row.vencidos);
+    end if;
+  exception when others then
+    failures := failures || ('S18 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S19: en solo lectura (D-14) el colega lee pero no escribe stock; el admin sí.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes
+       set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null,
+           prueba_pro_hasta = s_hoy - 17, prueba_clinica_hasta = s_hoy - 16, prueba_clinica_usada = true, beta_hasta = null
+     where clinica_id = s_c;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    if public.puede_escribir() then
+      failures := failures || 'S19 puede_escribir() debía ser false para el colega';
+    end if;
+    foreach s_sql in array array[
+      'select public.crear_producto(''Smoke S Bloqueado'', ''unidad'', 1)',
+      format('select * from public.mover_stock(%L, 1, ''compra'')', s_p3),
+      format('select public.actualizar_producto(%L, ''Smoke S Renombrado'', ''medicamento'', null, 2, null, null)', s_p3)
+    ] loop
+      begin
+        execute s_sql;
+        failures := failures || ('S19 debía fallar con LP004: ' || s_sql);
+      exception when others then
+        if sqlstate is distinct from 'LP004' then
+          failures := failures || ('S19 esperaba LP004 y llegó ' || sqlstate || ' (' || s_sql || ')');
+        end if;
+      end;
+    end loop;
+    select count(*) into s_n from public.productos where clinica_id = s_c;
+    if s_n <= 0 then
+      failures := failures || 'S19 el colega en solo lectura debía seguir leyendo productos';
+    end if;
+    select count(*) into s_n from public.inventario_resumen();
+    if s_n <> 1 then
+      failures := failures || 'S19 inventario_resumen() debía devolver una fila en solo lectura';
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into s_row from public.mover_stock(s_p3, 1, 'compra');
+    if s_row.cantidad_nueva is distinct from 2 then
+      failures := failures || ('S19 el admin debía poder mover stock (esperaba 2, llegó ' || coalesce(s_row.cantidad_nueva::text, 'null') || ')');
+    end if;
+  exception when others then
+    failures := failures || ('S19 error inesperado: ' || sqlerrm);
+  end;
+
+  -- S20: un autor retirado de la clínica sigue visible para quien ve sus movimientos.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.perfiles set activo = false where id = s_vet_col;
+    perform set_config('request.jwt.claims', json_build_object('sub', s_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    if not public.es_autor_en_mi_clinica(s_vet_col) then
+      failures := failures || 'S20 es_autor_en_mi_clinica debía ser true para el autor retirado';
+    end if;
+    select count(*) into s_n from public.perfiles where id = s_vet_col and nombre = 'Smoke S Colega';
+    if s_n <> 1 then
+      failures := failures || ('S20 el admin debía ver al autor retirado (filas: ' || s_n || ')');
+    end if;
+  exception when others then
+    failures := failures || ('S20 error inesperado: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------
