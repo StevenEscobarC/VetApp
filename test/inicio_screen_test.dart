@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/domain/auth_failure.dart';
@@ -13,6 +14,7 @@ import 'package:vetapp/features/patients/presentation/providers/mascotas_provide
 import 'package:vetapp/features/vaccination/domain/entities/carne.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 
+import 'helpers/fake_inventario.dart';
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
@@ -48,6 +50,7 @@ Widget _appUnderTest({
       vacunaRepositoryProvider.overrideWithValue(
         vacunas ?? FakeVacunaRepository(),
       ),
+      inventarioRepositoryProvider.overrideWithValue(FakeInventarioRepository()),
       mascotaRepositoryProvider.overrideWithValue(FakeMascotaRepository()),
       mascotaFotoDatasourceProvider.overrideWithValue(
         FakeMascotaFotoDatasource(),

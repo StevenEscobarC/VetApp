@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
@@ -85,7 +86,10 @@ const clienteProfile = AuthProfile(
 /// Boots [VetApp] with [authProfileProvider] overridden by a
 /// [FakeAuthProfileNotifier] seeded with [profile] — no live Supabase
 /// dependency anywhere in the widget tree.
-Widget appUnderTest({AuthProfile? profile}) {
+Widget appUnderTest({
+  AuthProfile? profile,
+  List<Override> overrides = const [],
+}) {
   SharedPreferences.setMockInitialValues({});
   return ProviderScope(
     retry: (retryCount, error) => null,
@@ -94,7 +98,10 @@ Widget appUnderTest({AuthProfile? profile}) {
         () => FakeAuthProfileNotifier(profile: profile),
       ),
       citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
-      recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
+      recordatoriosServiceProvider.overrideWithValue(
+        FakeRecordatoriosService(),
+      ),
+      ...overrides,
     ],
     child: const VetApp(),
   );

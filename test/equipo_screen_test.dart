@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/core/data/clock_provider.dart';
 import 'package:vetapp/core/utils/compartir.dart';
 import 'package:vetapp/core/utils/lanzador_externo.dart';
+import 'helpers/fake_inventario.dart';
 import 'helpers/fake_compartir.dart';
 import 'helpers/fake_url_launcher.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -45,6 +47,7 @@ List<Override> _overrides(
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
     planRepositoryProvider.overrideWithValue(planRepo ?? FakePlanRepository()),
+    inventarioRepositoryProvider.overrideWithValue(FakeInventarioRepository()),
   ];
 }
 

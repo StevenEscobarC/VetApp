@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
@@ -16,6 +17,7 @@ import 'package:vetapp/features/vaccination/domain/entities/protocolo.dart';
 import 'package:vetapp/features/vaccination/presentation/protocolos_routes.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 
+import 'helpers/fake_inventario.dart';
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_recordatorios.dart';
@@ -90,6 +92,7 @@ List<Override> _overrides(
       () => FakeAuthProfileNotifier(profile: perfil),
     ),
     vacunaRepositoryProvider.overrideWithValue(repo),
+    inventarioRepositoryProvider.overrideWithValue(FakeInventarioRepository()),
     teamRepositoryProvider.overrideWithValue(
       FakeTeamRepository(miembrosFixture: []),
     ),

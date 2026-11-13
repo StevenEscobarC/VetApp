@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
@@ -14,6 +15,7 @@ import 'package:vetapp/features/team/presentation/providers/perfil_providers.dar
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 import 'package:vetapp/features/team/presentation/screens/mi_perfil_screen.dart';
 
+import 'helpers/fake_inventario.dart';
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
 import 'helpers/fake_perfil.dart';
@@ -47,6 +49,7 @@ List<Override> _overrides(FakePerfilRepository repo, AuthProfile perfil) {
     citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
     recordatoriosServiceProvider.overrideWithValue(FakeRecordatoriosService()),
     ...planOverrides(),
+    inventarioRepositoryProvider.overrideWithValue(FakeInventarioRepository()),
   ];
 }
 
