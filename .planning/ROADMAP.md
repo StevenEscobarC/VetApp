@@ -338,14 +338,14 @@ Plans:
   2. El veterinario recibe una alerta cuando un producto cae por debajo del umbral de stock mínimo
   3. El veterinario puede ajustar manualmente la cantidad de un producto
 
-**Plans:** 9 plans
+**Plans:** 3/9 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — Contrato del servidor: productos + movimientos solo-append, RPC definer (crear/actualizar/archivar/mover_stock/inventario_resumen), RLS, guard en 9 tablas, autoría; smoke S1..S20 (258 checks) + R44 + sondas
-- [ ] 06-02-PLAN.md — Contrato Dart: Producto/Unidad/MovimientoStock, InventarioFailure tipado, repositorio, providers + acciones con invalidación G4, fake y overrides en 9 tests
-- [ ] 06-03-PLAN.md — formatearCop/parsearCop/formatearMiles, parsearFecha(permitirFuturo) y extensión retrocompatible de AppTextField
+- [x] 06-01-PLAN.md — Contrato del servidor: productos + movimientos solo-append, RPC definer (crear/actualizar/archivar/mover_stock/inventario_resumen), RLS, guard en 9 tablas, autoría; smoke S1..S20 (258 checks) + R44 + sondas
+- [x] 06-02-PLAN.md — Contrato Dart: Producto/Unidad/MovimientoStock, InventarioFailure tipado, repositorio, providers + acciones con invalidación G4, fake y overrides en 9 tests
+- [x] 06-03-PLAN.md — formatearCop/parsearCop/formatearMiles, parsearFecha(permitirFuturo) y extensión retrocompatible de AppTextField
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

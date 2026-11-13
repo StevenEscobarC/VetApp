@@ -40,14 +40,14 @@ created: 2026-10-31
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 06-01-T1 | 06-01 | 1 | INV-01..03 | T-06-01..10 | Bloque S (S1..S20) codifica aislamiento, solo-append, sin negativos, solo admin, solo lectura; R44 a 9 tablas | SQL smoke (estático) | grep gates -> `SMOKE_S_OK` (258 checks, S1..S20) | ❌ W0 | ⬜ pending |
-| 06-01-T2 | 06-01 | 1 | INV-01..03 | T-06-02..09 | RPC security definer + search_path, `for update`, sin grants de escritura, guard en 2 tablas | grep (SQL) | awk bloque Fase 6 -> `SCHEMA_F6_OK` | ✅ (schema.sql) | ⬜ pending |
-| 06-01-T3 | 06-01 | 1 | INV-01..03 | T-06-10 | anon sin acceso a tablas/RPC; hint de embed | script sintaxis | `bash -n` + grep -> `PROBE_F6_OK` | ✅ | ⬜ pending |
-| 06-02-T1 | 06-02 | 1 | INV-01, INV-02 | — | bajo = `<` (borde y mínimo 0), vence pronto/vencido con día Bogotá | unit | `flutter test test/producto_test.dart` -> `DOMINIO_INV_OK` | ❌ W0 | ⬜ pending |
-| 06-02-T2 | 06-02 | 1 | INV-01..03 | T-06-11, T-06-12, T-06-15 | Errores -> InventarioFailure tipado en español; sin conexión; solo delta al servidor | unit | `flutter test test/supabase_inventario_repository_test.dart` -> `REPO_INV_OK` | ❌ W0 | ⬜ pending |
-| 06-02-T3 | 06-02 | 1 | INV-01..03 | T-06-14 | Acciones invalidan lista + resumen + historial (G4); 9 overrides | unit + suite | `flutter test test/inventario_invalidacion_test.dart` + `flutter test` -> `CONTRATO_INV_OK` | ❌ W0 | ⬜ pending |
-| 06-03-T1 | 06-03 | 1 | INV-01 | T-06-16, T-06-17 | COP entero `$ 85.000`, rechazo de coma; fecha futura solo con `permitirFuturo` | unit | `flutter test test/formato_test.dart` -> `FORMATO_COP_OK` | ✅ (extender) | ⬜ pending |
-| 06-03-T2 | 06-03 | 1 | INV-01, INV-03 | — | AppTextField extendido sin cambiar defaults | widget + suite | `flutter test test/app_text_field_test.dart` + `flutter test` -> `APP_TEXT_FIELD_OK` | ❌ W0 | ⬜ pending |
+| 06-01-T1 | 06-01 | 1 | INV-01..03 | T-06-01..10 | Bloque S (S1..S20) codifica aislamiento, solo-append, sin negativos, solo admin, solo lectura; R44 a 9 tablas | SQL smoke (estático) | grep gates -> `SMOKE_S_OK` (258 checks, S1..S20) | ✅ | ✅ green (estático; en vivo → 06-04) |
+| 06-01-T2 | 06-01 | 1 | INV-01..03 | T-06-02..09 | RPC security definer + search_path, `for update`, sin grants de escritura, guard en 2 tablas | grep (SQL) | awk bloque Fase 6 -> `SCHEMA_F6_OK` | ✅ (schema.sql) | ✅ green (estático; en vivo → 06-04) |
+| 06-01-T3 | 06-01 | 1 | INV-01..03 | T-06-10 | anon sin acceso a tablas/RPC; hint de embed | script sintaxis | `bash -n` + grep -> `PROBE_F6_OK` | ✅ | ✅ green (sintaxis; `LIVE_SCHEMA_OK` → 06-04) |
+| 06-02-T1 | 06-02 | 1 | INV-01, INV-02 | — | bajo = `<` (borde y mínimo 0), vence pronto/vencido con día Bogotá | unit | `flutter test test/producto_test.dart` -> `DOMINIO_INV_OK` | ✅ | ✅ green |
+| 06-02-T2 | 06-02 | 1 | INV-01..03 | T-06-11, T-06-12, T-06-15 | Errores -> InventarioFailure tipado en español; sin conexión; solo delta al servidor | unit | `flutter test test/supabase_inventario_repository_test.dart` -> `REPO_INV_OK` | ✅ | ✅ green |
+| 06-02-T3 | 06-02 | 1 | INV-01..03 | T-06-14 | Acciones invalidan lista + resumen + historial (G4); 9 overrides | unit + suite | `flutter test test/inventario_invalidacion_test.dart` + `flutter test` -> `CONTRATO_INV_OK` | ✅ | ✅ green |
+| 06-03-T1 | 06-03 | 1 | INV-01 | T-06-16, T-06-17 | COP entero `$ 85.000`, rechazo de coma; fecha futura solo con `permitirFuturo` | unit | `flutter test test/formato_test.dart` -> `FORMATO_COP_OK` | ✅ | ✅ green |
+| 06-03-T2 | 06-03 | 1 | INV-01, INV-03 | — | AppTextField extendido sin cambiar defaults | widget + suite | `flutter test test/app_text_field_test.dart` + `flutter test` -> `APP_TEXT_FIELD_OK` | ✅ | ✅ green |
 | 06-04-T1 | 06-04 | 2 | INV-01..03 | T-06-18 | Revisión estática previa al apply | grep (SQL) | -> `PREAPPLY_F6_OK` | ✅ | ⬜ pending |
 | 06-04-T2 | 06-04 | 2 | INV-01..03 | T-06-18, T-06-19, T-06-21 | Delta en vivo; smoke completo en la nube | manual (usuario) | conteo -> `SMOKE_258_READY`; literal `RLS SMOKE: PASS (258 checks)` pegado por el usuario | ✅ | ⬜ pendiente del usuario |
 | 06-04-T3 | 06-04 | 2 | INV-01..03 | T-06-10, T-06-20 | Superficie anon denegada en vivo; embed resuelve | script (nube) | `verify_live_schema.sh` -> `LIVE_F6_OK` | ✅ | ⬜ pending |
@@ -86,6 +86,10 @@ created: 2026-10-31
 
 | Plan | Compuertas / comando | Resultado | Pruebas por archivo (pasan) |
 |------|----------------------|-----------|-----------------------------|
+| 06-01 | grep gates del bloque S y del bloque Fase 6, `bash -n` de la sonda (2026-11-12, fusionado en `f60f192`) | `SMOKE_S_OK` (258 `checks := checks + 1`, una cabecera "Total esperado: 258") · `SCHEMA_F6_OK` (5 RPC `security definer`, 0 `security invoker`, `for update` en `mover_stock`, guard en 2 tablas) · `PROBE_F6_OK` · smoke en vivo `PASS (258)` y `LIVE_SCHEMA_OK` ⬜ pendientes de 06-04 | — (SQL estático; ningún cambio aplicado en vivo) |
+| 06-02 | `flutter analyze` + 3 archivos nuevos + 9 pruebas existentes con override (2026-11-12) | `DOMINIO_INV_OK` · `REPO_INV_OK` · `CONTRATO_INV_OK` · desviación: código y pruebas de T1/T2 en un mismo commit (sin commit rojo previo) | producto 15, supabase_inventario_repository 18, inventario_invalidacion 10; 9 pruebas existentes verdes con `inventarioRepositoryProvider` (router_equipo vía `overrides` nuevo en `appUnderTest`) |
+| 06-03 | `flutter analyze` + 2 archivos (2026-11-12) | `FORMATO_COP_OK` · `APP_TEXT_FIELD_OK` (rojo visto antes del verde) | formato 35 (casos existentes sin cambios), app_text_field 3 |
+| Ola 1 | Suite completa sobre `master` tras fusionar (`f60f192`, 2026-11-12) | `flutter analyze` → `No issues found!` · `flutter test` → `+911: All tests passed!` (856 base + 43 de 06-02 + 12 de 06-03) | — |
 
 ---
 
