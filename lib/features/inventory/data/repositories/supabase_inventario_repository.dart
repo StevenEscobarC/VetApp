@@ -324,8 +324,8 @@ String mensajeErrorInventario(PostgrestException e) {
 /// que cubre sus subclases privadas (`_ClientSocketException` de `IOClient`,
 /// el caso típico de "sin señal") y sobrevive a `--obfuscate`. Sin importar la
 /// librería de IO (el target web debe compilar), un `SocketException` suelto
-/// se reconoce porque su tipo contiene ese nombre.
-@visibleForTesting
+/// se reconoce porque su tipo contiene ese nombre. Lo comparten los
+/// repositorios de inventario y de cobros (una sola regla de red).
 bool esErrorDeRed(Object e) {
   if (e is TimeoutException || e is http.ClientException) return true;
   return e.runtimeType.toString().contains('SocketException');

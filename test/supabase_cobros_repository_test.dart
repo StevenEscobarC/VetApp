@@ -247,7 +247,12 @@ void main() {
         lineas: _lineas,
         mascotaId: 'm1',
       );
-      expect(p.keys.toSet(), {'p_id', 'p_cliente_id', 'p_items', 'p_mascota_id'});
+      expect(p.keys.toSet(), {
+        'p_id',
+        'p_cliente_id',
+        'p_items',
+        'p_mascota_id',
+      });
     });
 
     test('paramsMarcarPagado', () {
@@ -434,10 +439,7 @@ void main() {
       expect(c.anulada, isTrue);
       expect(c.metodoPago, isNull);
       expect(c.validaHasta, DateTime.utc(2026, 11, 16));
-      expect(
-        c.anuladaAt,
-        DateTime.parse('2026-11-03T14:30:00Z').toLocal(),
-      );
+      expect(c.anuladaAt, DateTime.parse('2026-11-03T14:30:00Z').toLocal());
       expect(c.motivoAnulacion, 'Precio errado');
       expect(c.autorNombre, isNull);
       expect(c.cotizacionOrigenNumero, isNull);
