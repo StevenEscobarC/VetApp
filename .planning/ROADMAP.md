@@ -338,7 +338,7 @@ Plans:
   2. El veterinario recibe una alerta cuando un producto cae por debajo del umbral de stock mínimo
   3. El veterinario puede ajustar manualmente la cantidad de un producto
 
-**Plans:** 7/9 plans executed
+**Plans:** 8/9 plans executed
 
 Plans:
 **Wave 1**
@@ -359,7 +359,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 06-08-PLAN.md — Detalle del producto con historial y autoría, editar (mínimo/precios solo admin) y archivar
+- [x] 06-08-PLAN.md — Detalle del producto con historial y autoría, editar (mínimo/precios solo admin) y archivar
 
 **Wave 5** *(blocked on Wave 4 completion)*
 

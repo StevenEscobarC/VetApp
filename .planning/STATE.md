@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 6 waves 1-3 done (7/9) — next: wave 4 (06-08)"
+stopped_at: "Phase 6 waves 1-4 done (8/9) — next: 06-09 close"
 last_updated: "2026-11-12T00:00:00.000Z"
-last_activity: 2026-11-12 -- Phase 6 wave 3 merged (06-06, 06-07), +996 tests
+last_activity: 2026-11-12 -- Phase 6 wave 4 merged (06-08), +1034 tests
 progress:
   total_phases: 11
   completed_phases: 7
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 06 (inventario) — EXECUTING
-Plan: 7 of 9 (olas 1-3 completas)
-Status: Ola 4 lista: 06-08 detalle con historial, edición y archivar; luego 06-09 cierre con QA
+Plan: 8 of 9 (olas 1-4 completas)
+Status: Ola 5: 06-09 cierre (gate, sonda, auditoría de marca, QA en emulador con setup del usuario VET-54, visto bueno VET-55)
 Last activity: 2026-11-12 -- Phase 6 wave 1 executed (3/9 plans)
 
 Progress: [████░░░░░] 44% (4 de 9 fases completas; Fase 5 sin discutir)
