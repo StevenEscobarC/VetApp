@@ -132,7 +132,7 @@ created: 2026-10-31
 | Sonda anónima | `LIVE_SCHEMA_OK`. Las 5 RPC protegidas (401) y coinciden con las llamadas en `supabase_inventario_repository.dart`. |
 | Greps de capas y seguridad | Sin resultados en los 5: `supabase_flutter` en domain/presentation, `DateTime.now()`, escrituras directas, `double` en domain y `<= minimo`. |
 | Gate | `No issues found!` · `All tests passed!` (+1034 antes de 06-10; +1045 tras fusionar 06-10 en `e3e0904`). |
-| APK debug | `√ Built buildpp\outputslutter-apkpp-debug.apk`. |
+| APK debug | `Built build/app/outputs/flutter-apk/app-debug.apk` |
 | Marca | `06-BRAND-AUDIT.md`: `BRAND: PASS` (0 BLOCKER, 2 WARN). |
 | Code review | `06-REVIEW.md`: 1 CRITICAL y 6 WARNING. CR-01, WR-01, WR-02 y WR-04 se cerraron en 06-10. WR-03, WR-05, WR-06 e INFO quedan como deuda. |
 | 06-10 en vivo | `apply_migration` de `mover_stock` con 8 argumentos y smoke `RLS SMOKE: PASS (261 checks) - cambios revertidos`. |
