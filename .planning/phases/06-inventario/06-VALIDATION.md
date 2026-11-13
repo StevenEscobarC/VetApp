@@ -89,6 +89,7 @@ created: 2026-10-31
 | 06-01 | grep gates del bloque S y del bloque Fase 6, `bash -n` de la sonda (2026-11-12, fusionado en `f60f192`) | `SMOKE_S_OK` (258 `checks := checks + 1`, una cabecera "Total esperado: 258") · `SCHEMA_F6_OK` (5 RPC `security definer`, 0 `security invoker`, `for update` en `mover_stock`, guard en 2 tablas) · `PROBE_F6_OK` · smoke en vivo `PASS (258)` y `LIVE_SCHEMA_OK` ⬜ pendientes de 06-04 | — (SQL estático; ningún cambio aplicado en vivo) |
 | 06-02 | `flutter analyze` + 3 archivos nuevos + 9 pruebas existentes con override (2026-11-12) | `DOMINIO_INV_OK` · `REPO_INV_OK` · `CONTRATO_INV_OK` · desviación: código y pruebas de T1/T2 en un mismo commit (sin commit rojo previo) | producto 15, supabase_inventario_repository 18, inventario_invalidacion 10; 9 pruebas existentes verdes con `inventarioRepositoryProvider` (router_equipo vía `overrides` nuevo en `appUnderTest`) |
 | 06-03 | `flutter analyze` + 2 archivos (2026-11-12) | `FORMATO_COP_OK` · `APP_TEXT_FIELD_OK` (rojo visto antes del verde) | formato 35 (casos existentes sin cambios), app_text_field 3 |
+| Ola 1 (QA) | — | QA: no aplica — 06-01..03 no tienen pantallas (contrato SQL, contrato Dart y helpers); la UAT en emulador es de 06-09 | — |
 | Ola 1 | Suite completa sobre `master` tras fusionar (`f60f192`, 2026-11-12) | `flutter analyze` → `No issues found!` · `flutter test` → `+911: All tests passed!` (856 base + 43 de 06-02 + 12 de 06-03) | — |
 
 ---
