@@ -338,7 +338,7 @@ Plans:
   2. El veterinario recibe una alerta cuando un producto cae por debajo del umbral de stock mínimo
   3. El veterinario puede ajustar manualmente la cantidad de un producto
 
-**Plans:** 5/9 plans executed
+**Plans:** 7/9 plans executed
 
 Plans:
 **Wave 1**
@@ -354,8 +354,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-06-PLAN.md — Ajuste rápido −1/+ con Deshacer, hoja Ajustar stock (Compra/Uso/Vencido/Conteo) y confirmación > 10
-- [ ] 06-07-PLAN.md — Alerta de stock bajo: tarjeta en Inicio, pastilla en Más, filtros Bajos/Vence pronto y Pedir por WhatsApp
+- [x] 06-06-PLAN.md — Ajuste rápido −1/+ con Deshacer, hoja Ajustar stock (Compra/Uso/Vencido/Conteo) y confirmación > 10
+- [x] 06-07-PLAN.md — Alerta de stock bajo: tarjeta en Inicio, pastilla en Más, filtros Bajos/Vence pronto y Pedir por WhatsApp
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
