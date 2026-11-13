@@ -54,6 +54,8 @@ String textoErrorAjuste(InventarioFailure e, {bool deshacer = false}) {
       return 'Ese producto ya no está disponible. Actualiza la lista.';
     case ErrorInventario.yaDeshecho:
       return 'Ese ajuste ya se deshizo.';
+    case ErrorInventario.stockCambio:
+      return e.message;
     default:
       return _msgOtro;
   }
@@ -65,6 +67,7 @@ String textoErrorEnHoja(InventarioFailure e) => switch (e.tipo) {
     'No hay suficiente stock para ese ajuste. Actualiza la lista y revisa la '
         'cantidad.',
   ErrorInventario.noDisponible => 'Ese producto ya no está disponible.',
+  ErrorInventario.stockCambio => e.message,
   ErrorInventario.sinConexion => _msgOffline,
   _ => _msgOtro,
 };

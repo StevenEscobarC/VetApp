@@ -445,8 +445,12 @@ void main() {
       expect((await repo.producto('p1'))!.cantidad, 8);
       expect(_movs(repo).single.args['cantidadEsperada'], 5);
 
-      await _escribir(tester, '7');
-      expect(find.text('Quedarán 7 frascos'), findsOneWidget);
+      // Lo contado se conserva y se puede reaplicar sobre la cantidad fresca.
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        '7',
+      );
+      expect(_aplicarHabilitado(tester), isTrue);
       await _aplicarAjuste(tester);
       final ultimo = _movs(repo).last;
       expect(ultimo.args['delta'], -1);

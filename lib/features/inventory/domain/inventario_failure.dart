@@ -5,6 +5,9 @@ enum ErrorInventario {
   stockInsuficiente,
   noDisponible,
   yaDeshecho,
+
+  /// IN004: el conteo se hizo sobre una cantidad que ya cambió en el servidor.
+  stockCambio,
   nombreDuplicado,
   sinPermiso,
   datosInvalidos,

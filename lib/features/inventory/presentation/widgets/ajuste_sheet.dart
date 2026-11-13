@@ -68,7 +68,9 @@ class _AjusteSheetState extends ConsumerState<AjusteSheet> {
   bool _noDisponible = false;
   String? _errorServidor;
 
-  Producto get _p => widget.producto;
+  /// Copia del producto con la que se calcula el delta. Empieza con la de la
+  /// fila/detalle y se refresca si el servidor dice que cambió (IN004).
+  late Producto _p = widget.producto;
 
   @override
   void initState() {
@@ -123,11 +125,22 @@ class _AjusteSheetState extends ConsumerState<AjusteSheet> {
     }
     if (n > kCantidadMaxima) return 'La cantidad máxima es 1.000.000.';
     if (_esConteo) {
-      return n == _p.cantidad ? 'Es la misma cantidad que hay ahora.' : null;
+      if (n == _p.cantidad) return 'Es la misma cantidad que hay ahora.';
+      return _errorTopesServidor;
     }
     if (n == 0) return 'Escribe una cantidad mayor que 0.';
     if (_motivo != MotivoMovimiento.compra && n > _p.cantidad) {
       return 'No puedes dejar el stock por debajo de 0.';
+    }
+    return _errorTopesServidor;
+  }
+
+  /// Los mismos topes que aplica `mover_stock`, para no enviar algo que el
+  /// servidor siempre rechaza con un error genérico.
+  String? get _errorTopesServidor {
+    if (_delta.abs() > kAjusteMaximo) return 'El ajuste máximo es 100.000.';
+    if (_quedarian > kCantidadMaxima) {
+      return 'El stock no puede superar 1.000.000.';
     }
     return null;
   }
@@ -181,6 +194,11 @@ class _AjusteSheetState extends ConsumerState<AjusteSheet> {
         producto: producto,
         delta: delta,
         motivo: motivo,
+        // El conteo es absoluto: si el stock cambió desde que se abrió la
+        // hoja, el servidor lo rechaza (IN004) en vez de fijar otra cifra.
+        cantidadEsperada: motivo == MotivoMovimiento.conteo
+            ? producto.cantidad
+            : null,
       );
       if (mounted) Navigator.of(context).pop();
       mostrarResultadoAjuste(
@@ -200,6 +218,20 @@ class _AjusteSheetState extends ConsumerState<AjusteSheet> {
         _errorServidor = textoErrorEnHoja(e);
         if (e.tipo == ErrorInventario.noDisponible) _noDisponible = true;
       });
+      if (e.tipo == ErrorInventario.stockCambio) await _refrescarProducto();
+    }
+  }
+
+  /// Tras IN004 las acciones ya invalidaron los providers del producto; se
+  /// relee para que la hoja muestre la cantidad actual y el próximo delta se
+  /// calcule sobre ella. Se conserva lo que el usuario escribió.
+  Future<void> _refrescarProducto() async {
+    try {
+      final fresco = await ref.read(productoProvider(_p.id).future);
+      if (!mounted || fresco == null) return;
+      setState(() => _p = fresco);
+    } on InventarioFailure {
+      // Se mantiene el aviso; el usuario puede cerrar y volver a abrir.
     }
   }
 
