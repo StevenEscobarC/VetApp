@@ -11,9 +11,12 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/chips/app_filter_chip.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../../core/utils/compartir.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../domain/entities/producto.dart';
+import '../../domain/pedido_whatsapp.dart';
 import '../inventario_routes.dart';
 import '../providers/inventario_providers.dart';
 import '../widgets/producto_fila.dart';
@@ -158,6 +161,22 @@ class _Cabecera extends ConsumerWidget {
 
   String _etiqueta(String base, int n) => n > 0 ? '$base ($n)' : base;
 
+  /// Compartir no es una escritura: nunca se bloquea por solo lectura.
+  Future<void> _pedir(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final texto = mensajePedidoStock(
+      productos: productos,
+      clinica: ref.read(authProfileProvider).value?.clinicaNombre,
+    );
+    try {
+      await ref.read(compartidorProvider).compartirTexto(texto);
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No pudimos abrir el menú de compartir.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bajos = productos.where((p) => p.bajo).length;
@@ -200,6 +219,23 @@ class _Cabecera extends ConsumerWidget {
             ResumenBajosStrip(
               bajos: bajos,
               onVerBajos: () => onFiltro(_Filtro.bajos),
+            ),
+          ],
+          if (filtro == _Filtro.bajos && bajos > 0) ...[
+            const SizedBox(height: AppSpacing.md),
+            AppButton(
+              label: 'Pedir por WhatsApp',
+              variant: AppButtonVariant.outline,
+              icon: Icons.share_outlined,
+              expand: true,
+              onPressed: () => _pedir(context, ref),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Pedimos lo necesario para llegar al doble del mínimo.',
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: AppColors.textMuted),
             ),
           ],
         ],
