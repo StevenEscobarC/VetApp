@@ -15,6 +15,7 @@ import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../domain/entities/movimiento_stock.dart';
 import '../../domain/entities/producto.dart';
+import '../../domain/inventario_failure.dart';
 import '../../domain/stock.dart';
 import '../inventario_routes.dart';
 import '../providers/inventario_providers.dart';
@@ -182,6 +183,10 @@ class _Contenido extends ConsumerWidget {
         _Detalles(producto: producto, hoy: hoy),
         const SizedBox(height: AppSpacing.lg),
         _Historial(producto: producto),
+        if (ref.watch(puedeAdministrarInventarioProvider)) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _AccionArchivar(producto: producto),
+        ],
       ],
     );
   }
@@ -453,6 +458,105 @@ class _Historial extends ConsumerWidget {
         const SizedBox(height: AppSpacing.md),
         cuerpo,
       ],
+    );
+  }
+}
+
+/// "Archivar producto" (solo administrador, D-13): confirma, archiva y vuelve
+/// a la lista. No borra nada: el historial se conserva y no hay restauración.
+class _AccionArchivar extends ConsumerStatefulWidget {
+  const _AccionArchivar({required this.producto});
+
+  final Producto producto;
+
+  @override
+  ConsumerState<_AccionArchivar> createState() => _AccionArchivarState();
+}
+
+class _AccionArchivarState extends ConsumerState<_AccionArchivar> {
+  bool _enVuelo = false;
+
+  void _volverALista(GoRouter router) {
+    if (router.canPop()) {
+      router.pop();
+    } else {
+      router.go(rutaInventario());
+    }
+  }
+
+  Future<void> _archivar() async {
+    if (_enVuelo) return;
+    if (!await asegurarEscritura(context, ref)) return;
+    if (!mounted) return;
+    final nombre = widget.producto.nombre;
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Archivar producto'),
+        content: Text(
+          '«$nombre» dejará de aparecer en tu inventario y no podrás ajustar '
+          'su stock. El historial de movimientos se conserva. Esta acción no '
+          'se puede deshacer desde la app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          AppButton(
+            label: 'Archivar',
+            variant: AppButtonVariant.destructive,
+            expand: false,
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    void aviso(String texto) => messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(texto)));
+
+    setState(() => _enVuelo = true);
+    try {
+      await ref.read(inventarioActionsProvider).archivar(widget.producto.id);
+      aviso('«$nombre» archivado.');
+      _volverALista(router);
+    } on InventarioFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
+      switch (e.tipo) {
+        case ErrorInventario.sinPermiso:
+          aviso('Solo el administrador de la clínica puede hacer esto.');
+        case ErrorInventario.noDisponible:
+          aviso('Ese producto ya no está disponible.');
+          _volverALista(router);
+        default:
+          aviso('No pudimos completar la operación. Intenta de nuevo.');
+      }
+    } catch (_) {
+      aviso('No pudimos completar la operación. Intenta de nuevo.');
+    } finally {
+      if (mounted) setState(() => _enVuelo = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final puede = ref.watch(puedeEscribirProvider);
+    return ControlEscritura(
+      puedeEscribir: puede,
+      label: 'Archivar producto',
+      onTap: _archivar,
+      child: AppButton(
+        label: 'Archivar producto',
+        variant: AppButtonVariant.destructive,
+        icon: iconoEscritura(puede, Icons.archive_outlined),
+        isLoading: _enVuelo,
+        onPressed: _archivar,
+      ),
     );
   }
 }

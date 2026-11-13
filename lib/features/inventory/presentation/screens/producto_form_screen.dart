@@ -14,7 +14,11 @@ import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../domain/entities/producto.dart';
 import '../../domain/inventario_failure.dart';
 import '../../domain/stock.dart';
+import '../inventario_routes.dart';
 import '../providers/inventario_providers.dart';
+
+const String _kSoloAdminMinimoPrecios =
+    'Solo el administrador puede cambiar el mínimo y los precios.';
 
 const String _kErrorGenerico =
     'No pudimos completar la operación. Intenta de nuevo.';
@@ -50,6 +54,7 @@ class _ProductoFormScreenState extends ConsumerState<ProductoFormScreen> {
   bool _detalles = false;
   bool _guardando = false;
   bool _guardandoOtro = false;
+  bool _precargado = false;
 
   String? _errNombre;
   String? _errCantidad;
@@ -203,6 +208,360 @@ class _ProductoFormScreenState extends ConsumerState<ProductoFormScreen> {
     }
   }
 
+  bool get _esEdicion => widget.productoId != null;
+
+  /// Rellena los campos una sola vez con el producto cargado (modo edición).
+  void _precargar(Producto p) {
+    if (_precargado) return;
+    _precargado = true;
+    _nombreCtrl.text = p.nombre;
+    _minimoCtrl.text = '${p.minimo}';
+    final v = p.vencimiento;
+    _vencimientoCtrl.text = v == null ? '' : formatearFecha(v);
+    final pv = p.precioVentaCop;
+    _precioCtrl.text = pv == null ? '' : formatearMiles(pv);
+    final c = p.costoCop;
+    _costoCtrl.text = c == null ? '' : formatearMiles(c);
+    _categoria = p.categoria;
+    _detalles = true;
+  }
+
+  /// Guarda los cambios. El administrador edita todo; el resto de veterinarios
+  /// solo nombre, categoría y vencimiento, y se reenvían sin cambios el mínimo
+  /// y los precios (el servidor es la autoridad, 42501).
+  Future<void> _guardarEdicion(Producto original) async {
+    if (_guardando) return;
+    final admin = ref.read(puedeAdministrarInventarioProvider);
+    final nombre = _nombreCtrl.text.trim();
+    final fecha = parsearFecha(_vencimientoCtrl.text, permitirFuturo: true);
+    final minimo = admin
+        ? _entero(_minimoCtrl.text, 'Escribe el mínimo (puede ser 0).')
+        : (valor: original.minimo, error: null);
+    final precio = admin
+        ? parsearCop(_precioCtrl.text)
+        : (valor: original.precioVentaCop, error: null);
+    final costo = admin
+        ? parsearCop(_costoCtrl.text)
+        : (valor: original.costoCop, error: null);
+
+    setState(() {
+      _errNombre = nombre.isEmpty ? 'Escribe el nombre del producto.' : null;
+      _errMinimo = minimo.error;
+      _errVencimiento = fecha.error == null
+          ? null
+          : 'Escribe una fecha válida (dd/mm/aaaa).';
+      _errPrecio = precio.error;
+      _errCosto = costo.error;
+    });
+    if ([
+      _errNombre,
+      _errMinimo,
+      _errVencimiento,
+      _errPrecio,
+      _errCosto,
+    ].any((e) => e != null)) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    setState(() => _guardando = true);
+    try {
+      await ref
+          .read(inventarioActionsProvider)
+          .actualizar(
+            id: original.id,
+            nombre: nombre,
+            categoria: _categoria,
+            vencimiento: fecha.valor,
+            minimo: minimo.valor!,
+            precioVentaCop: precio.valor,
+            costoCop: costo.valor,
+          );
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Cambios guardados.')));
+      router.pop();
+    } on InventarioFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
+      if (!mounted) return;
+      switch (e.tipo) {
+        case ErrorInventario.nombreDuplicado:
+          setState(() => _errNombre = 'Ya tienes un producto con ese nombre.');
+        case ErrorInventario.sinPermiso:
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Solo el administrador de la clínica puede hacer esto.',
+              ),
+            ),
+          );
+        case ErrorInventario.noDisponible:
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Ese producto ya no está disponible.'),
+            ),
+          );
+        default:
+          messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text(_kErrorGenerico)));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Widget _filaSoloLectura(String etiqueta, String valor) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: AppSpacing.touchTarget),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            etiqueta,
+            style: textTheme.labelLarge?.copyWith(color: AppColors.textMuted),
+          ),
+          Text(valor, style: textTheme.bodyLarge),
+        ],
+      ),
+    );
+  }
+
+  Widget _edicion(Producto p) {
+    _precargar(p);
+    final textTheme = Theme.of(context).textTheme;
+    final admin = ref.watch(puedeAdministrarInventarioProvider);
+    final soloDigitos = [FilteringTextInputFormatter.digitsOnly];
+    final dinero = [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))];
+
+    return Scaffold(
+      appBar: const AppTopBar(title: 'Editar producto'),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppTextField(
+                    label: 'Nombre del producto',
+                    controller: _nombreCtrl,
+                    focusNode: _nombreFocus,
+                    textCapitalization: TextCapitalization.sentences,
+                    maxLength: 80,
+                    textInputAction: TextInputAction.next,
+                    errorText: _errNombre,
+                    onChanged: (_) {
+                      if (_errNombre != null) setState(() => _errNombre = null);
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _filaSoloLectura('Unidad de conteo', p.unidad.chip),
+                  _ayuda('No se puede cambiar.'),
+                  _ayuda(
+                    'Para cambiar la cantidad usa Ajustar stock en el '
+                    'detalle.',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (admin)
+                    AppTextField(
+                      label: 'Stock mínimo',
+                      controller: _minimoCtrl,
+                      focusNode: _minimoFocus,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: soloDigitos,
+                      maxLength: 7,
+                      textInputAction: TextInputAction.next,
+                      helperText:
+                          'Te avisamos cuando queden menos de esta cantidad.',
+                      errorText: _errMinimo,
+                      onChanged: (_) {
+                        if (_errMinimo != null) {
+                          setState(() => _errMinimo = null);
+                        }
+                      },
+                    )
+                  else
+                    _filaSoloLectura('Stock mínimo', formatearMiles(p.minimo)),
+                  const SizedBox(height: AppSpacing.md),
+                  InkWell(
+                    onTap: () => setState(() => _detalles = !_detalles),
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minHeight: AppSpacing.touchTarget,
+                      ),
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Más detalles',
+                            style: textTheme.labelLarge?.copyWith(
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                          Icon(
+                            _detalles ? Icons.expand_less : Icons.expand_more,
+                            color: AppColors.textMuted,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_detalles) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Text('Categoría', style: textTheme.labelLarge),
+                    const SizedBox(height: AppSpacing.sm),
+                    _selectorCategoria(),
+                    const SizedBox(height: AppSpacing.md),
+                    AppTextField(
+                      label: 'Vencimiento (opcional)',
+                      controller: _vencimientoCtrl,
+                      hintText: 'dd/mm/aaaa',
+                      prefixIcon: Icons.calendar_today_outlined,
+                      keyboardType: TextInputType.datetime,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[\d/]')),
+                      ],
+                      maxLength: 10,
+                      helperText: 'Un solo vencimiento por producto.',
+                      errorText: _errVencimiento,
+                      onChanged: (_) {
+                        if (_errVencimiento != null) {
+                          setState(() => _errVencimiento = null);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    if (admin) ...[
+                      AppTextField(
+                        label: 'Precio de venta (opcional)',
+                        controller: _precioCtrl,
+                        focusNode: _precioFocus,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: dinero,
+                        prefixText: '\$ ',
+                        helperText: 'En pesos, sin decimales.',
+                        errorText: _errPrecio,
+                        onChanged: (_) {
+                          if (_errPrecio != null) {
+                            setState(() => _errPrecio = null);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      AppTextField(
+                        label: 'Costo (opcional)',
+                        controller: _costoCtrl,
+                        focusNode: _costoFocus,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: dinero,
+                        prefixText: '\$ ',
+                        helperText: 'En pesos, sin decimales.',
+                        errorText: _errCosto,
+                        onChanged: (_) {
+                          if (_errCosto != null) {
+                            setState(() => _errCosto = null);
+                          }
+                        },
+                      ),
+                    ] else ...[
+                      if (p.precioVentaCop != null) ...[
+                        _filaSoloLectura(
+                          'Precio de venta',
+                          formatearCop(p.precioVentaCop!),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+                      if (p.costoCop != null) ...[
+                        _filaSoloLectura('Costo', formatearCop(p.costoCop!)),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+                    ],
+                  ],
+                  if (!admin) _ayuda(_kSoloAdminMinimoPrecios),
+                ],
+              ),
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: AppButton(
+                label: 'Guardar cambios',
+                isLoading: _guardando,
+                onPressed: _guardando ? null : () => _guardarEdicion(p),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Estados de carga del producto en modo edición.
+  Widget _edicionCargando(AsyncValue<Producto?> async) {
+    final Widget cuerpo;
+    if (async.hasError && !async.hasValue) {
+      cuerpo = _mensaje(
+        'No pudimos cargar el producto. Intenta de nuevo.',
+        'Reintentar',
+        () => ref.invalidate(productoProvider(widget.productoId!)),
+      );
+    } else if (async.hasValue) {
+      cuerpo = _mensaje(
+        'Este producto ya no está disponible.',
+        'Volver al inventario',
+        () => GoRouter.of(context).canPop()
+            ? GoRouter.of(context).pop()
+            : GoRouter.of(context).go(rutaInventario()),
+      );
+    } else {
+      cuerpo = const Center(child: CircularProgressIndicator());
+    }
+    return Scaffold(
+      appBar: const AppTopBar(title: 'Editar producto'),
+      body: cuerpo,
+    );
+  }
+
+  Widget _mensaje(String texto, String boton, VoidCallback onPressed) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            texto,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            label: boton,
+            variant: AppButtonVariant.outline,
+            expand: false,
+            onPressed: onPressed,
+          ),
+        ],
+      ),
+    ),
+  );
+
   /// Deja el formulario listo para el siguiente producto: conserva unidad y
   /// categoría y devuelve el foco al nombre.
   void _reiniciar() {
@@ -257,6 +616,12 @@ class _ProductoFormScreenState extends ConsumerState<ProductoFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_esEdicion) {
+      final async = ref.watch(productoProvider(widget.productoId!));
+      final p = async.value;
+      if (p != null && !p.archivado) return _edicion(p);
+      return _edicionCargando(async);
+    }
     final textTheme = Theme.of(context).textTheme;
     final soloDigitos = [FilteringTextInputFormatter.digitsOnly];
     final dinero = [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))];
