@@ -2059,6 +2059,7 @@ $$;
 
 -- D-09: p_id es autor de citas/consultas/dosis en mi clínica (aunque ya no sea miembro).
 -- Redefinición de la versión 4.1 con el OR de dosis_aplicadas.
+-- La Fase 6 la redefine otra vez al final del archivo (suma movimientos_inventario).
 create or replace function public.es_autor_en_mi_clinica(p_id uuid)
 returns boolean language sql stable security definer set search_path = public
 as $$ select
@@ -3736,7 +3737,7 @@ drop trigger if exists protocolos_validar_plan on public.protocolos_vacunacion;
 create trigger protocolos_validar_plan before insert or update on public.protocolos_vacunacion for each row execute function public.protocolos_validar_plan();
 
 -- LP004 (D-02/D-12, decisión bloqueada 3): el veterinario que excede los cupos del plan queda en
--- solo lectura. Guarda en las 7 tablas de escritura clínica; NO hay guarda en carne_enlaces ni en
+-- solo lectura. Guarda en las 9 tablas de escritura (clínica e inventario: productos y movimientos_inventario, Fase 6); NO hay guarda en carne_enlaces ni en
 -- vacuna_alertas (compartir el carné y gestionar alertas siguen permitidos) y marcar el recordatorio
 -- de una cita (recordatorio_enviado_at) tampoco se bloquea. Es trigger y no policy restrictiva para
 -- que UPDATE/DELETE fallen con LP004 en vez de afectar 0 filas (Pitfall 7) y para cubrir también las
@@ -4171,5 +4172,367 @@ revoke all on function public.plan_permite_logo() from public, anon;
 grant execute on function public.plan_permite_logo() to authenticated;
 revoke all on function public.asignar_plan(uuid, text, int, date, boolean, date) from public, anon, authenticated;
 grant execute on function public.asignar_plan(uuid, text, int, date, boolean, date) to service_role;
+
+-- ===== Fase 6: Inventario (delta idempotente) =====
+-- Regla del libro de movimientos: productos.cantidad SOLO cambia a través de public.mover_stock (fila
+-- bloqueada con for update, sin negativos), que en la misma transacción inserta un movimiento append-only
+-- con veterinario_id = auth.uid() y cantidad_resultante. Ninguna tabla acepta escritura directa de
+-- authenticated (sin policies de escritura y con los privilegios revocados). Fase 7 (facturación) reutiliza
+-- esta misma RPC ampliando p_origen ('factura') con create or replace.
+-- Decisión registrada: las 5 RPC son security definer con search_path fijado y chequeos explícitos de
+-- es_veterinario() + mi_clinica_id() dentro (como registrar_dosis), NO invoker (como crear_cita): un mover_stock
+-- con los permisos del llamador exigiría una policy de UPDATE sobre productos y cualquier veterinario podría cambiar `cantidad`
+-- por PostgREST sin dejar movimiento.
+
+create table if not exists public.productos (
+  id uuid primary key default gen_random_uuid(),
+  clinica_id uuid not null references public.clinicas(id) on delete cascade,
+  nombre text not null check (char_length(btrim(nombre)) between 1 and 80),
+  categoria text not null default 'medicamento' check (categoria in ('medicamento', 'insumo', 'alimento', 'otro')),
+  unidad text not null check (unidad in ('unidad', 'tableta', 'frasco', 'ml', 'dosis', 'caja', 'kg')),
+  cantidad int not null default 0 constraint productos_cantidad_no_negativa check (cantidad >= 0 and cantidad <= 1000000),
+  minimo int not null default 2 check (minimo between 0 and 1000000),
+  vencimiento date null,
+  precio_venta_cop int null check (precio_venta_cop is null or precio_venta_cop between 0 and 100000000),
+  costo_cop int null check (costo_cop is null or costo_cop between 0 and 100000000),
+  creado_por uuid not null references public.perfiles(id) on delete restrict,
+  archivado_at timestamptz null,
+  archivado_por uuid null references public.perfiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (id, clinica_id)
+);
+
+create table if not exists public.movimientos_inventario (
+  id uuid primary key default gen_random_uuid(),
+  clinica_id uuid not null,
+  producto_id uuid not null,
+  delta int not null check (delta <> 0),
+  cantidad_resultante int not null check (cantidad_resultante >= 0),
+  motivo text not null check (motivo in ('compra', 'uso', 'vencido_danado', 'conteo', 'alta', 'venta', 'dosis', 'deshacer')),
+  origen text not null default 'ajuste' check (origen in ('alta', 'ajuste', 'dosis', 'factura')),
+  ref_id uuid null,
+  nota text null check (nota is null or char_length(nota) <= 120),
+  deshace_id uuid null references public.movimientos_inventario(id),
+  veterinario_id uuid not null,
+  created_at timestamptz not null default now()
+);
+
+do $$ begin
+  alter table public.movimientos_inventario
+    add constraint movimientos_producto_misma_clinica_fkey foreign key (producto_id, clinica_id)
+    references public.productos(id, clinica_id) on delete cascade;
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter table public.movimientos_inventario
+    add constraint movimientos_veterinario_perfil_fkey foreign key (veterinario_id)
+    references public.perfiles(id) on delete restrict;
+exception when duplicate_object then null;
+end $$;
+
+create unique index if not exists productos_clinica_nombre_activo_uq
+  on public.productos (clinica_id, lower(btrim(nombre))) where archivado_at is null;
+create index if not exists productos_clinica_activos_idx
+  on public.productos (clinica_id) where archivado_at is null;
+create unique index if not exists movimientos_deshace_uq
+  on public.movimientos_inventario (deshace_id) where deshace_id is not null;
+create index if not exists movimientos_producto_fecha_idx
+  on public.movimientos_inventario (producto_id, created_at desc);
+create index if not exists movimientos_inventario_clinica_idx
+  on public.movimientos_inventario (clinica_id);
+
+drop trigger if exists productos_tocar_updated_at on public.productos;
+create trigger productos_tocar_updated_at before update on public.productos
+  for each row execute function public.tocar_updated_at();
+
+-- RLS: solo lectura para veterinarios de la clínica; ninguna policy ni privilegio de escritura.
+alter table public.productos enable row level security;
+alter table public.movimientos_inventario enable row level security;
+
+drop policy if exists productos_select on public.productos;
+create policy productos_select on public.productos for select to authenticated
+  using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+drop policy if exists movimientos_inventario_select on public.movimientos_inventario;
+create policy movimientos_inventario_select on public.movimientos_inventario for select to authenticated
+  using (public.es_veterinario() and clinica_id = public.mi_clinica_id());
+
+revoke all on table public.productos from anon;
+revoke all on table public.movimientos_inventario from anon;
+revoke insert, update, delete, truncate on table public.productos from authenticated;
+revoke insert, update, delete, truncate on table public.movimientos_inventario from authenticated;
+
+-- RPC: crear_producto (alta con stock inicial opcional).
+drop function if exists public.crear_producto(text, text, int, int, text, date, int, int);
+create or replace function public.crear_producto(
+  p_nombre text,
+  p_unidad text,
+  p_cantidad int,
+  p_minimo int default 2,
+  p_categoria text default 'medicamento',
+  p_vencimiento date default null,
+  p_precio_venta_cop int default null,
+  p_costo_cop int default null
+)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_id uuid;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede gestionar el inventario.' using errcode = 'insufficient_privilege';
+  end if;
+  if p_cantidad is null or p_cantidad < 0 or p_cantidad > 1000000 then
+    raise exception 'La cantidad debe estar entre 0 y 1.000.000.' using errcode = 'check_violation';
+  end if;
+
+  insert into public.productos
+    (clinica_id, nombre, categoria, unidad, cantidad, minimo, vencimiento, precio_venta_cop, costo_cop, creado_por)
+  values
+    (v_clinica, btrim(p_nombre), p_categoria, p_unidad, p_cantidad, p_minimo, p_vencimiento, p_precio_venta_cop, p_costo_cop, auth.uid())
+  returning id into v_id;
+
+  if p_cantidad > 0 then
+    insert into public.movimientos_inventario
+      (clinica_id, producto_id, delta, cantidad_resultante, motivo, origen, veterinario_id)
+    values
+      (v_clinica, v_id, p_cantidad, p_cantidad, 'alta', 'alta', auth.uid());
+  end if;
+
+  return v_id;
+end;
+$$;
+
+-- RPC: actualizar_producto (registro completo; unidad y cantidad nunca se tocan aquí).
+drop function if exists public.actualizar_producto(uuid, text, text, date, int, int, int);
+create or replace function public.actualizar_producto(
+  p_id uuid,
+  p_nombre text,
+  p_categoria text,
+  p_vencimiento date,
+  p_minimo int,
+  p_precio_venta_cop int,
+  p_costo_cop int
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_p public.productos%rowtype;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede gestionar el inventario.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_p from public.productos
+   where id = p_id and clinica_id = v_clinica
+   for update;
+  if not found or v_p.archivado_at is not null then
+    raise exception 'Producto no disponible.' using errcode = 'IN002';
+  end if;
+
+  if (p_minimo is distinct from v_p.minimo
+      or p_precio_venta_cop is distinct from v_p.precio_venta_cop
+      or p_costo_cop is distinct from v_p.costo_cop)
+     and not public.es_admin_clinica() then
+    raise exception 'Solo el administrador de la clínica puede cambiar el mínimo y los precios.' using errcode = 'insufficient_privilege';
+  end if;
+
+  update public.productos
+     set nombre = btrim(p_nombre),
+         categoria = p_categoria,
+         vencimiento = p_vencimiento,
+         minimo = p_minimo,
+         precio_venta_cop = p_precio_venta_cop,
+         costo_cop = p_costo_cop
+   where id = p_id and clinica_id = v_clinica;
+end;
+$$;
+
+-- RPC: archivar_producto (solo admin; nunca DELETE, el historial se conserva).
+drop function if exists public.archivar_producto(uuid);
+create or replace function public.archivar_producto(p_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_p public.productos%rowtype;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede gestionar el inventario.' using errcode = 'insufficient_privilege';
+  end if;
+  if not public.es_admin_clinica() then
+    raise exception 'Solo el administrador de la clínica puede archivar productos.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_p from public.productos
+   where id = p_id and clinica_id = v_clinica
+   for update;
+  if not found or v_p.archivado_at is not null then
+    raise exception 'Producto no disponible.' using errcode = 'IN002';
+  end if;
+
+  update public.productos
+     set archivado_at = now(), archivado_por = auth.uid()
+   where id = p_id and clinica_id = v_clinica;
+end;
+$$;
+
+-- RPC: mover_stock (única vía para cambiar la cantidad; fila bloqueada, sin negativos, libro append-only).
+drop function if exists public.mover_stock(uuid, int, text, text, uuid, text, uuid);
+create or replace function public.mover_stock(
+  p_producto_id uuid,
+  p_delta int,
+  p_motivo text,
+  p_origen text default 'ajuste',
+  p_ref_id uuid default null,
+  p_nota text default null,
+  p_deshace_id uuid default null
+)
+returns table (movimiento_id uuid, cantidad_nueva int)
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_p public.productos%rowtype;
+  v_o public.movimientos_inventario%rowtype;
+  v_nueva int;
+  v_mov uuid;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede gestionar el inventario.' using errcode = 'insufficient_privilege';
+  end if;
+
+  if p_delta is null or p_delta = 0 or abs(p_delta) > 100000 then
+    raise exception 'El ajuste debe ser distinto de cero y de máximo 100.000.' using errcode = 'check_violation';
+  end if;
+  if p_origen is distinct from 'ajuste' then
+    raise exception 'Origen de movimiento no permitido.' using errcode = 'check_violation';
+  end if;
+  if p_motivo is null or p_motivo not in ('compra', 'uso', 'vencido_danado', 'conteo', 'deshacer') then
+    raise exception 'Motivo de movimiento no permitido.' using errcode = 'check_violation';
+  end if;
+  if (p_motivo = 'deshacer') <> (p_deshace_id is not null) then
+    raise exception 'Deshacer requiere el movimiento original y solo se usa con el motivo deshacer.' using errcode = 'check_violation';
+  end if;
+
+  select * into v_p from public.productos
+   where id = p_producto_id and clinica_id = v_clinica
+   for update;
+  if not found or v_p.archivado_at is not null then
+    raise exception 'Producto no disponible.' using errcode = 'IN002';
+  end if;
+
+  if p_motivo = 'deshacer' then
+    select * into v_o from public.movimientos_inventario
+     where id = p_deshace_id and clinica_id = v_clinica and producto_id = p_producto_id;
+    if not found or v_o.motivo = 'deshacer' or p_delta <> -v_o.delta then
+      raise exception 'Solo se puede deshacer el inverso exacto de un ajuste del mismo producto.' using errcode = 'check_violation';
+    end if;
+    if exists (select 1 from public.movimientos_inventario m where m.deshace_id = p_deshace_id) then
+      raise exception 'Ese ajuste ya fue deshecho.' using errcode = 'IN003';
+    end if;
+  end if;
+
+  v_nueva := v_p.cantidad + p_delta;
+  if v_nueva < 0 then
+    raise exception 'No hay suficiente stock (quedan %).', v_p.cantidad using errcode = 'IN001';
+  end if;
+
+  update public.productos set cantidad = v_nueva where id = p_producto_id and clinica_id = v_clinica;
+
+  insert into public.movimientos_inventario
+    (clinica_id, producto_id, delta, cantidad_resultante, motivo, origen, ref_id, nota, deshace_id, veterinario_id)
+  values
+    (v_clinica, p_producto_id, p_delta, v_nueva, p_motivo, p_origen, p_ref_id, nullif(btrim(p_nota), ''), p_deshace_id, auth.uid())
+  returning id into v_mov;
+
+  return query select v_mov, v_nueva;
+end;
+$$;
+
+-- RPC: inventario_resumen (conteos de la tarjeta de Inicio; archivados no cuentan; borde cantidad = minimo no cuenta).
+drop function if exists public.inventario_resumen();
+create or replace function public.inventario_resumen()
+returns table (bajos int, por_vencer int, vencidos int)
+language plpgsql
+stable
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede ver el inventario.' using errcode = 'insufficient_privilege';
+  end if;
+
+  return query
+    select
+      (count(*) filter (where cantidad < minimo))::int,
+      (count(*) filter (where vencimiento between v_hoy and v_hoy + 30))::int,
+      (count(*) filter (where vencimiento < v_hoy))::int
+    from public.productos
+    where clinica_id = v_clinica and archivado_at is null;
+end;
+$$;
+
+-- Solo lectura (D-14): guard_solo_lectura también sobre inventario (corre bajo las RPC definer).
+drop trigger if exists guard_solo_lectura on public.productos;
+create trigger guard_solo_lectura before insert or update or delete on public.productos for each row execute function public.guard_solo_lectura();
+
+drop trigger if exists guard_solo_lectura on public.movimientos_inventario;
+create trigger guard_solo_lectura before insert or update or delete on public.movimientos_inventario for each row execute function public.guard_solo_lectura();
+
+-- Autoría visible: un autor de movimientos retirado sigue visible para su clínica (redefine la de Fase 5).
+create or replace function public.es_autor_en_mi_clinica(p_id uuid)
+returns boolean language sql stable security definer set search_path = public
+as $$ select
+  exists (
+    select 1 from public.citas c
+    where c.clinica_id = public.mi_clinica_id() and c.veterinario_id = p_id
+  )
+  or exists (
+    select 1 from public.consultas co
+    join public.mascotas m on m.id = co.mascota_id
+    where co.veterinario_id = p_id and m.clinica_id = public.mi_clinica_id()
+  )
+  or exists (
+    select 1 from public.dosis_aplicadas d where d.clinica_id = public.mi_clinica_id() and d.veterinario_id = p_id
+  )
+  or exists (
+    select 1 from public.movimientos_inventario m where m.clinica_id = public.mi_clinica_id() and m.veterinario_id = p_id
+  )
+$$;
+
+revoke all on function public.es_autor_en_mi_clinica(uuid) from public, anon;
+grant execute on function public.es_autor_en_mi_clinica(uuid) to authenticated;
+
+-- Grants de las 5 RPC (solo authenticated).
+revoke all on function public.crear_producto(text, text, int, int, text, date, int, int) from public, anon;
+grant execute on function public.crear_producto(text, text, int, int, text, date, int, int) to authenticated;
+revoke all on function public.actualizar_producto(uuid, text, text, date, int, int, int) from public, anon;
+grant execute on function public.actualizar_producto(uuid, text, text, date, int, int, int) to authenticated;
+revoke all on function public.archivar_producto(uuid) from public, anon;
+grant execute on function public.archivar_producto(uuid) to authenticated;
+revoke all on function public.mover_stock(uuid, int, text, text, uuid, text, uuid) from public, anon;
+grant execute on function public.mover_stock(uuid, int, text, text, uuid, text, uuid) to authenticated;
+revoke all on function public.inventario_resumen() from public, anon;
+grant execute on function public.inventario_resumen() to authenticated;
 
 notify pgrst, 'reload schema';

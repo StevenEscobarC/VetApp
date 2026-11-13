@@ -70,7 +70,7 @@ rm -f "$inv_body"
 
 # Fase 5: las 4 tablas de vacunación no conceden nada a anon (revoke all + RLS solo veterinarios).
 # Se acepta 401/403/404 (sin privilegio) o 200 con cuerpo [] -- nunca filas.
-for t in protocolos_vacunacion dosis_aplicadas vacuna_alertas carne_enlaces; do
+for t in protocolos_vacunacion dosis_aplicadas vacuna_alertas carne_enlaces productos movimientos_inventario; do
   col=id
   [ "$t" = "vacuna_alertas" ] && col=dosis_ref_id
   [ "$t" = "carne_enlaces" ] && col=mascota_id
@@ -106,9 +106,21 @@ else
   any_fail=1
 fi
 
-for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario generar_invitacion_clinica revocar_invitacion retirar_miembro cambiar_rol_miembro crear_mi_clinica unirse_a_clinica es_admin_clinica es_miembro_activo es_autor_en_mi_clinica consumir_invitacion protocolos_efectivos guardar_protocolo restablecer_protocolo desactivar_protocolo registrar_dosis anular_dosis previsualizar_dosis carne_de_mascota vacunas_pendientes vacunas_resumen vacunas_resumen_mascotas gestionar_alerta_vacuna obtener_o_crear_enlace_carne regenerar_enlace_carne carne_publico actualizar_clinica mi_plan puede_escribir plan_permite_logo asignar_plan _plan_efectivo; do
+for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario generar_invitacion_clinica revocar_invitacion retirar_miembro cambiar_rol_miembro crear_mi_clinica unirse_a_clinica es_admin_clinica es_miembro_activo es_autor_en_mi_clinica consumir_invitacion protocolos_efectivos guardar_protocolo restablecer_protocolo desactivar_protocolo registrar_dosis anular_dosis previsualizar_dosis carne_de_mascota vacunas_pendientes vacunas_resumen vacunas_resumen_mascotas gestionar_alerta_vacuna obtener_o_crear_enlace_carne regenerar_enlace_carne carne_publico actualizar_clinica mi_plan puede_escribir plan_permite_logo asignar_plan _plan_efectivo mover_stock crear_producto actualizar_producto archivar_producto inventario_resumen; do
   payload="{}"
   case "$rpc" in
+    mover_stock)
+      payload='{"p_producto_id":"00000000-0000-0000-0000-000000000000","p_delta":1,"p_motivo":"compra"}'
+      ;;
+    crear_producto)
+      payload='{"p_nombre":"Sonda","p_unidad":"unidad","p_cantidad":0}'
+      ;;
+    actualizar_producto)
+      payload='{"p_id":"00000000-0000-0000-0000-000000000000","p_nombre":"Sonda","p_categoria":"otro","p_vencimiento":null,"p_minimo":0,"p_precio_venta_cop":null,"p_costo_cop":null}'
+      ;;
+    archivar_producto)
+      payload='{"p_id":"00000000-0000-0000-0000-000000000000"}'
+      ;;
     revocar_invitacion|es_miembro_activo|es_autor_en_mi_clinica)
       payload='{"p_id":"00000000-0000-0000-0000-000000000000"}'
       ;;
@@ -274,6 +286,7 @@ probe_embed consultas '*, veterinario:perfiles!consultas_veterinario_perfil_fkey
 # Fase 5: el hint dosis_veterinario_perfil_fkey lo usa SupabaseVacunaRepository. anon no tiene
 # privilegios sobre dosis_aplicadas: [] o 401/403 es correcto; 400 significa hint equivocado.
 probe_embed dosis_aplicadas '*, veterinario:perfiles!dosis_veterinario_perfil_fkey(nombre, matricula, activo)' 'dosis veterinario embed' allow_denied
+probe_embed movimientos_inventario '*, autor:perfiles!movimientos_veterinario_perfil_fkey(nombre, activo)' 'movimientos autor embed' allow_denied
 
 # Fase 5 (D-26): el bucket clinica-logos es privado; la URL pública no debe servir nada.
 logo_code=$(curl -s -o /dev/null -w '%{http_code}' \
