@@ -138,35 +138,38 @@ class _Boton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activo = !bloqueado && !enVuelo;
-    final boton = SizedBox.square(
-      dimension: AppSpacing.touchTarget,
-      child: OutlinedButton(
-        key: botonKey,
-        onPressed: activo ? onTap : null,
-        style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.zero,
-          minimumSize: const Size.square(AppSpacing.touchTarget),
-          fixedSize: const Size.square(AppSpacing.touchTarget),
-          disabledBackgroundColor: bloqueado ? AppColors.surfaceMuted : null,
-          disabledForegroundColor: bloqueado ? AppColors.placeholder : null,
+    final boton = _AbsorbeToqueSiInactivo(
+      activo: activo,
+      child: SizedBox.square(
+        dimension: AppSpacing.touchTarget,
+        child: OutlinedButton(
+          key: botonKey,
+          onPressed: activo ? onTap : null,
+          style: OutlinedButton.styleFrom(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size.square(AppSpacing.touchTarget),
+            fixedSize: const Size.square(AppSpacing.touchTarget),
+            disabledBackgroundColor: bloqueado ? AppColors.surfaceMuted : null,
+            disabledForegroundColor: bloqueado ? AppColors.placeholder : null,
+          ),
+          child: cargando
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(iconoEscritura(puedeEscribir, icono), size: 20),
+                    if (etiqueta != null && puedeEscribir)
+                      Text(
+                        etiqueta!,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                  ],
+                ),
         ),
-        child: cargando
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(iconoEscritura(puedeEscribir, icono), size: 20),
-                  if (etiqueta != null && puedeEscribir)
-                    Text(
-                      etiqueta!,
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                ],
-              ),
       ),
     );
     if (!puedeEscribir) {
@@ -184,6 +187,26 @@ class _Boton extends StatelessWidget {
       onTap: activo ? onTap : null,
       excludeSemantics: true,
       child: boton,
+    );
+  }
+}
+
+/// Un botón deshabilitado no recoge el toque y este subiría a la fila entera,
+/// que abre el detalle. Con el botón inactivo (en vuelo, sin stock) el toque
+/// se queda aquí y no hace nada.
+class _AbsorbeToqueSiInactivo extends StatelessWidget {
+  const _AbsorbeToqueSiInactivo({required this.activo, required this.child});
+
+  final bool activo;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (activo) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: child,
     );
   }
 }
