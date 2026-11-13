@@ -159,3 +159,59 @@ const String _errorCopEntero = 'Usa pesos enteros, sin coma.';
   }
   return (valor: valor, error: null);
 }
+
+final RegExp _separadoresDocumento = RegExp(r'[.\s]');
+final RegExp _cedulaValida = RegExp(r'^[0-9]{5,12}$');
+final RegExp _nitValido = RegExp(r'^[0-9]{5,12}(-[0-9])?$');
+final RegExp _soloDigitos = RegExp(r'^[0-9]+$');
+
+/// Cédula del cliente como solo dígitos (D-24): quita puntos y espacios.
+/// Vacío devuelve `(valor: null, error: null)` (campo opcional). Debe tener
+/// 5 a 12 dígitos, igual que el CHECK `clientes_cedula_formato` del
+/// servidor, para que la UI rechace antes que la base de datos.
+({String? valor, String? error}) normalizarCedula(String texto) {
+  final t = texto.replaceAll(_separadoresDocumento, '');
+  if (t.isEmpty) return (valor: null, error: null);
+  if (!_cedulaValida.hasMatch(t)) {
+    return (
+      valor: null,
+      error: 'Revisa la cédula: debe tener entre 5 y 12 números.',
+    );
+  }
+  return (valor: t, error: null);
+}
+
+/// Cédula guardada como dígitos, mostrada con puntos de miles
+/// (`'1020304050'` -> `'1.020.304.050'`). Un texto que no es solo dígitos
+/// se devuelve tal cual (datos viejos sin normalizar).
+String formatearCedula(String digitos) {
+  if (!_soloDigitos.hasMatch(digitos)) return digitos;
+  return formatearMiles(int.parse(digitos));
+}
+
+/// NIT (o cédula) de la clínica (D-04): quita puntos y espacios y admite el
+/// dígito de verificación opcional tras un guion (`'900123456-7'`). Vacío
+/// devuelve `(valor: null, error: null)`. Refleja el CHECK
+/// `clinicas_nit_formato` del servidor.
+({String? valor, String? error}) normalizarNit(String texto) {
+  final t = texto.replaceAll(_separadoresDocumento, '');
+  if (t.isEmpty) return (valor: null, error: null);
+  if (!_nitValido.hasMatch(t)) {
+    return (
+      valor: null,
+      error:
+          'Usa solo números y, si es NIT, el guion del dígito de verificación.',
+    );
+  }
+  return (valor: t, error: null);
+}
+
+/// NIT guardado como `'900123456-7'`, mostrado como `'900.123.456-7'`:
+/// agrupa solo la parte numérica y conserva el dígito de verificación.
+String formatearNit(String nit) {
+  final guion = nit.indexOf('-');
+  final cuerpo = guion < 0 ? nit : nit.substring(0, guion);
+  final dv = guion < 0 ? '' : nit.substring(guion);
+  if (!_soloDigitos.hasMatch(cuerpo)) return nit;
+  return '${formatearMiles(int.parse(cuerpo))}$dv';
+}
