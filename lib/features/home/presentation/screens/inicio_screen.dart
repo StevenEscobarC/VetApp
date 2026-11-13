@@ -13,6 +13,7 @@ import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../../plan/presentation/widgets/plan_banner.dart';
 import '../../../vaccination/presentation/widgets/mascota_search_sheet.dart';
+import '../../../inventory/presentation/widgets/stock_bajo_card.dart';
 import '../../../vaccination/presentation/widgets/vacunas_pendientes_card.dart';
 
 /// Walking-skeleton Inicio: greets the signed-in vet by real `nombre` and
@@ -87,6 +88,7 @@ class InicioScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               const VacunasPendientesCard(),
+              const StockBajoCard(),
               const SizedBox(height: AppSpacing.md),
               // Solo lectura: conserva lugar, acento y tamaño; el ícono pasa a
               // candado y el toque abre la hoja explicativa en vez del

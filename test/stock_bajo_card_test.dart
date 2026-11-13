@@ -42,8 +42,8 @@ void main() {
     expect(find.text('Revisa qué hay que reabastecer.'), findsOneWidget);
     expect(find.byIcon(Icons.inventory_2_outlined), findsOneWidget);
     expect(
-      tester.getSemantics(find.byType(StockBajoCard)).label,
-      '3 productos con stock bajo. Ver inventario.',
+      find.bySemanticsLabel('3 productos con stock bajo. Ver inventario.'),
+      findsOneWidget,
     );
     expect(
       tester.getSize(find.byType(InkWell)).height,
