@@ -3,14 +3,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/data/clock_provider.dart';
+import 'package:vetapp/core/utils/compartir.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/inventory/domain/entities/producto.dart';
+import 'package:vetapp/features/inventory/presentation/inventario_routes.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/inventory/presentation/screens/inventario_screen.dart';
 import 'package:vetapp/features/inventory/presentation/widgets/insignia_stock.dart';
+import 'package:vetapp/features/inventory/presentation/widgets/resumen_bajos_strip.dart';
 import 'package:vetapp/features/plan/domain/mi_plan.dart';
 
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_compartir.dart';
 import 'helpers/fake_inventario.dart';
 import 'helpers/fake_plan.dart';
 import 'helpers/router_harness.dart';
@@ -54,10 +58,18 @@ final _vacuna = productoDePrueba(
   vencimiento: DateTime(2026, 11, 10),
 );
 
-Widget _app(FakeInventarioRepository repo, {MiPlan? plan}) => routerHarness(
+Widget _app(
+  FakeInventarioRepository repo, {
+  MiPlan? plan,
+  bool bajos = false,
+  FakeCompartidor? compartidor,
+}) => routerHarness(
   initialLocation: '/',
   routes: [
-    GoRoute(path: '/', builder: (_, _) => const InventarioScreen()),
+    GoRoute(
+      path: '/',
+      builder: (_, _) => InventarioScreen(filtroBajosInicial: bajos),
+    ),
     GoRoute(
       path: '/inventario/nuevo',
       builder: (_, _) => const Scaffold(body: Text('PANTALLA NUEVO')),
@@ -70,6 +82,7 @@ Widget _app(FakeInventarioRepository repo, {MiPlan? plan}) => routerHarness(
     ),
     inventarioRepositoryProvider.overrideWithValue(repo),
     clockProvider.overrideWithValue(() => _hoy),
+    if (compartidor != null) compartidorProvider.overrideWithValue(compartidor),
   ],
 );
 
@@ -77,11 +90,15 @@ Future<void> _abrir(
   WidgetTester tester,
   FakeInventarioRepository repo, {
   MiPlan? plan,
+  bool bajos = false,
+  FakeCompartidor? compartidor,
 }) async {
   tester.view.physicalSize = const Size(800, 3000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(_app(repo, plan: plan));
+  await tester.pumpWidget(
+    _app(repo, plan: plan, bajos: bajos, compartidor: compartidor),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -112,7 +129,14 @@ void main() {
 
     // Una sola insignia de cada tipo, con su icono.
     expect(find.text('Bajo'), findsOneWidget);
-    expect(find.byIcon(Icons.trending_down), findsOneWidget);
+    // La tira de bajos también usa trending_down: se acota a la insignia.
+    expect(
+      find.descendant(
+        of: find.byType(InsigniaStock),
+        matching: find.byIcon(Icons.trending_down),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Agotado'), findsOneWidget);
     expect(find.byIcon(Icons.error_outline), findsOneWidget);
     expect(find.text('Vencido'), findsOneWidget);
@@ -284,5 +308,207 @@ void main() {
     expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
     expect(find.text('PANTALLA NUEVO'), findsNothing);
     semantics.dispose();
+  });
+
+  group('filtros', () {
+    testWidgets('chips con conteos', (tester) async {
+      await _abrir(tester, _repoTodos());
+      expect(find.text('Todos'), findsOneWidget);
+      expect(find.text('Bajos (2)'), findsOneWidget);
+      expect(find.text('Vence pronto (2)'), findsOneWidget);
+    });
+
+    testWidgets('sin productos bajos el chip se lee solo Bajos', (
+      tester,
+    ) async {
+      await _abrir(
+        tester,
+        FakeInventarioRepository(productos: [_suero, _alcohol]),
+      );
+      expect(find.text('Bajos'), findsOneWidget);
+      expect(find.text('Vence pronto'), findsOneWidget);
+    });
+
+    testWidgets('Bajos solo cantidad < mínimo, A-Z, sin borde ni mínimo 0', (
+      tester,
+    ) async {
+      await _abrir(tester, _repoTodos());
+      await tester.tap(find.text('Bajos (2)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Amoxicilina'), findsOneWidget);
+      expect(find.text('Gasas'), findsOneWidget);
+      expect(find.text('Suero'), findsNothing);
+      expect(find.text('Alcohol'), findsNothing);
+      expect(find.text('Zinc'), findsNothing);
+      expect(
+        tester.getTopLeft(find.text('Amoxicilina')).dy,
+        lessThan(tester.getTopLeft(find.text('Gasas')).dy),
+      );
+    });
+
+    testWidgets('Vence pronto incluye vencidos y ordena por vencimiento', (
+      tester,
+    ) async {
+      await _abrir(tester, _repoTodos());
+      await tester.tap(find.text('Vence pronto (2)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Gasas'), findsNothing);
+      expect(
+        tester.getTopLeft(find.text('Zinc')).dy,
+        lessThan(tester.getTopLeft(find.text('Vacuna')).dy),
+      );
+    });
+
+    testWidgets('filtroBajosInicial arranca en Bajos', (tester) async {
+      await _abrir(tester, _repoTodos(), bajos: true);
+      expect(find.text('Amoxicilina'), findsOneWidget);
+      expect(find.text('Zinc'), findsNothing);
+    });
+
+    testWidgets('la ruta /inventario?filtro=bajos arranca en Bajos', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        routerHarness(
+          initialLocation: '/inventario?filtro=bajos',
+          routes: inventarioRoutes,
+          overrides: [
+            ...planOverrides(),
+            authProfileProvider.overrideWith(
+              () => FakeAuthProfileNotifier(profile: vetProfile),
+            ),
+            inventarioRepositoryProvider.overrideWithValue(_repoTodos()),
+            clockProvider.overrideWithValue(() => _hoy),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Zinc'), findsNothing);
+      expect(find.text('Gasas'), findsOneWidget);
+    });
+
+    testWidgets('tira: conteo, Ver bajos selecciona Bajos; se oculta con '
+        'búsqueda', (tester) async {
+      await _abrir(tester, _repoTodos());
+      expect(find.byType(ResumenBajosStrip), findsOneWidget);
+      expect(find.text('2 productos con stock bajo'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'a');
+      await tester.pumpAndSettle();
+      expect(find.byType(ResumenBajosStrip), findsNothing);
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pumpAndSettle();
+      expect(find.byType(ResumenBajosStrip), findsOneWidget);
+
+      await tester.tap(find.text('Ver bajos'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ResumenBajosStrip), findsNothing);
+      expect(find.text('Zinc'), findsNothing);
+      expect(find.text('Gasas'), findsOneWidget);
+    });
+
+    testWidgets('tira en singular', (tester) async {
+      await _abrir(
+        tester,
+        FakeInventarioRepository(productos: [_amoxi, _suero]),
+      );
+      expect(find.text('1 producto con stock bajo'), findsOneWidget);
+    });
+
+    testWidgets('sin bajos no hay tira', (tester) async {
+      await _abrir(
+        tester,
+        FakeInventarioRepository(productos: [_suero, _alcohol]),
+      );
+      expect(find.byType(ResumenBajosStrip), findsNothing);
+    });
+
+    testWidgets('estados vacíos de cada filtro', (tester) async {
+      await _abrir(
+        tester,
+        FakeInventarioRepository(productos: [_suero, _alcohol]),
+      );
+      await tester.tap(find.text('Bajos'));
+      await tester.pumpAndSettle();
+      expect(find.text('Nada por reabastecer'), findsOneWidget);
+      expect(
+        find.text('Todos tus productos están en el mínimo o por encima.'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+
+      await tester.tap(find.text('Vence pronto'));
+      await tester.pumpAndSettle();
+      expect(find.text('Nada por vencer pronto'), findsOneWidget);
+      expect(
+        find.text('Ningún producto vence en los próximos 30 días.'),
+        findsOneWidget,
+      );
+    });
+  });
+
+  group('pedido por WhatsApp', () {
+    testWidgets('en Bajos muestra botón y ayuda; compartir registra el texto', (
+      tester,
+    ) async {
+      final compartidor = FakeCompartidor();
+      await _abrir(tester, _repoTodos(), bajos: true, compartidor: compartidor);
+      expect(find.text('Pedir por WhatsApp'), findsOneWidget);
+      expect(
+        find.text('Pedimos lo necesario para llegar al doble del mínimo.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Pedir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(compartidor.compartidos, [
+        'Pedido de Clínica Patitas:\n'
+            '- Amoxicilina: pedir 3 frascos (quedan 1)\n'
+            '- Gasas: pedir 6 cajas (quedan 0)',
+      ]);
+    });
+
+    testWidgets('un error al compartir muestra el snackbar', (tester) async {
+      final compartidor = FakeCompartidor(error: Exception('sin hoja'));
+      await _abrir(tester, _repoTodos(), bajos: true, compartidor: compartidor);
+      await tester.tap(find.text('Pedir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No pudimos abrir el menú de compartir.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('no aparece en Todos ni en Bajos vacío', (tester) async {
+      await _abrir(tester, _repoTodos());
+      expect(find.text('Pedir por WhatsApp'), findsNothing);
+    });
+
+    testWidgets('Bajos vacío no ofrece pedido', (tester) async {
+      await _abrir(
+        tester,
+        FakeInventarioRepository(productos: [_suero]),
+        bajos: true,
+      );
+      expect(find.text('Nada por reabastecer'), findsOneWidget);
+      expect(find.text('Pedir por WhatsApp'), findsNothing);
+    });
+
+    testWidgets('funciona en solo lectura sin candado', (tester) async {
+      final compartidor = FakeCompartidor();
+      await _abrir(
+        tester,
+        _repoTodos(),
+        plan: planSoloLectura,
+        bajos: true,
+        compartidor: compartidor,
+      );
+      await tester.tap(find.text('Pedir por WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(compartidor.compartidos, hasLength(1));
+      expect(find.text('Tu cuenta está en solo lectura'), findsNothing);
+    });
   });
 }
