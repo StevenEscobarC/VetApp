@@ -48,12 +48,12 @@ created: 2026-10-31
 | 06-02-T3 | 06-02 | 1 | INV-01..03 | T-06-14 | Acciones invalidan lista + resumen + historial (G4); 9 overrides | unit + suite | `flutter test test/inventario_invalidacion_test.dart` + `flutter test` -> `CONTRATO_INV_OK` | ✅ | ✅ green |
 | 06-03-T1 | 06-03 | 1 | INV-01 | T-06-16, T-06-17 | COP entero `$ 85.000`, rechazo de coma; fecha futura solo con `permitirFuturo` | unit | `flutter test test/formato_test.dart` -> `FORMATO_COP_OK` | ✅ | ✅ green |
 | 06-03-T2 | 06-03 | 1 | INV-01, INV-03 | — | AppTextField extendido sin cambiar defaults | widget + suite | `flutter test test/app_text_field_test.dart` + `flutter test` -> `APP_TEXT_FIELD_OK` | ✅ | ✅ green |
-| 06-04-T1 | 06-04 | 2 | INV-01..03 | T-06-18 | Revisión estática previa al apply | grep (SQL) | -> `PREAPPLY_F6_OK` | ✅ | ⬜ pending |
-| 06-04-T2 | 06-04 | 2 | INV-01..03 | T-06-18, T-06-19, T-06-21 | Delta en vivo; smoke completo en la nube | manual (usuario) | conteo -> `SMOKE_258_READY`; literal `RLS SMOKE: PASS (258 checks)` pegado por el usuario | ✅ | ⬜ pendiente del usuario |
-| 06-04-T3 | 06-04 | 2 | INV-01..03 | T-06-10, T-06-20 | Superficie anon denegada en vivo; embed resuelve | script (nube) | `verify_live_schema.sh` -> `LIVE_F6_OK` | ✅ | ⬜ pending |
-| 06-05-T1 | 06-05 | 2 | INV-01, INV-02 | T-06-23 | Lista con insignias icono+texto, búsqueda, estados; FAB con candado en solo lectura | widget | `flutter test test/inventario_screen_test.dart` -> `LISTA_INV_OK` | ❌ W0 | ⬜ pending |
-| 06-05-T2 | 06-05 | 2 | INV-01 | T-06-22, T-06-24 | Alta de un paso, validaciones, 23505 inline, LP004 conserva datos | widget | `flutter test test/producto_form_screen_test.dart` -> `FORM_ALTA_OK` | ❌ W0 | ⬜ pending |
-| 06-05-T3 | 06-05 | 2 | INV-01 | T-06-25 | Más -> /inventario -> /nuevo sin duplicar el shell (G5) | widget/router + suite | `flutter test test/router_inventario_cross_shell_test.dart` + `flutter test` -> `SLICE_ALTA_OK` | ❌ W0 | ⬜ pending |
+| 06-04-T1 | 06-04 | 2 | INV-01..03 | T-06-18 | Revisión estática previa al apply | grep (SQL) | -> `PREAPPLY_F6_OK` | ✅ | ✅ green |
+| 06-04-T2 | 06-04 | 2 | INV-01..03 | T-06-18, T-06-19, T-06-21 | Delta en vivo; smoke completo en la nube | manual (usuario) | conteo -> `SMOKE_258_READY`; literal `RLS SMOKE: PASS (258 checks)` pegado por el usuario | ✅ | ⬜ pendiente del usuario (delta aplicado 2026-11-12, `apply_migration fase_06_inventario` success; smoke por pegar) |
+| 06-04-T3 | 06-04 | 2 | INV-01..03 | T-06-10, T-06-20 | Superficie anon denegada en vivo; embed resuelve | script (nube) | `verify_live_schema.sh` -> `LIVE_F6_OK` | ✅ | ✅ green |
+| 06-05-T1 | 06-05 | 2 | INV-01, INV-02 | T-06-23 | Lista con insignias icono+texto, búsqueda, estados; FAB con candado en solo lectura | widget | `flutter test test/inventario_screen_test.dart` -> `LISTA_INV_OK` | ✅ | ✅ green |
+| 06-05-T2 | 06-05 | 2 | INV-01 | T-06-22, T-06-24 | Alta de un paso, validaciones, 23505 inline, LP004 conserva datos | widget | `flutter test test/producto_form_screen_test.dart` -> `FORM_ALTA_OK` | ✅ | ✅ green |
+| 06-05-T3 | 06-05 | 2 | INV-01 | T-06-25 | Más -> /inventario -> /nuevo sin duplicar el shell (G5) | widget/router + suite | `flutter test test/router_inventario_cross_shell_test.dart` + `flutter test` -> `SLICE_ALTA_OK` | ✅ | ✅ green |
 | 06-06-T1 | 06-06 | 3 | INV-03 | T-06-26..29 | −1 inmediato, Deshacer = inverso, fila bloqueada en vuelo, candado, errores sin conexión/IN001/IN002 | widget | `flutter test test/ajuste_rapido_test.dart` -> `AJUSTE_RAPIDO_OK` | ❌ W0 | ⬜ pending |
 | 06-06-T2 | 06-06 | 3 | INV-03 | T-06-26, T-06-27 | Hoja de ajuste: motivos, vista previa, confirmación solo > 10, Deshacer solo <= 10, errores inline | widget + suite | `flutter test test/ajuste_sheet_test.dart` + `flutter test` -> `AJUSTE_SHEET_OK` | ❌ W0 | ⬜ pending |
 | 06-07-T1 | 06-07 | 3 | INV-02 | — | Filtros Todos/Bajos/Vence pronto, `?filtro=bajos`, franja | widget | `flutter test test/inventario_screen_test.dart` -> `FILTROS_INV_OK` | ✅ (extender) | ⬜ pending |
@@ -91,6 +91,9 @@ created: 2026-10-31
 | 06-03 | `flutter analyze` + 2 archivos (2026-11-12) | `FORMATO_COP_OK` · `APP_TEXT_FIELD_OK` (rojo visto antes del verde) | formato 35 (casos existentes sin cambios), app_text_field 3 |
 | Ola 1 (QA) | — | QA: no aplica — 06-01..03 no tienen pantallas (contrato SQL, contrato Dart y helpers); la UAT en emulador es de 06-09 | — |
 | Ola 1 | Suite completa sobre `master` tras fusionar (`f60f192`, 2026-11-12) | `flutter analyze` → `No issues found!` · `flutter test` → `+911: All tests passed!` (856 base + 43 de 06-02 + 12 de 06-03) | — |
+| 06-04 | Revisión previa + `apply_migration fase_06_inventario` (MCP, con OK del usuario) + 3 consultas de solo lectura + sonda anon (2026-11-12) | `PREAPPLY_F6_OK` (sin cambios) · primer intento con timeout de conexión, reintento `success` · productos 0, movimientos 0, guard en 9 tablas · `LIVE_F6_OK` / `LIVE_SCHEMA_OK` · smoke `PASS (258 checks)` ⬜ pendiente del usuario | — (SQL en vivo; detalle en 06-04-SUMMARY) |
+| 06-05 | `flutter analyze` + 3 archivos nuevos, commits en rojo antes de cada implementación (2026-11-12, fusionado en `703fe84`) | `LISTA_INV_OK` · `FORM_ALTA_OK` · `SLICE_ALTA_OK` · QA en emulador → 06-09 (F1, F2) | inventario_screen 12, producto_form_screen 12, router_inventario_cross_shell 3; `widget_test` ajustado con `ensureVisible` (sin debilitar) |
+| Ola 2 | Suite completa sobre `master` tras fusionar 06-05 (`703fe84`, 2026-11-12) | `flutter analyze` → `No issues found!` · `flutter test` → `+938: All tests passed!` | — |
 
 ---
 

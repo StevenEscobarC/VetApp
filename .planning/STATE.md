@@ -5,7 +5,7 @@ milestone_name: milestone
 status: executing
 stopped_at: "Phase 6 wave 1 done (06-01..03) — next: 06-04 live apply (needs user OK) and 06-05"
 last_updated: "2026-11-12T00:00:00.000Z"
-last_activity: 2026-11-12 -- Phase 6 wave 1 executed (3/9 plans)
+last_activity: 2026-11-12 -- Phase 6 wave 2: 06-04 applied live (smoke pending), 06-05 done
 progress:
   total_phases: 11
   completed_phases: 7
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 06 (inventario) — EXECUTING
-Plan: 3 of 9 (ola 1 completa: 06-01, 06-02, 06-03)
+Plan: 4 of 9 (ola 1 completa; ola 2: 06-05 hecho, 06-04 aplicado en vivo, smoke pendiente del usuario)
 Status: Ola 2 pendiente: 06-04 [BLOCKING] aplicar el esquema en vivo con OK del usuario y pegar el smoke de 258 checks; 06-05 primera rebanada de app
 Last activity: 2026-11-12 -- Phase 6 wave 1 executed (3/9 plans)
 

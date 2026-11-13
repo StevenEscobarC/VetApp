@@ -338,7 +338,7 @@ Plans:
   2. El veterinario recibe una alerta cuando un producto cae por debajo del umbral de stock mínimo
   3. El veterinario puede ajustar manualmente la cantidad de un producto
 
-**Plans:** 3/9 plans executed
+**Plans:** 4/9 plans executed
 
 Plans:
 **Wave 1**
@@ -350,7 +350,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [ ] 06-04-PLAN.md — [BLOCKING] Aplicar el delta Fase 6 en vivo (MCP con OK) y pegar el smoke (258 checks) + sonda
-- [ ] 06-05-PLAN.md — Más > Inventario: lista con insignias y búsqueda, Nuevo producto en un paso, rutas de primer nivel
+- [x] 06-05-PLAN.md — Más > Inventario: lista con insignias y búsqueda, Nuevo producto en un paso, rutas de primer nivel
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
