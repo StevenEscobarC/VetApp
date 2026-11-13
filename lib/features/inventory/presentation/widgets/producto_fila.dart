@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../domain/entities/producto.dart';
+import '../inventario_routes.dart';
 import 'ajuste_rapido_botones.dart';
 import 'insignia_stock.dart';
 
@@ -52,6 +54,7 @@ class ProductoFila extends StatelessWidget {
     // La etiqueta resume nombre, cantidad e insignias; los botones de ajuste
     // quedan fuera para exponerse como acciones separadas.
     return AppCard(
+      onTap: () => context.push(rutaProducto(p.id)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

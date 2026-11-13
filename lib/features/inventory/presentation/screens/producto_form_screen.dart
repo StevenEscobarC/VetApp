@@ -23,7 +23,10 @@ const String _kErrorGenerico =
 /// inicial y mínimo; categoría, vencimiento y precios van en "Agregar más
 /// detalles". La cantidad nueva la decide el servidor vía `crear_producto`.
 class ProductoFormScreen extends ConsumerStatefulWidget {
-  const ProductoFormScreen({super.key});
+  const ProductoFormScreen({super.key, this.productoId});
+
+  /// Con id edita ese producto; sin id crea uno nuevo.
+  final String? productoId;
 
   @override
   ConsumerState<ProductoFormScreen> createState() => _ProductoFormScreenState();

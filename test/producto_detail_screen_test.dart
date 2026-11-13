@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/data/clock_provider.dart';
 import 'package:vetapp/core/theme/app_colors.dart';
+import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/inventory/domain/entities/movimiento_stock.dart';
 import 'package:vetapp/features/inventory/domain/entities/producto.dart';
@@ -131,9 +132,7 @@ void main() {
   testWidgets('las filas opcionales solo aparecen si aplican', (tester) async {
     await _abrir(
       tester,
-      FakeInventarioRepository(
-        productos: [productoDePrueba(cantidad: 5)],
-      ),
+      FakeInventarioRepository(productos: [productoDePrueba(cantidad: 5)]),
     );
     expect(find.text('Categoría'), findsOneWidget);
     expect(find.text('Vencimiento'), findsNothing);
@@ -191,8 +190,10 @@ void main() {
       final m = _movs(repo).single.args;
       expect(m['delta'], -1);
       expect(m['motivo'], MotivoMovimiento.uso);
-      expect(find.text('Descontaste 1 frasco de Amoxicilina. Ahora hay 4.'),
-          findsOneWidget);
+      expect(
+        find.text('Descontaste 1 frasco de Amoxicilina. Ahora hay 4.'),
+        findsOneWidget,
+      );
       expect(find.text('Deshacer'), findsOneWidget);
       // La cantidad mostrada es la del servidor.
       expect(find.text('4'), findsOneWidget);
@@ -402,7 +403,7 @@ void main() {
       productos: [_amoxicilina()],
       movimientos: [_mov(1)],
     );
-    await _abrir(tester, repo, plan: planSoloLectura);
+    await _abrir(tester, repo, plan: planSoloLectura, perfil: vetColegaProfile);
 
     expect(find.byIcon(Icons.lock_outline), findsNWidgets(4));
     expect(find.byIcon(Icons.edit_outlined), findsNothing);
