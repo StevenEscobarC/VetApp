@@ -12,6 +12,7 @@ Derivado de `supabase/schema.sql` (la fuente de verdad). Si algo aquí difiere d
 6. citas, cita_mascotas
 7. RLS en resumen
 8. Planeado (sin columnas definidas)
+9. productos y movimientos_inventario (Fase 6)
 
 ## 1. Convenciones generales
 
@@ -102,8 +103,24 @@ Historia clínica. Columnas: `id`, `mascota_id` (cascade), `veterinario_id` (FK 
 No existen tablas ni columnas para esto en `schema.sql`; no inventes columnas al diseñarlas, defínelas en la fase correspondiente con `vetapp-supabase`.
 
 - Vacunas y desparasitación: Fase 5.
-- Inventario/productos con stock mínimo: Fase 6.
 - Facturas/cotizaciones con ítems y descuento de inventario: Fase 7.
 - Directorio de veterinarias, reclamo del código de vinculación, citas `solicitada` y reseñas (estrellas + comentario, una por cliente y clínica): Fase 9.
 
-Las entidades Dart de `lib/features/{vaccination,inventory,billing}/domain/entities/` (`vacuna.dart`, `producto.dart`, `factura.dart`) son stubs del scaffolding original y **todavía no se mapean a ninguna tabla**.
+Las entidades Dart de `lib/features/billing/domain/entities/` (`factura.dart`) son stubs del scaffolding original y **todavía no se mapean a ninguna tabla**.
+
+## 9. productos y movimientos_inventario (Fase 6)
+
+**productos**: `clinica_id`, `nombre` (1-80, único por clínica entre activos, sin distinguir mayúsculas), `categoria` (`medicamento`/`insumo`/`alimento`/`otro`), `unidad` (`unidad`/`tableta`/`frasco`/`ml`/`dosis`/`caja`/`kg`), `cantidad int` (0..1.000.000, nunca negativa), `minimo int` (default 2), `vencimiento date?`, `precio_venta_cop int?`, `costo_cop int?` (enteros COP, sin decimales), `creado_por`, `archivado_at`/`archivado_por` (archivar = borrado lógico). [DB]
+
+- "Bajo" significa `cantidad < minimo`, estricto; nunca `<=`. [App + RPC `inventario_resumen`]
+- `cantidad` solo cambia vía `mover_stock`; `actualizar_producto` no la toca. [DB]
+- `minimo`, precios y archivar son solo del admin de la clínica (`es_admin_clinica()`). [DB]
+
+**movimientos_inventario** (append-only): `producto_id`, `delta` (≠ 0), `cantidad_resultante` (≥ 0), `motivo` (`compra`/`uso`/`vencido_danado`/`conteo`/`alta`/`venta`/`dosis`/`deshacer`), `origen` (`alta`/`ajuste`/`dosis`/`factura`; `ref_id` reservado para las fases 5/7), `nota?` (≤ 120), `deshace_id?` (único: un movimiento se deshace una sola vez), `veterinario_id`. Sin update ni delete para nadie. [DB]
+
+RPCs (únicas vías de escritura; el cliente nunca hace insert/update/delete sobre estas tablas): `crear_producto`, `actualizar_producto`, `archivar_producto`, `mover_stock` y `inventario_resumen`.
+
+- `mover_stock` bloquea la fila con `for update` y rechaza un stock negativo.
+- Códigos de error: `IN001` (stock insuficiente), `IN002` (producto no disponible o archivado) e `IN003` (ya deshecho). La capa de datos los traduce a `InventarioFailure`.
+- `guard_solo_lectura` (plan vencido) cubre ambas tablas, que suman 9 tablas protegidas en total.
+
