@@ -5257,7 +5257,7 @@ begin
     end loop;
     if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'clientes' and column_name = 'cedula')
        or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'clinicas' and column_name = 'nit') then
-      failures := failures || 'T1 faltan las columnas clientes.cedula o clinicas.nit';
+      failures := failures || 'T1 faltan las columnas clientes.cedula o clinicas.nit'::text;
     end if;
   exception when others then
     failures := failures || ('T1 error inesperado: ' || sqlerrm);
@@ -5284,7 +5284,7 @@ begin
       end loop;
     end loop;
     if to_regclass('public.cobro_contadores') is not null and has_table_privilege('authenticated', 'public.cobro_contadores', 'SELECT') then
-      failures := failures || 'T2 authenticated tiene SELECT sobre cobro_contadores';
+      failures := failures || 'T2 authenticated tiene SELECT sobre cobro_contadores'::text;
     end if;
     foreach t_t in array array[
       'public.crear_cuenta_cobro(uuid,uuid,jsonb,uuid,uuid,uuid,uuid)',
@@ -5432,7 +5432,7 @@ begin
     begin
       perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli,
         jsonb_build_array(jsonb_build_object('tipo', 'producto', 'producto_id', t_p1, 'cantidad', 50, 'precio_unitario_cop', 85000)));
-      failures := failures || 'T6 una CC con 50 unidades y stock 7 debía fallar con IN001';
+      failures := failures || 'T6 una CC con 50 unidades y stock 7 debía fallar con IN001'::text;
     exception
       when sqlstate 'IN001' then
         get stacked diagnostics t_sql = pg_exception_detail;
@@ -5453,7 +5453,7 @@ begin
        or (select count(*) from public.cobro_items where clinica_id = t_c) <> t_n2
        or (select count(*) from public.movimientos_inventario where producto_id = t_p1) <> t_n3
        or (select cantidad from public.productos where id = t_p1) is distinct from t_n4 then
-      failures := failures || 'T6 el rechazo por stock dejó encabezado, ítems, movimientos o cambió la cantidad';
+      failures := failures || 'T6 el rechazo por stock dejó encabezado, ítems, movimientos o cambió la cantidad'::text;
     end if;
   exception when others then
     failures := failures || ('T6 error inesperado: ' || sqlerrm);
@@ -5495,7 +5495,7 @@ begin
     if (select cantidad from public.productos where id = t_p1) is distinct from 7
        or (select count(*) from public.movimientos_inventario where ref_id = t_cobro) <> 2
        or (select count(*) from public.cobros where clinica_id = t_c) <> t_n then
-      failures := failures || 'T8 el reintento movió stock otra vez o creó otra CC';
+      failures := failures || 'T8 el reintento movió stock otra vez o creó otra CC'::text;
     end if;
   exception when others then
     failures := failures || ('T8 error inesperado: ' || sqlerrm);
@@ -5523,7 +5523,7 @@ begin
     perform set_config('request.jwt.claims', '', true);
     if (select count(*) from public.cobros where clinica_id = t_c) <> t_n
        or exists (select 1 from public.movimientos_inventario where producto_id in (t_p_arch, t_p_otro)) then
-      failures := failures || 'T9 el rechazo IN002 dejó una CC o un movimiento';
+      failures := failures || 'T9 el rechazo IN002 dejó una CC o un movimiento'::text;
     end if;
   exception when others then
     failures := failures || ('T9 error inesperado: ' || sqlerrm);
@@ -5557,7 +5557,7 @@ begin
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
     if (select count(*) from public.cobros where clinica_id = t_c) <> t_n then
-      failures := failures || 'T10 un id ajeno dejó una CC creada';
+      failures := failures || 'T10 un id ajeno dejó una CC creada'::text;
     end if;
   exception when others then
     failures := failures || ('T10 error inesperado: ' || sqlerrm);
@@ -5595,7 +5595,7 @@ begin
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
     if (select count(*) from public.cobros where clinica_id = t_c) <> t_n then
-      failures := failures || 'T11 una línea inválida dejó una CC creada';
+      failures := failures || 'T11 una línea inválida dejó una CC creada'::text;
     end if;
   exception when others then
     failures := failures || ('T11 error inesperado: ' || sqlerrm);
@@ -5687,7 +5687,7 @@ begin
     perform set_config('request.jwt.claims', '', true);
     if (select total_cop from public.cobros where id = t_cobro) is distinct from t_n2
        or (select count(*) from public.cobro_items where cobro_id = t_cobro) <> 4 then
-      failures := failures || 'T14 una escritura directa cambió la CC o sus ítems';
+      failures := failures || 'T14 una escritura directa cambió la CC o sus ítems'::text;
     end if;
   exception when others then
     failures := failures || ('T14 error inesperado: ' || sqlerrm);
@@ -5733,7 +5733,7 @@ begin
     perform public.marcar_cobro_pagado(t_cobro2, 'efectivo');
     begin
       perform public.marcar_cobro_pagado(t_cot2, 'efectivo');
-      failures := failures || 'T15 pagar una cotización debía fallar con BC001';
+      failures := failures || 'T15 pagar una cotización debía fallar con BC001'::text;
     exception
       when sqlstate 'BC001' then null;
       when others then failures := failures || ('T15 esperaba BC001 y llegó ' || sqlstate || ': ' || sqlerrm);
@@ -5741,7 +5741,7 @@ begin
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
     if (select metodo_pago from public.cobros where id = t_cobro2) is distinct from 'nequi' then
-      failures := failures || 'T15 el segundo marcar pagada cambió el método (debía ser idempotente)';
+      failures := failures || 'T15 el segundo marcar pagada cambió el método (debía ser idempotente)'::text;
     end if;
   exception when others then
     failures := failures || ('T15 error inesperado: ' || sqlerrm);
@@ -5756,7 +5756,7 @@ begin
     perform set_config('role', 'authenticated', true);
     begin
       perform public.anular_cobro(t_cobro, 'Error de precio');
-      failures := failures || 'T16 un colega no autor ni admin pudo anular';
+      failures := failures || 'T16 un colega no autor ni admin pudo anular'::text;
     exception
       when insufficient_privilege then null;
       when others then failures := failures || ('T16 esperaba insufficient_privilege y llegó ' || sqlstate || ': ' || sqlerrm);
@@ -5764,13 +5764,13 @@ begin
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
     if (select estado from public.cobros where id = t_cobro) is distinct from 'pendiente' then
-      failures := failures || 'T16 el intento del colega cambió el estado';
+      failures := failures || 'T16 el intento del colega cambió el estado'::text;
     end if;
     perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
     perform set_config('role', 'authenticated', true);
     begin
       perform public.anular_cobro(t_cobro, '  ab ');
-      failures := failures || 'T16 un motivo de 2 caracteres debía fallar con check_violation';
+      failures := failures || 'T16 un motivo de 2 caracteres debía fallar con check_violation'::text;
     exception
       when check_violation then null;
       when others then failures := failures || ('T16 esperaba check_violation y llegó ' || sqlstate || ': ' || sqlerrm);
@@ -5808,7 +5808,7 @@ begin
     end if;
     if (select cantidad from public.productos where id = t_p1) is distinct from 10
        or (select cantidad from public.productos where id = t_p2) is distinct from 5 then
-      failures := failures || 'T17 el stock no volvió a 10 y 5';
+      failures := failures || 'T17 el stock no volvió a 10 y 5'::text;
     end if;
     select count(*) into t_n from public.movimientos_inventario d
       join public.movimientos_inventario v on v.id = d.deshace_id
@@ -5832,7 +5832,7 @@ begin
     perform set_config('role', 'authenticated', true);
     begin
       perform public.anular_cobro(t_cobro, 'Otra vez');
-      failures := failures || 'T18 anular dos veces debía fallar con BC001';
+      failures := failures || 'T18 anular dos veces debía fallar con BC001'::text;
     exception
       when sqlstate 'BC001' then null;
       when others then failures := failures || ('T18 esperaba BC001 y llegó ' || sqlstate || ': ' || sqlerrm);
@@ -5846,10 +5846,10 @@ begin
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
     if (select count(*) from public.movimientos_inventario where ref_id = t_cobro) <> t_n2 then
-      failures := failures || 'T18 la doble anulación dejó movimientos nuevos';
+      failures := failures || 'T18 la doble anulación dejó movimientos nuevos'::text;
     end if;
     if (select cantidad from public.productos where id = t_p2) is distinct from 3 then
-      failures := failures || 'T18 la CC 3 no descontó 2 gasas';
+      failures := failures || 'T18 la CC 3 no descontó 2 gasas'::text;
     end if;
     update public.productos set archivado_at = now(), archivado_por = t_vet_admin where id = t_p2;
     perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
@@ -5859,7 +5859,7 @@ begin
     perform set_config('request.jwt.claims', '', true);
     if (select cantidad from public.productos where id = t_p2) is distinct from 5
        or (select estado from public.cobros where id = t_cobro3) is distinct from 'anulada' then
-      failures := failures || 'T18 anular con el producto archivado no devolvió el stock';
+      failures := failures || 'T18 anular con el producto archivado no devolvió el stock'::text;
     end if;
   exception when others then
     failures := failures || ('T18 error inesperado: ' || sqlerrm);
@@ -5887,7 +5887,7 @@ begin
     begin
       perform * from public.crear_cotizacion(gen_random_uuid(), t_cli,
         jsonb_build_array(jsonb_build_object('tipo', 'producto', 'producto_id', t_p_arch, 'cantidad', 1, 'precio_unitario_cop', 1000)));
-      failures := failures || 'T19 una cotización con un producto archivado debía fallar con IN002';
+      failures := failures || 'T19 una cotización con un producto archivado debía fallar con IN002'::text;
     exception
       when sqlstate 'IN002' then null;
       when others then failures := failures || ('T19 esperaba IN002 y llegó ' || sqlstate || ': ' || sqlerrm);
@@ -5908,10 +5908,10 @@ begin
     if exists (select 1 from public.movimientos_inventario where ref_id = t_cot3)
        or (select count(*) from public.movimientos_inventario where producto_id = t_p1) <> t_n2
        or (select cantidad from public.productos where id = t_p1) is distinct from t_n3 then
-      failures := failures || 'T19 la cotización movió stock';
+      failures := failures || 'T19 la cotización movió stock'::text;
     end if;
     if (select count(*) from public.cobros where creado_por = t_vet_q and tipo = 'cotizacion') <> 1 then
-      failures := failures || 'T19 falta la cotización del cotizador';
+      failures := failures || 'T19 falta la cotización del cotizador'::text;
     end if;
   exception when others then
     failures := failures || ('T19 error inesperado: ' || sqlerrm);
@@ -5946,18 +5946,18 @@ begin
     end if;
     begin
       perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli, t_json, t_m, null, null, t_cot);
-      failures := failures || 'T20 convertir dos veces debía fallar con BC002';
+      failures := failures || 'T20 convertir dos veces debía fallar con BC002'::text;
     exception
       when sqlstate 'BC002' then null;
       when others then failures := failures || ('T20 esperaba BC002 y llegó ' || sqlstate || ': ' || sqlerrm);
     end;
     select * into t_row from public.crear_cuenta_cobro(t_clave2, t_cli, t_json, t_m, null, null, t_cot);
     if t_row.id is distinct from t_cc_conv or t_row.ya_existia is distinct from true then
-      failures := failures || 'T20 el reintento de la conversión no devolvió la misma CC con ya_existia';
+      failures := failures || 'T20 el reintento de la conversión no devolvió la misma CC con ya_existia'::text;
     end if;
     begin
       perform public.anular_cobro(t_cot, 'Ya no aplica');
-      failures := failures || 'T20 anular una cotización convertida debía fallar con BC002';
+      failures := failures || 'T20 anular una cotización convertida debía fallar con BC002'::text;
     exception
       when sqlstate 'BC002' then null;
       when others then failures := failures || ('T20 esperaba BC002 y llegó ' || sqlstate || ': ' || sqlerrm);
@@ -5974,11 +5974,11 @@ begin
       failures := failures || format('T20 la cotización quedó en %s / %s', t_row.estado, t_row.convertida_en_id);
     end if;
     if (select cantidad from public.productos where id = t_p1) is distinct from t_n2 - 1 then
-      failures := failures || 'T20 la conversión no descontó 1 unidad (o descontó de más en el reintento)';
+      failures := failures || 'T20 la conversión no descontó 1 unidad (o descontó de más en el reintento)'::text;
     end if;
     if (select estado from public.cobros where id = t_cot3) is distinct from 'anulada'
        or exists (select 1 from public.movimientos_inventario where ref_id = t_cot3) then
-      failures := failures || 'T20 anular una cotización abierta falló o creó movimientos';
+      failures := failures || 'T20 anular una cotización abierta falló o creó movimientos'::text;
     end if;
   exception when others then
     failures := failures || ('T20 error inesperado: ' || sqlerrm);
@@ -5996,7 +5996,7 @@ begin
     t_cc_cita := t_row.id;
     begin
       perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli, t_json, null, t_cita);
-      failures := failures || 'T21 cobrar dos veces la misma cita debía fallar con BC003';
+      failures := failures || 'T21 cobrar dos veces la misma cita debía fallar con BC003'::text;
     exception
       when sqlstate 'BC003' then
         get stacked diagnostics t_sql = pg_exception_detail;
@@ -6011,7 +6011,7 @@ begin
     end;
     begin
       perform * from public.crear_cuenta_cobro(gen_random_uuid(), t_cli, t_json, null, null, t_cons);
-      failures := failures || 'T21 cobrar la consulta de una cita ya cobrada debía fallar con BC003';
+      failures := failures || 'T21 cobrar la consulta de una cita ya cobrada debía fallar con BC003'::text;
     exception
       when sqlstate 'BC003' then null;
       when others then failures := failures || ('T21 esperaba BC003 (consulta) y llegó ' || sqlstate || ': ' || sqlerrm);
@@ -6043,7 +6043,7 @@ begin
     perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
     perform set_config('role', 'authenticated', true);
     if public.puede_escribir() then
-      failures := failures || 'T22 puede_escribir() debía ser false para el colega';
+      failures := failures || 'T22 puede_escribir() debía ser false para el colega'::text;
     end if;
     foreach t_sql in array array[
       format('select * from public.crear_cuenta_cobro(%L::uuid, %L::uuid, %L::jsonb)', gen_random_uuid(), t_cli, t_json),
@@ -6061,7 +6061,7 @@ begin
     end loop;
     select count(*) into t_n from public.cobros where clinica_id = t_c;
     if t_n <= 0 then
-      failures := failures || 'T22 el colega en solo lectura debía seguir leyendo los cobros';
+      failures := failures || 'T22 el colega en solo lectura debía seguir leyendo los cobros'::text;
     end if;
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
@@ -6069,7 +6069,7 @@ begin
     perform set_config('role', 'authenticated', true);
     select * into t_row from public.crear_cotizacion(gen_random_uuid(), t_cli, t_json);
     if t_row.id is null then
-      failures := failures || 'T22 el admin debía poder crear una cotización';
+      failures := failures || 'T22 el admin debía poder crear una cotización'::text;
     end if;
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
@@ -6086,7 +6086,7 @@ begin
     perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
     perform set_config('role', 'authenticated', true);
     if not public.es_autor_en_mi_clinica(t_vet_q) then
-      failures := failures || 'T23 es_autor_en_mi_clinica debía ser true para el cotizador retirado';
+      failures := failures || 'T23 es_autor_en_mi_clinica debía ser true para el cotizador retirado'::text;
     end if;
     select count(*) into t_n from public.perfiles where id = t_vet_q and nombre = 'Smoke T Cotizador';
     if t_n <> 1 then
