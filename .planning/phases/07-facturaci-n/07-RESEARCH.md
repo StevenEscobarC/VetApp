@@ -513,14 +513,14 @@ String mensajeStock(String nombre, int quedan, String unidad) {
 | A7 | `PG >= 15` features are not needed (the design avoids `ON DELETE SET NULL (col)`) | Data model | None as designed |
 | A8 | A seeded list of services is not needed; an empty list plus an admin CTA is enough because "Otro" always works | Discretion | Low: friction on day one; a "Agregar sugeridos" button (Consulta, Vacunación, Desparasitación, Cirugía) is a cheap alternative that asks the admin to type each price |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Legal review.** Has an accountant confirmed the cuenta de cobro wording and the case of a clinic that is a legal entity or that sells goods (A1-A3)?
+1. **Legal review.** Has an accountant confirmed the cuenta de cobro wording and the case of a clinic that is a legal entity or that sells goods (A1-A3)? **RESOLVED:** ship per D-01 (no disclaimer containing the banned word); accountant validation is an open user item recorded at sign-off in 07-16 T3.
    - Recommendation: ship v1 as designed (D-01 locked), add the neutral disclaimer, and add a user task "validate with an accountant" before charging clinics for the feature.
-2. **Void window.** Should voiding a paid CC be allowed at any time? D-19 and D-15 allow it with a reason. Recommend yes, and record the earlier payment in the void row (the `metodo_pago` and `pagada_el` stay for audit).
-3. **Services list seeding (Claude's discretion).** Recommend the empty list with an admin CTA "Agregar servicios sugeridos" (four names, price entered by the admin), as a seed with invented prices would put wrong amounts on legal documents.
-4. **Print of voided CC.** Recommend allowing PDF re-generation with the "ANULADA" banner.
-5. **A quote edit changing the date.** Recommend `valida_hasta` stays tied to the original date and does not reset on edit (simple and predictable); confirm in the UI-SPEC.
+2. **Void window.** Should voiding a paid CC be allowed at any time? D-19 and D-15 allow it with a reason. Recommend yes, and record the earlier payment in the void row (the `metodo_pago` and `pagada_el` stay for audit). **RESOLVED:** 07-01 `anular_cobro` allows voiding at any time with a reason; `metodo_pago`/`pagada_el` stay for audit.
+3. **Services list seeding (Claude's discretion).** Recommend the empty list with an admin CTA "Agregar servicios sugeridos" (four names, price entered by the admin), as a seed with invented prices would put wrong amounts on legal documents. **RESOLVED:** 07-10, empty list plus admin suggestion chips (names only, no prices).
+4. **Print of voided CC.** Recommend allowing PDF re-generation with the "ANULADA" banner. **RESOLVED:** 07-09, PDF re-generation with the "ANULADA" stamp.
+5. **A quote edit changing the date.** Recommend `valida_hasta` stays tied to the original date and does not reset on edit (simple and predictable); confirm in the UI-SPEC. **RESOLVED:** 07-04 `editar_cotizacion` never changes `valida_hasta`.
 
 ## Sources
 
