@@ -11,7 +11,12 @@ const String kRutaNuevoProducto = '/inventario/nuevo';
 /// pantallas solo se empujan rutas de primer nivel: empujar una ruta de una
 /// rama del shell duplica la página del shell en el Navigator raíz (G5).
 final List<GoRoute> inventarioRoutes = [
-  GoRoute(path: '/inventario', builder: (_, _) => const InventarioScreen()),
+  GoRoute(
+    path: '/inventario',
+    builder: (_, state) => InventarioScreen(
+      filtroBajosInicial: state.uri.queryParameters['filtro'] == 'bajos',
+    ),
+  ),
   GoRoute(
     path: kRutaNuevoProducto,
     builder: (_, _) => const ProductoFormScreen(),
