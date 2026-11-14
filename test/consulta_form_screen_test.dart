@@ -534,7 +534,9 @@ void main() {
         expect(snack.duration, const Duration(seconds: 6));
         expect(snack.action?.label, 'Cobrar');
 
-        await tester.tap(find.widgetWithText(SnackBarAction, 'Cobrar'));
+        // La ficha de este harness es un Text sin Scaffold: el snackbar no
+        // sigue visible tras el pop, así que se dispara la acción capturada.
+        snack.action!.onPressed();
         await tester.pumpAndSettle();
         final destino = tester
             .widget<Text>(find.textContaining('NUEVO '))

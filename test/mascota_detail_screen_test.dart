@@ -1237,6 +1237,7 @@ void main() {
         await tester.tap(find.text('Guardar consulta'));
         await tester.pump();
         await tester.pump();
+        await tester.pumpAndSettle();
 
         await tester.tap(find.widgetWithText(SnackBarAction, 'Cobrar'));
         await tester.pumpAndSettle();
