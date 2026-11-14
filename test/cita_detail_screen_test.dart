@@ -13,11 +13,15 @@ import 'package:vetapp/features/appointments/presentation/providers/citas_provid
 import 'package:vetapp/features/appointments/presentation/screens/cita_detail_screen.dart';
 
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/billing/domain/entities/cobro.dart';
+import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
 import 'package:vetapp/features/team/domain/miembro.dart';
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_cobros.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_team.dart';
 import 'helpers/router_harness.dart';
 
@@ -33,6 +37,7 @@ Widget _detalle(
   FakeCitaRepository repo,
   String id, {
   bool multi = false,
+  FakeCobrosRepository? cobros,
 }) => routerHarness(
   initialLocation: '/agenda/$id',
   routes: [
@@ -65,6 +70,15 @@ Widget _detalle(
       builder: (_, state) =>
           Scaffold(body: Text('paciente ${state.pathParameters['id']}')),
     ),
+    GoRoute(
+      path: '/cobros/nuevo',
+      builder: (_, state) => Scaffold(body: Text('cobro ${state.uri}')),
+    ),
+    GoRoute(
+      path: '/cobros/:id',
+      builder: (_, state) =>
+          Scaffold(body: Text('detalle cobro ${state.pathParameters['id']}')),
+    ),
   ],
   overrides: [
     citaRepositoryProvider.overrideWithValue(repo),
@@ -74,6 +88,10 @@ Widget _detalle(
     teamRepositoryProvider.overrideWithValue(
       FakeTeamRepository(miembrosFixture: multi ? [miembroAna, _luisTorres] : []),
     ),
+    cobrosRepositoryProvider.overrideWithValue(
+      cobros ?? FakeCobrosRepository(),
+    ),
+    ...planOverrides(),
   ],
 );
 
@@ -87,6 +105,20 @@ Future<void> _abrir(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(_detalle(repo, id, multi: multi));
+  await tester.pumpAndSettle();
+}
+
+/// Como [_abrir], con un repositorio de cobros propio.
+Future<void> _abrirConCobros(
+  WidgetTester tester,
+  FakeCitaRepository repo,
+  String id,
+  FakeCobrosRepository cobros,
+) async {
+  tester.view.physicalSize = const Size(800, 2000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(_detalle(repo, id, cobros: cobros));
   await tester.pumpAndSettle();
 }
 
@@ -369,5 +401,155 @@ void main() {
       expect(find.text('Veterinario'), findsOneWidget);
       expect(find.text('Reasignar cita'), findsNothing);
     });
+  });
+
+  group('Cobrar / Cobrada en la cita completada (D-05, D-20)', () {
+    final completadaLuna = citaLunaHoy.copyWith(
+      estado: EstadoCita.completada,
+      mascotasConConsulta: {'m-luna'},
+    );
+
+    testWidgets('sin CC: Cobrar outline antes de Ver historia clínica', (
+      tester,
+    ) async {
+      await _abrirConCobros(
+        tester,
+        FakeCitaRepository(citas: [completadaLuna]),
+        'cita-1',
+        FakeCobrosRepository(),
+      );
+
+      final cobrar = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, 'Cobrar'),
+      );
+      expect(cobrar.variant, AppButtonVariant.outline);
+      expect(cobrar.icon, Icons.receipt_long_outlined);
+      expect(
+        tester.getTopLeft(find.widgetWithText(AppButton, 'Cobrar')).dy,
+        lessThan(
+          tester
+              .getTopLeft(
+                find.widgetWithText(AppButton, 'Ver historia clínica'),
+              )
+              .dy,
+        ),
+      );
+
+      await tester.tap(find.text('Cobrar'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'cobro /cobros/nuevo?tipo=cc&clienteId=c-maria&mascotaId=m-luna'
+          '&citaId=cita-1',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('varias mascotas: Cobrar no prellena la mascota', (
+      tester,
+    ) async {
+      await _abrirConCobros(
+        tester,
+        FakeCitaRepository(
+          citas: [citaRockyLunaHoy.copyWith(estado: EstadoCita.completada)],
+        ),
+        'cita-2',
+        FakeCobrosRepository(),
+      );
+
+      await tester.tap(find.text('Cobrar'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'cobro /cobros/nuevo?tipo=cc&clienteId=c-maria&citaId=cita-2',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+      'con CC vinculada: Cobrada: CC-0012 + Pagada, abre el detalle',
+      (tester) async {
+        final cobros = FakeCobrosRepository(
+          vinculado: const CobroVinculado(
+            id: 'cc-12',
+            numero: 12,
+            estado: EstadoCobro.pagada,
+          ),
+        );
+        await _abrirConCobros(
+          tester,
+          FakeCitaRepository(citas: [completadaLuna]),
+          'cita-1',
+          cobros,
+        );
+
+        expect(find.text('Cobrar'), findsNothing);
+        expect(find.text('Cobrada: CC-0012'), findsOneWidget);
+        expect(find.text('Pagada'), findsOneWidget);
+        expect(find.text('Ver historia clínica'), findsOneWidget);
+        expect(
+          cobros.llamadas.firstWhere((l) => l.metodo == 'cobroVinculado').args,
+          {'citaId': 'cita-1', 'consultaId': null},
+        );
+
+        await tester.tap(find.text('Cobrada: CC-0012'));
+        await tester.pumpAndSettle();
+        expect(find.text('detalle cobro cc-12'), findsOneWidget);
+      },
+    );
+
+    testWidgets('CC anulada: vuelve Cobrar', (tester) async {
+      await _abrirConCobros(
+        tester,
+        FakeCitaRepository(citas: [completadaLuna]),
+        'cita-1',
+        FakeCobrosRepository(
+          cobros: [
+            cobroDePrueba(
+              id: 'cc-12',
+              citaId: 'cita-1',
+              estado: EstadoCobro.anulada,
+              anuladaAt: DateTime.utc(2026, 11, 2),
+            ),
+          ],
+        ),
+      );
+
+      expect(find.textContaining('Cobrada'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Cobrar'), findsOneWidget);
+    });
+
+    testWidgets('error de cobros: Cobrar sin texto de error', (tester) async {
+      await _abrirConCobros(
+        tester,
+        FakeCitaRepository(citas: [completadaLuna]),
+        'cita-1',
+        FakeCobrosRepository(error: Exception('boom')),
+      );
+
+      expect(find.widgetWithText(AppButton, 'Cobrar'), findsOneWidget);
+      expect(find.textContaining('boom'), findsNothing);
+      expect(find.textContaining('No pudimos'), findsNothing);
+    });
+
+    for (final e in [
+      EstadoCita.pendiente,
+      EstadoCita.confirmada,
+      EstadoCita.cancelada,
+      EstadoCita.noAsistio,
+    ]) {
+      testWidgets('${e.valor}: sin Cobrar', (tester) async {
+        await _abrirConCobros(
+          tester,
+          FakeCitaRepository(citas: [_conEstado(citaLunaHoy, e)]),
+          'cita-1',
+          FakeCobrosRepository(),
+        );
+        expect(find.text('Cobrar'), findsNothing);
+        expect(find.textContaining('Cobrada'), findsNothing);
+      });
+    }
   });
 }
