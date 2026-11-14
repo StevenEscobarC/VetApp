@@ -24,10 +24,13 @@ import 'package:vetapp/features/clients/presentation/providers/clientes_provider
 import 'package:vetapp/features/patients/domain/entities/mascota.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
+import 'package:vetapp/features/inventory/domain/entities/producto.dart';
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/fake_cobros.dart';
+import 'helpers/fake_inventario.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/fake_plan.dart';
 import 'helpers/router_harness.dart';
@@ -884,4 +887,358 @@ void main() {
       expect(p.modo, ModoFormCobro.copiar);
     });
   });
+
+  group('productos (07-11)', () {
+    List<({String metodo, Map<String, Object?> args})> crear(
+      FakeCobrosRepository repo,
+    ) => repo.llamadas.where((l) => l.metodo.startsWith('crear')).toList();
+
+    Future<void> agregarProducto(WidgetTester tester, String nombre) async {
+      await tester.ensureVisible(find.text('Agregar producto'));
+      await tester.tap(find.text('Agregar producto'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(nombre).last);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> emitirCc(WidgetTester tester) async {
+      await tester.tap(find.text('Emitir cuenta de cobro'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Emitir'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Agregar producto (outline, inventory_2) en ambos tipos; la '
+        'hoja sigue el tipo elegido', (tester) async {
+      await _abrir(
+        tester,
+        _appInv(
+          prefill: _prefill(clienteId: 'cli1'),
+          productos: [_amox, _agotado],
+        ),
+      );
+      expect(find.text('Agregar producto'), findsOneWidget);
+      expect(find.byIcon(Icons.inventory_2_outlined), findsOneWidget);
+
+      // CC: el agotado no se puede elegir.
+      await tester.tap(find.text('Agregar producto'));
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel('Suero, agotado, no disponible'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Suero'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LineaCobroTile), findsNothing);
+      await tester.tap(find.text('Amoxicilina').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(LineaCobroTile), findsOneWidget);
+      expect(find.text('Quedan 3 frascos'), findsOneWidget);
+
+      // Cotización: el mismo agotado sí se agrega.
+      await tester.tap(find.text('Cotización'));
+      await tester.pumpAndSettle();
+      expect(find.text('Agregar producto'), findsOneWidget);
+      await agregarProducto(tester, 'Suero');
+      expect(find.byType(LineaCobroTile), findsNWidgets(2));
+      expect(find.text('Quedan 0 frascos'), findsOneWidget);
+    });
+
+    testWidgets('CC: "+" se detiene en el stock; escribir más muestra el '
+        'error en línea', (tester) async {
+      await _abrir(
+        tester,
+        _appInv(
+          prefill: _prefill(clienteId: 'cli1'),
+          productos: [_amox],
+        ),
+      );
+      await agregarProducto(tester, 'Amoxicilina');
+      final mas = find.bySemanticsLabel('Aumentar cantidad de Amoxicilina');
+      await tester.tap(mas);
+      await tester.pumpAndSettle();
+      await tester.tap(mas);
+      await tester.pumpAndSettle();
+      expect(find.text('Subtotal \$ 255.000'), findsOneWidget);
+      await tester.tap(mas);
+      await tester.pumpAndSettle();
+      expect(find.text('Subtotal \$ 255.000'), findsOneWidget);
+      expect(find.text('Solo quedan 3 frascos de Amoxicilina.'), findsNothing);
+
+      await tester.enterText(_campo('cantidad-l1'), '5');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Solo quedan 3 frascos de Amoxicilina.'),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(LineaCobroTile),
+          matching: find.byIcon(Icons.error_outline),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('CC con stock 0: "{Producto} está agotado."', (tester) async {
+      await _abrir(
+        tester,
+        _appInv(
+          prefill: _prefill(clienteId: 'cli1', tipo: TipoCobro.cotizacion),
+          productos: [productoDePrueba(cantidad: 0, precioVentaCop: 85000)],
+        ),
+      );
+      await agregarProducto(tester, 'Amoxicilina');
+      expect(find.text('Amoxicilina está agotado.'), findsNothing);
+      await tester.tap(find.text('Cuenta de cobro'));
+      await tester.pumpAndSettle();
+      expect(find.text('Amoxicilina está agotado.'), findsOneWidget);
+    });
+
+    testWidgets('emitir con una línea inválida la muestra y no envía', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(servicios: _servicios);
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _appInv(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+          productos: [_amox],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Abrir'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Consulta · \$ 50.000'));
+      await tester.tap(find.text('Consulta · \$ 50.000'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Vacuna · \$ 40.000'));
+      await tester.tap(find.text('Vacuna · \$ 40.000'));
+      await tester.pumpAndSettle();
+      await agregarProducto(tester, 'Amoxicilina');
+      await tester.ensureVisible(_campo('cantidad-l3'));
+      await tester.enterText(_campo('cantidad-l3'), '5');
+      await tester.pumpAndSettle();
+
+      // Volver arriba para que la línea quede fuera de la vista.
+      await tester.drag(
+        find.byType(SingleChildScrollView),
+        const Offset(0, 3000),
+      );
+      await tester.pumpAndSettle();
+      final barra = tester.getTopLeft(find.byType(TotalCobroBar)).dy;
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('l3'))).dy,
+        greaterThan(barra),
+      );
+
+      await tester.tap(find.text('Emitir cuenta de cobro'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(crear(repo), isEmpty);
+      final y = tester.getTopLeft(find.byKey(const ValueKey('l3'))).dy;
+      expect(y, lessThan(barra));
+      expect(y, greaterThanOrEqualTo(0));
+    });
+
+    testWidgets('cotización: sin tope ni error de stock', (tester) async {
+      await _abrir(
+        tester,
+        _appInv(
+          prefill: _prefill(clienteId: 'cli1', tipo: TipoCobro.cotizacion),
+          productos: [_amox],
+        ),
+      );
+      await agregarProducto(tester, 'Amoxicilina');
+      expect(find.text('Quedan 3 frascos'), findsOneWidget);
+      await tester.enterText(_campo('cantidad-l1'), '3');
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.bySemanticsLabel('Aumentar cantidad de Amoxicilina'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Subtotal \$ 340.000'), findsOneWidget);
+      expect(find.textContaining('Solo quedan'), findsNothing);
+    });
+
+    testWidgets('producto sin precio: precio enfocado con la ayuda', (
+      tester,
+    ) async {
+      await _abrir(
+        tester,
+        _appInv(
+          prefill: _prefill(clienteId: 'cli1'),
+          productos: [productoDePrueba(nombre: 'Gasas', cantidad: 9)],
+        ),
+      );
+      await agregarProducto(tester, 'Gasas');
+      expect(
+        find.text('Este producto no tiene precio de venta. Escribe el precio.'),
+        findsOneWidget,
+      );
+      final campo = tester.widget<TextField>(_campo('precio-l1'));
+      expect(campo.focusNode?.hasFocus, isTrue);
+    });
+
+    testWidgets('ayuda de inventario solo en CC con productos', (tester) async {
+      const ayuda = 'Al emitirla se descuentan los productos del inventario.';
+      await _abrir(
+        tester,
+        _appInv(
+          prefill: _prefill(clienteId: 'cli1'),
+          productos: [_amox],
+        ),
+      );
+      await _agregarConsulta(tester);
+      expect(find.text(ayuda), findsNothing);
+      await agregarProducto(tester, 'Amoxicilina');
+      expect(_enBarra(find.text(ayuda)), findsOneWidget);
+      await tester.tap(find.text('Cotización'));
+      await tester.pumpAndSettle();
+      expect(find.text(ayuda), findsNothing);
+    });
+
+    testWidgets('IN001 del servidor marca la línea exacta, refresca la nota, '
+        'conserva el borrador y el reintento usa la MISMA clave', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure(
+          'Solo quedan 2 frascos de Amoxicilina.',
+          tipo: ErrorCobro.stockInsuficiente,
+          productoId: 'p1',
+          quedan: 2,
+        ),
+      );
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+          productos: [_amox],
+        ),
+      );
+      await _agregarConsulta(tester);
+      await agregarProducto(tester, 'Amoxicilina');
+      await tester.enterText(_campo('cantidad-l2'), '3');
+      await tester.pumpAndSettle();
+      await emitirCc(tester);
+
+      expect(find.text('Revisa las cantidades marcadas.'), findsOneWidget);
+      final linea = find.byKey(const ValueKey('l2'));
+      expect(
+        find.descendant(
+          of: linea,
+          matching: find.text('Solo quedan 2 frascos de Amoxicilina.'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: linea, matching: find.text('Quedan 2 frascos')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('l1')),
+          matching: find.textContaining('Solo quedan'),
+        ),
+        findsNothing,
+      );
+      expect(find.byType(LineaCobroTile), findsNWidgets(2));
+
+      await tester.enterText(_campo('cantidad-l2'), '2');
+      await tester.pumpAndSettle();
+      await emitirCc(tester);
+      final llamadas = crear(repo);
+      expect(llamadas, hasLength(2));
+      expect(llamadas[1].args['clave'], llamadas[0].args['clave']);
+      final lineas = llamadas[1].args['lineas']! as List<LineaCobroNueva>;
+      expect(lineas.last.productoId, 'p1');
+      expect(lineas.last.cantidad, 2);
+    });
+
+    testWidgets('IN002 del servidor: "ya no está disponible" y pasos '
+        'deshabilitados', (tester) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure(
+          'Gasas ya no está disponible. Quítalo del cobro.',
+          tipo: ErrorCobro.productoNoDisponible,
+          productoId: 'p9',
+        ),
+      );
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+          productos: [
+            productoDePrueba(
+              id: 'p9',
+              nombre: 'Gasas',
+              unidad: Unidad.unidad,
+              cantidad: 9,
+              precioVentaCop: 2000,
+            ),
+          ],
+        ),
+      );
+      await agregarProducto(tester, 'Gasas');
+      await emitirCc(tester);
+      expect(
+        find.text('Gasas ya no está disponible. Quítalo del cobro.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.bySemanticsLabel('Aumentar cantidad de Gasas'));
+      await tester.pumpAndSettle();
+      expect(find.text('Subtotal \$ 2.000'), findsOneWidget);
+      expect(find.bySemanticsLabel('Quitar Gasas'), findsOneWidget);
+    });
+  });
+}
+
+final _amox = productoDePrueba(cantidad: 3, precioVentaCop: 85000);
+final _agotado = productoDePrueba(id: 'p2', nombre: 'Suero', cantidad: 0);
+
+Widget _appInv({
+  PrefillCobro? prefill,
+  FakeCobrosRepository? repo,
+  List<Producto> productos = const [],
+}) {
+  final p = prefill ?? _prefill();
+  return routerHarness(
+    initialLocation: '/',
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, _) => Scaffold(
+          body: Center(
+            child: TextButton(
+              onPressed: () => context.push('/form'),
+              child: const Text('Abrir'),
+            ),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/form',
+        builder: (_, _) => CobroFormScreen(prefill: p),
+      ),
+      GoRoute(
+        path: '/cobros/:id',
+        builder: (_, s) =>
+            Scaffold(body: Text('Detalle ${s.pathParameters['id']}')),
+      ),
+    ],
+    overrides: [
+      ..._overrides(repo: repo),
+      inventarioRepositoryProvider.overrideWithValue(
+        FakeInventarioRepository(productos: productos),
+      ),
+    ],
+  );
 }
