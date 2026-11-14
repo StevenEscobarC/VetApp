@@ -58,6 +58,10 @@ Widget _appUnderTest({
         path: '/agenda/nueva',
         builder: (_, state) => Text('nueva-cita ${state.uri.query}'),
       ),
+      GoRoute(
+        path: '/cobros/nuevo',
+        builder: (_, state) => Text('NUEVO COBRO ${state.uri.query}'),
+      ),
     ],
     overrides: [
       ...planOverrides(plan: plan),
@@ -705,6 +709,78 @@ void main() {
       );
       expect(SupabaseClienteRepository.desdeFila(fila('')).cedula, isNull);
       expect(SupabaseClienteRepository.desdeFila(fila(null)).cedula, isNull);
+    });
+  });
+
+  group('Nueva cuenta de cobro (D-05)', () {
+    void pantallaAlta(WidgetTester tester) {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    testWidgets(
+      'outline con recibo, justo después de "Agendar cita"; abre el '
+      'formulario con el cliente y sin mascota',
+      (tester) async {
+        pantallaAlta(tester);
+        await tester.pumpWidget(_appUnderTest());
+        await tester.pumpAndSettle();
+
+        final nueva = find.widgetWithText(AppButton, 'Nueva cuenta de cobro');
+        expect(nueva, findsOneWidget);
+        expect(
+          tester.widget<AppButton>(nueva).variant,
+          AppButtonVariant.outline,
+        );
+        expect(
+          find.descendant(
+            of: nueva,
+            matching: find.byIcon(Icons.receipt_long_outlined),
+          ),
+          findsOneWidget,
+        );
+
+        final agendar = find.widgetWithText(AppButton, 'Agendar cita');
+        final yAgendar = tester.getBottomLeft(agendar).dy;
+        final yNueva = tester.getTopLeft(nueva).dy;
+        expect(yNueva, greaterThan(yAgendar));
+        expect(yNueva - yAgendar, lessThanOrEqualTo(16));
+        expect(
+          tester.getTopLeft(find.text('Vincular cuenta')).dy,
+          greaterThan(yNueva),
+        );
+
+        await tester.ensureVisible(nueva);
+        await tester.tap(nueva);
+        await tester.pumpAndSettle();
+        final texto = tester
+            .widget<Text>(find.textContaining('NUEVO COBRO '))
+            .data!;
+        final query = Uri.splitQueryString(
+          texto.substring('NUEVO COBRO '.length),
+        );
+        expect(query, {'tipo': 'cc', 'clienteId': 'c-1'});
+      },
+    );
+
+    testWidgets('solo lectura: candado y hoja del plan, sin navegar', (
+      tester,
+    ) async {
+      pantallaAlta(tester);
+      await tester.pumpWidget(_appUnderTest(plan: planSoloLectura));
+      await tester.pumpAndSettle();
+
+      final nueva = find.widgetWithText(AppButton, 'Nueva cuenta de cobro');
+      expect(
+        find.descendant(of: nueva, matching: find.byIcon(Icons.lock_outline)),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(nueva);
+      await tester.tap(nueva);
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.textContaining('NUEVO COBRO'), findsNothing);
     });
   });
 }
