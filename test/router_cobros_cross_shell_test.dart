@@ -9,6 +9,7 @@ import 'package:vetapp/features/appointments/presentation/providers/citas_provid
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/billing/domain/entities/cobro.dart';
+import 'package:vetapp/features/billing/presentation/providers/borrador_cobro_provider.dart';
 import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
 import 'package:vetapp/features/billing/presentation/screens/cobro_detail_screen.dart';
 import 'package:vetapp/features/billing/presentation/screens/cobro_form_screen.dart';
@@ -211,5 +212,77 @@ void main() {
     double y(String t) => tester.getTopLeft(find.text(t)).dy;
     expect(y('Inventario'), lessThan(y('Cobros')));
     expect(y('Cobros'), lessThan(y('Recordatorios')));
+  });
+
+  group('editar y convertir (07-15)', () {
+    testWidgets('/cobros/q1/editar abre el formulario en modo editar', (
+      tester,
+    ) async {
+      await _abrirMas(tester);
+      _container(tester).read(routerProvider).push('/cobros/q1/editar');
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(CobroDetailScreen), findsNothing);
+      final p = tester
+          .widget<CobroFormScreen>(find.byType(CobroFormScreen))
+          .prefill;
+      expect(p.modo, ModoFormCobro.editarCotizacion);
+      expect(p.tipo, TipoCobro.cotizacion);
+      expect(p.origenId, 'q1');
+      expect(find.text('Editar cotización'), findsOneWidget);
+    });
+
+    testWidgets('/cobros/q1/convertir abre el formulario en modo convertir', (
+      tester,
+    ) async {
+      await _abrirMas(tester);
+      _container(tester).read(routerProvider).push('/cobros/q1/convertir');
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(CobroDetailScreen), findsNothing);
+      final p = tester
+          .widget<CobroFormScreen>(find.byType(CobroFormScreen))
+          .prefill;
+      expect(p.modo, ModoFormCobro.convertir);
+      expect(p.tipo, TipoCobro.cuentaCobro);
+      expect(p.origenId, 'q1');
+      expect(find.text('Convertir COT-0004'), findsOneWidget);
+    });
+
+    testWidgets('/cobros/q1 sigue abriendo el detalle', (tester) async {
+      await _abrirMas(tester);
+      _container(tester).read(routerProvider).push('/cobros/q1');
+      await tester.pumpAndSettle();
+      expect(find.byType(CobroFormScreen), findsNothing);
+      expect(
+        tester
+            .widget<CobroDetailScreen>(find.byType(CobroDetailScreen))
+            .cobroId,
+        'q1',
+      );
+    });
+
+    testWidgets('Cobros > cotización > Convertir abre el formulario con un '
+        'solo AppShell y Atrás vuelve al detalle', (tester) async {
+      await _abrirMas(tester);
+      _container(tester).read(routerProvider).push('/cobros?tipo=cot');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Julia Paz · Max'));
+      await tester.pumpAndSettle();
+      expect(_ubicacion(tester), '/cobros/q1');
+
+      await tester.tap(find.text('Convertir en cuenta de cobro'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(_ubicacion(tester), '/cobros/q1/convertir');
+      expect(find.byType(CobroFormScreen), findsOneWidget);
+      expect(find.byType(AppShell, skipOffstage: false), findsOneWidget);
+
+      _container(tester).read(routerProvider).pop();
+      await tester.pumpAndSettle();
+      expect(_ubicacion(tester), '/cobros/q1');
+      expect(find.byType(CobroDetailScreen), findsOneWidget);
+    });
   });
 }
