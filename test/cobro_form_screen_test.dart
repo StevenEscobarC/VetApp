@@ -1199,6 +1199,368 @@ void main() {
       expect(find.bySemanticsLabel('Quitar Gasas'), findsOneWidget);
     });
   });
+
+  group('modos editar / convertir / copiar (07-15)', () {
+    const lineasCot = [
+      CobroItem(
+        orden: 1,
+        tipo: TipoLinea.servicio,
+        descripcion: 'Consulta',
+        cantidad: 1,
+        precioUnitarioCop: 50000,
+        servicioId: 's1',
+      ),
+      CobroItem(
+        orden: 2,
+        tipo: TipoLinea.producto,
+        descripcion: 'Amoxicilina',
+        cantidad: 2,
+        precioUnitarioCop: 85000,
+        productoId: 'p1',
+      ),
+    ];
+
+    Cobro cot({EstadoCobro estado = EstadoCobro.abierta}) => cobroDePrueba(
+      id: 'q4',
+      tipo: TipoCobro.cotizacion,
+      numero: 4,
+      estado: estado,
+      items: lineasCot,
+    );
+
+    Cobro ccAnulada() => cobroDePrueba(
+      id: 'c12',
+      numero: 12,
+      estado: EstadoCobro.anulada,
+      citaId: 'cita1',
+      items: lineasCot,
+    );
+
+    PrefillCobro modo(ModoFormCobro m, String origen) => (
+      modo: m,
+      tipo: m == ModoFormCobro.editarCotizacion
+          ? TipoCobro.cotizacion
+          : TipoCobro.cuentaCobro,
+      clienteId: m == ModoFormCobro.copiar ? 'cli1' : null,
+      mascotaId: m == ModoFormCobro.copiar ? 'm1' : null,
+      citaId: m == ModoFormCobro.copiar ? 'cita1' : null,
+      consultaId: null,
+      origenId: origen,
+    );
+
+    List<({String metodo, Map<String, Object?> args})> llamadas(
+      FakeCobrosRepository repo,
+      String metodo,
+    ) => repo.llamadas.where((l) => l.metodo == metodo).toList();
+
+    Future<void> emitirCc(WidgetTester tester) async {
+      await tester.tap(find.text('Emitir cuenta de cobro'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Emitir'));
+      await tester.pumpAndSettle();
+    }
+
+    const noDisponible = 'Esta cotización ya no se puede usar. Actualiza '
+        'la lista.';
+
+    bool ctaHabilitada(WidgetTester tester) =>
+        tester.widget<TotalCobroBar>(find.byType(TotalCobroBar)).habilitado;
+
+    testWidgets('convertir: título, nota, sin Tipo, copia cliente, mascota y '
+        'líneas editables', (tester) async {
+      final repo = FakeCobrosRepository(servicios: _servicios, cobros: [cot()]);
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: modo(ModoFormCobro.convertir, 'q4'),
+          productos: [_amox],
+        ),
+      );
+      expect(find.text('Convertir COT-0004'), findsOneWidget);
+      expect(
+        find.text(
+          'Desde la cotización COT-0004. Revisa los precios y cantidades '
+          'antes de emitir.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Cotización'), findsNothing);
+      expect(find.text('Cuenta de cobro'), findsNothing);
+      expect(find.text('Laura Gómez'), findsOneWidget);
+      expect(
+        tester
+            .widget<AppFilterChip>(find.widgetWithText(AppFilterChip, 'Rocky'))
+            .selected,
+        isTrue,
+      );
+      expect(find.byType(LineaCobroTile), findsNWidgets(2));
+      expect(find.text('Quedan 3 frascos'), findsOneWidget);
+      expect(_enBarra(find.text('Emitir cuenta de cobro')), findsOneWidget);
+      expect(_enBarra(find.text('\$ 220.000')), findsOneWidget);
+
+      // Editable y con el tope de stock de cualquier CC.
+      await tester.enterText(_campo('cantidad-l2'), '5');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Solo quedan 3 frascos de Amoxicilina.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('convertir: confirma y emite con p_cotizacion_id; reemplaza '
+        'por el detalle de la CC nueva', (tester) async {
+      final repo = FakeCobrosRepository(servicios: _servicios, cobros: [cot()]);
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: modo(ModoFormCobro.convertir, 'q4'),
+          productos: [_amox],
+        ),
+      );
+      await tester.tap(find.text('Emitir cuenta de cobro'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Emitir la cuenta de cobro?'), findsOneWidget);
+      await tester.tap(find.text('Emitir'));
+      await tester.pumpAndSettle();
+
+      final c = llamadas(repo, 'crearCuentaCobro').single.args;
+      expect(c['cotizacionId'], 'q4');
+      expect(c['clave'], 'clave-1');
+      expect(c['clienteId'], 'cli1');
+      expect(c['mascotaId'], 'm1');
+      expect(c['citaId'], isNull);
+      expect(c['lineas']! as List<LineaCobroNueva>, hasLength(2));
+      expect(find.text('Detalle cobro-1'), findsOneWidget);
+      expect(find.text('Cuenta de cobro CC-0001 emitida.'), findsOneWidget);
+      final q = repo.guardados.firstWhere((x) => x.id == 'q4');
+      expect(q.estado, EstadoCobro.convertida);
+      expect(q.convertidaEnNumero, 1);
+    });
+
+    testWidgets('convertir: un producto archivado se marca al copiar', (
+      tester,
+    ) async {
+      await _abrir(
+        tester,
+        _appInv(
+          repo: FakeCobrosRepository(servicios: _servicios, cobros: [cot()]),
+          prefill: modo(ModoFormCobro.convertir, 'q4'),
+        ),
+      );
+      expect(
+        find.text('Amoxicilina ya no está disponible. Quítalo del cobro.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('convertir: BC002 del servidor muestra el aviso, deshabilita '
+        'el CTA y Volver regresa', (tester) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        cobros: [cot()],
+        errorCrear: const CobroFailure(
+          'Esta cotización ya no se puede usar. Actualiza la lista.',
+          tipo: ErrorCobro.cotizacionNoDisponible,
+        ),
+      );
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: modo(ModoFormCobro.convertir, 'q4'),
+          productos: [_amox],
+        ),
+      );
+      await emitirCc(tester);
+      expect(find.text(noDisponible), findsOneWidget);
+      expect(ctaHabilitada(tester), isFalse);
+      expect(find.byType(LineaCobroTile), findsNWidgets(2));
+
+      await tester.tap(find.widgetWithText(TextButton, 'Volver'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(CobroFormScreen), findsNothing);
+      expect(find.text('Abrir'), findsOneWidget);
+    });
+
+    testWidgets('origen de otra clase: convertir una CC o editar una '
+        'cotización convertida muestran el mismo aviso', (tester) async {
+      for (final (m, origen) in [
+        (ModoFormCobro.convertir, cobroDePrueba(id: 'q4')),
+        (
+          ModoFormCobro.editarCotizacion,
+          cot(estado: EstadoCobro.convertida),
+        ),
+      ]) {
+        await tester.pumpWidget(const SizedBox());
+        await _abrir(
+          tester,
+          _appInv(
+            repo: FakeCobrosRepository(
+              servicios: _servicios,
+              cobros: [origen],
+            ),
+            prefill: modo(m, 'q4'),
+            productos: [_amox],
+          ),
+        );
+        expect(find.text(noDisponible), findsOneWidget);
+        expect(ctaHabilitada(tester), isFalse);
+        expect(find.widgetWithText(TextButton, 'Volver'), findsOneWidget);
+      }
+    });
+
+    testWidgets('mientras carga el origen: filas de esqueleto', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final pendiente = Completer<Cobro?>();
+      await tester.pumpWidget(
+        routerHarness(
+          initialLocation: '/form',
+          routes: [
+            GoRoute(
+              path: '/form',
+              builder: (_, _) => CobroFormScreen(
+                prefill: modo(ModoFormCobro.convertir, 'q4'),
+              ),
+            ),
+          ],
+          overrides: [
+            ..._overrides(),
+            cobroProvider.overrideWith((ref, id) => pendiente.future),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('esqueleto-origen')), findsOneWidget);
+      expect(find.text('Elige el cliente'), findsNothing);
+      expect(ctaHabilitada(tester), isFalse);
+      pendiente.complete(null);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('editar: título, sin Tipo, cliente cambiable; Guardar '
+        'cambios sin diálogo, vuelve y avisa', (tester) async {
+      final repo = FakeCobrosRepository(servicios: _servicios, cobros: [cot()]);
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: modo(ModoFormCobro.editarCotizacion, 'q4'),
+          productos: [_amox],
+        ),
+      );
+      expect(find.text('Editar cotización'), findsOneWidget);
+      expect(find.text('Cotización'), findsNothing);
+      expect(find.text('Cuenta de cobro'), findsNothing);
+      expect(find.text('Cambiar'), findsOneWidget);
+      expect(find.byType(LineaCobroTile), findsNWidgets(2));
+      // Una cotización no tiene tope de stock.
+      await tester.enterText(_campo('cantidad-l2'), '5');
+      await tester.pumpAndSettle();
+      expect(find.text('Solo quedan 3 frascos de Amoxicilina.'), findsNothing);
+
+      await tester.tap(_enBarra(find.text('Guardar cambios')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      final e = llamadas(repo, 'editarCotizacion').single.args;
+      expect(e['id'], 'q4');
+      expect(e['clienteId'], 'cli1');
+      expect(e['mascotaId'], 'm1');
+      final ls = e['lineas']! as List<LineaCobroNueva>;
+      expect(ls, hasLength(2));
+      expect(ls[1].cantidad, 5);
+      expect(llamadas(repo, 'crearCotizacion'), isEmpty);
+      expect(find.byType(CobroFormScreen), findsNothing);
+      expect(find.text('Abrir'), findsOneWidget);
+      expect(find.text('Cambios guardados.'), findsOneWidget);
+    });
+
+    testWidgets('editar: un fallo conserva el formulario con el aviso de '
+        'cotización', (tester) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        cobros: [cot()],
+        errorEditar: const CobroFailure('x'),
+      );
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: modo(ModoFormCobro.editarCotizacion, 'q4'),
+          productos: [_amox],
+        ),
+      );
+      await tester.tap(_enBarra(find.text('Guardar cambios')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No pudimos guardar la cotización. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+      expect(find.byType(CobroFormScreen), findsOneWidget);
+      expect(ctaHabilitada(tester), isTrue);
+    });
+
+    testWidgets('editar: BC002 del servidor deshabilita el CTA', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        cobros: [cot()],
+        errorEditar: const CobroFailure(
+          'Esta cotización ya no se puede usar. Actualiza la lista.',
+          tipo: ErrorCobro.cotizacionNoDisponible,
+        ),
+      );
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: modo(ModoFormCobro.editarCotizacion, 'q4'),
+          productos: [_amox],
+        ),
+      );
+      await tester.tap(_enBarra(find.text('Guardar cambios')));
+      await tester.pumpAndSettle();
+      expect(find.text(noDisponible), findsOneWidget);
+      expect(ctaHabilitada(tester), isFalse);
+    });
+
+    testWidgets('copiar desde una CC anulada: Nueva cuenta de cobro, '
+        'prellenada, emite con la cita y sin cotización', (tester) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        cobros: [ccAnulada()],
+      );
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: modo(ModoFormCobro.copiar, 'c12'),
+          productos: [_amox],
+        ),
+      );
+      expect(find.text('Nueva cuenta de cobro'), findsOneWidget);
+      expect(find.text('Laura Gómez'), findsOneWidget);
+      expect(find.text('Rocky'), findsOneWidget);
+      expect(find.byType(LineaCobroTile), findsNWidgets(2));
+
+      await emitirCc(tester);
+      final c = llamadas(repo, 'crearCuentaCobro').single.args;
+      expect(c['citaId'], 'cita1');
+      expect(c['cotizacionId'], isNull);
+      expect(c['clave'], 'clave-1');
+      expect(c['lineas']! as List<LineaCobroNueva>, hasLength(2));
+      expect(find.text('Detalle cobro-1'), findsOneWidget);
+      expect(find.text('Cuenta de cobro CC-0001 emitida.'), findsOneWidget);
+    });
+  });
 }
 
 final _amox = productoDePrueba(cantidad: 3, precioVentaCop: 85000);

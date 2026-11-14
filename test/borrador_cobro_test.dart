@@ -342,4 +342,140 @@ void main() {
       expect(leer().lineas[0].stock, 2);
     });
   });
+
+  group('cargarDesde (07-15)', () {
+    const PrefillCobro convertir = (
+      modo: ModoFormCobro.convertir,
+      tipo: TipoCobro.cuentaCobro,
+      clienteId: null,
+      mascotaId: null,
+      citaId: null,
+      consultaId: null,
+      origenId: 'q4',
+    );
+    const PrefillCobro copiar = (
+      modo: ModoFormCobro.copiar,
+      tipo: TipoCobro.cuentaCobro,
+      clienteId: 'cli1',
+      mascotaId: 'm1',
+      citaId: 'cita1',
+      consultaId: null,
+      origenId: 'c12',
+    );
+
+    const lineas = [
+      CobroItem(
+        orden: 1,
+        tipo: TipoLinea.servicio,
+        descripcion: 'Consulta',
+        cantidad: 1,
+        precioUnitarioCop: 45000,
+        servicioId: 's1',
+      ),
+      CobroItem(
+        orden: 2,
+        tipo: TipoLinea.producto,
+        descripcion: 'Amoxicilina',
+        cantidad: 2,
+        precioUnitarioCop: 80000,
+        productoId: 'p1',
+      ),
+      CobroItem(
+        orden: 3,
+        tipo: TipoLinea.producto,
+        descripcion: 'Gasas',
+        cantidad: 4,
+        precioUnitarioCop: 2000,
+        productoId: 'p-archivado',
+      ),
+    ];
+
+    final cotizacion = cobroDePrueba(
+      id: 'q4',
+      tipo: TipoCobro.cotizacion,
+      numero: 4,
+      estado: EstadoCobro.abierta,
+      items: lineas,
+    );
+    final ccAnulada = cobroDePrueba(
+      id: 'c12',
+      estado: EstadoCobro.anulada,
+      citaId: 'cita1',
+      items: lineas,
+    );
+    final productos = [productoDePrueba(cantidad: 3, precioVentaCop: 85000)];
+
+    test('copia las 3 líneas con precio y cantidad; el producto activo trae '
+        'existencias y el archivado el error', () {
+      final sub = container.listen(borradorCobroProvider(convertir), (_, _) {});
+      addTearDown(sub.close);
+      notifier(convertir).cargarDesde(cotizacion, productos: productos);
+      final b = leer(convertir);
+      expect(b.clienteId, 'cli1');
+      expect(b.mascotaId, 'm1');
+      expect(b.lineas, hasLength(3));
+      final [s, p, a] = b.lineas;
+      expect(s.tipo, TipoLinea.servicio);
+      expect(s.descripcion, 'Consulta');
+      expect(s.cantidad, 1);
+      expect(s.precioUnitarioCop, 45000);
+      expect(s.servicioId, 's1');
+      expect(p.cantidad, 2);
+      expect(p.precioUnitarioCop, 80000);
+      expect(p.precioBaseCop, 85000);
+      expect(p.productoId, 'p1');
+      expect(p.stock, 3);
+      expect(p.unidad, Unidad.frasco);
+      expect(p.errorStock, isNull);
+      expect(a.cantidad, 4);
+      expect(a.precioUnitarioCop, 2000);
+      expect(a.errorStock, 'Gasas ya no está disponible. Quítalo del cobro.');
+      expect(b.totalCop, 45000 + 160000 + 8000);
+      expect({for (final l in b.lineas) l.key}, hasLength(3));
+    });
+
+    test('convertir: cotizacionId es la cotización y no copia vínculo', () {
+      final sub = container.listen(borradorCobroProvider(convertir), (_, _) {});
+      addTearDown(sub.close);
+      notifier(convertir).cargarDesde(
+        cobroDePrueba(
+          id: 'q4',
+          tipo: TipoCobro.cotizacion,
+          estado: EstadoCobro.abierta,
+          citaId: 'cita9',
+        ),
+        productos: const [],
+      );
+      expect(leer(convertir).cotizacionId, 'q4');
+      expect(leer(convertir).citaId, isNull);
+      expect(leer(convertir).vinculado, isFalse);
+    });
+
+    test('copiar: copia el vínculo de la visita y no lleva cotizacionId', () {
+      final sub = container.listen(borradorCobroProvider(copiar), (_, _) {});
+      addTearDown(sub.close);
+      notifier(copiar).cargarDesde(ccAnulada, productos: productos);
+      expect(leer(copiar).citaId, 'cita1');
+      expect(leer(copiar).cotizacionId, isNull);
+      expect(leer(copiar).lineas, hasLength(3));
+    });
+
+    test('una segunda llamada se ignora y la clave no cambia; la copia trae '
+        'una clave nueva frente al borrador anterior', () {
+      final previo = container.listen(borradorCobroProvider(_nuevo), (_, _) {});
+      addTearDown(previo.close);
+      expect(leer().clave, 'clave-1');
+
+      final sub = container.listen(borradorCobroProvider(copiar), (_, _) {});
+      addTearDown(sub.close);
+      final clave = leer(copiar).clave;
+      expect(clave, isNot('clave-1'));
+      notifier(copiar).cargarDesde(ccAnulada, productos: productos);
+      notifier(copiar).quitar(leer(copiar).lineas.first.key);
+      notifier(copiar).cargarDesde(ccAnulada, productos: productos);
+      expect(leer(copiar).lineas, hasLength(2));
+      expect(leer(copiar).clave, clave);
+      expect(generadas, 2);
+    });
+  });
 }
