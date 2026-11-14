@@ -11,6 +11,8 @@ import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
+import '../../../billing/presentation/cobros_rutas.dart';
+import '../../../billing/presentation/widgets/cobrar_boton.dart';
 import '../../../patients/domain/entities/mascota.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../../plan/presentation/limite_plan_gate.dart';
@@ -313,6 +315,13 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           const SizedBox(height: AppSpacing.sm),
           // `go` (no push): el destino vive en la rama Agenda del shell (D-07).
           _botonAgendarCita(context),
+          const SizedBox(height: AppSpacing.sm),
+          // Venta de mostrador: cliente sin mascota (D-05). `push`: el
+          // formulario es una ruta de nivel superior fuera del shell (G5).
+          CobrarBoton(
+            ruta: rutaNuevoCobro(clienteId: widget.clienteId),
+            label: 'Nueva cuenta de cobro',
+          ),
           const SizedBox(height: AppSpacing.lg),
           _buildVinculacionRow(context, cliente),
         ],
