@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -94,7 +93,10 @@ Widget _app({
           ),
         ),
       ),
-      GoRoute(path: '/form', builder: (_, _) => CobroFormScreen(prefill: p)),
+      GoRoute(
+        path: '/form',
+        builder: (_, _) => CobroFormScreen(prefill: p),
+      ),
       GoRoute(
         path: '/servicios',
         builder: (_, _) => const Scaffold(body: Text('Pantalla servicios')),
@@ -140,8 +142,10 @@ Future<void> _abrir(WidgetTester tester, Widget app) async {
 Finder _enBarra(Finder f) =>
     find.descendant(of: find.byType(TotalCobroBar), matching: f);
 
-Finder _campo(String key) =>
-    find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(TextField));
+Finder _campo(String key) => find.descendant(
+  of: find.byKey(ValueKey(key)),
+  matching: find.byType(TextField),
+);
 
 Future<void> _agregarConsulta(WidgetTester tester) async {
   await tester.tap(find.text('Consulta · \$ 50.000'));
@@ -229,9 +233,8 @@ void main() {
         'quita', (tester) async {
       await _abrir(tester, _app(prefill: _prefill(clienteId: 'cli1')));
       expect(find.text('Mascota (opcional)'), findsOneWidget);
-      AppFilterChip chip(String n) => tester.widget<AppFilterChip>(
-        find.widgetWithText(AppFilterChip, n),
-      );
+      AppFilterChip chip(String n) =>
+          tester.widget<AppFilterChip>(find.widgetWithText(AppFilterChip, n));
       expect(chip('Rocky').selected, isFalse);
       expect(chip('Luna').selected, isFalse);
 
@@ -409,7 +412,10 @@ void main() {
       final repo = FakeCobrosRepository(servicios: _servicios);
       await _abrir(
         tester,
-        _app(repo: repo, prefill: _prefill(clienteId: 'cli1')),
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
       );
       await tester.tap(find.text('Otro'));
       await tester.pumpAndSettle();
@@ -443,7 +449,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Emitir cuenta de cobro'));
       await tester.pumpAndSettle();
-      expect(_enBarra(find.text('El total es demasiado alto.')), findsOneWidget);
+      expect(
+        _enBarra(find.text('El total es demasiado alto.')),
+        findsOneWidget,
+      );
       expect(find.byType(AlertDialog), findsNothing);
     });
   });
