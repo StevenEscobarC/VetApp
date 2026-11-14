@@ -3128,11 +3128,12 @@ begin
     failures := failures || ('Q47 error inesperado: ' || sqlerrm);
   end;
 
-  -- Q48: actualizar_clinica: anon no la ejecuta, authenticated sí.
+  -- Q48: actualizar_clinica: anon no la ejecuta, authenticated sí. Desde la Fase 7 la firma tiene 6 argumentos
+  -- (p_nit con default); la de 5 ya no existe (T28).
   checks := checks + 1;
   perform set_config('role', 'postgres', true);
-  if has_function_privilege('anon', 'public.actualizar_clinica(text,text,text,text,text)', 'execute')
-     or not has_function_privilege('authenticated', 'public.actualizar_clinica(text,text,text,text,text)', 'execute') then
+  if has_function_privilege('anon', 'public.actualizar_clinica(text,text,text,text,text,text)', 'execute')
+     or not has_function_privilege('authenticated', 'public.actualizar_clinica(text,text,text,text,text,text)', 'execute') then
     failures := failures || 'Q48 grants de actualizar_clinica incorrectos (anon debe fallar, authenticated ejecutar)';
   end if;
 
