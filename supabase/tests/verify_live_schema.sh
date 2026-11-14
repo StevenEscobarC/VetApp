@@ -317,7 +317,7 @@ probe_embed movimientos_inventario '*, autor:perfiles!movimientos_veterinario_pe
 # Fase 7: hints de FK de cobros (deben coincidir con kSelectCobro de 07-02). 400 = hint equivocado.
 probe_embed cobros '*, cobro_items(*), autor:perfiles!cobros_creado_por_perfil_fkey(nombre)' 'cobros autor e items embed' allow_denied
 probe_embed cobros '*, anulador:perfiles!cobros_anulada_por_perfil_fkey(nombre)' 'cobros anulador embed' allow_denied
-probe_embed cobros '*, convertida:cobros!cobros_convertida_en_fkey(numero), origen:cobros!cobros_cotizacion_origen_fkey(numero)' 'cobros conversion embed' allow_denied
+probe_embed cobros '*, convertida:cobros!convertida_en_id(numero), origen:cobros!cotizacion_origen_id(numero)' 'cobros conversion embed' allow_denied
 
 # Fase 5 (D-26): el bucket clinica-logos es privado; la URL pública no debe servir nada.
 logo_code=$(curl -s -o /dev/null -w '%{http_code}' \

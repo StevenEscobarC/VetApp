@@ -50,8 +50,8 @@ class SupabaseCobrosRepository {
       '*, cobro_items(*), '
       'autor:perfiles!cobros_creado_por_perfil_fkey(nombre), '
       'anulador:perfiles!cobros_anulada_por_perfil_fkey(nombre), '
-      'convertida:cobros!cobros_convertida_en_fkey(numero), '
-      'origen:cobros!cobros_cotizacion_origen_fkey(numero)';
+      'convertida:cobros!convertida_en_id(numero), '
+      'origen:cobros!cotizacion_origen_id(numero)';
 
   Future<T> _run<T>(
     Future<T> Function() op,
