@@ -1,6 +1,8 @@
 /// Datos de una clínica. Solo los administradores los editan, siempre a través
 /// del RPC `actualizar_clinica`. [logoPath] es la ruta del objeto en el bucket
-/// privado `clinica-logos`, nunca una URL (D-26/D-27).
+/// privado `clinica-logos`, nunca una URL (D-26/D-27). [nit] es el NIT o la
+/// cédula opcional (D-04) normalizado (`'900123456-7'`); sale en las
+/// cotizaciones y cuentas de cobro.
 class Clinica {
   const Clinica({
     required this.id,
@@ -9,10 +11,12 @@ class Clinica {
     required this.direccion,
     required this.telefono,
     this.logoPath,
+    this.nit,
   });
 
   factory Clinica.desdeJson(Map<String, dynamic> json) {
     final logo = json['logo_path'] as String?;
+    final nit = json['nit'] as String?;
     return Clinica(
       id: json['id'] as String,
       nombre: json['nombre'] as String? ?? '',
@@ -20,6 +24,7 @@ class Clinica {
       direccion: json['direccion'] as String? ?? '',
       telefono: json['telefono'] as String? ?? '',
       logoPath: (logo == null || logo.isEmpty) ? null : logo,
+      nit: (nit == null || nit.isEmpty) ? null : nit,
     );
   }
 
@@ -29,6 +34,7 @@ class Clinica {
   final String direccion;
   final String telefono;
   final String? logoPath;
+  final String? nit;
 
   /// [quitarLogo] permite poner [logoPath] en null (copyWith no distingue
   /// "no cambiar" de "null" por sí solo).
@@ -38,6 +44,7 @@ class Clinica {
     String? direccion,
     String? telefono,
     String? logoPath,
+    String? nit,
     bool quitarLogo = false,
   }) {
     return Clinica(
@@ -47,6 +54,7 @@ class Clinica {
       direccion: direccion ?? this.direccion,
       telefono: telefono ?? this.telefono,
       logoPath: quitarLogo ? null : (logoPath ?? this.logoPath),
+      nit: nit ?? this.nit,
     );
   }
 }

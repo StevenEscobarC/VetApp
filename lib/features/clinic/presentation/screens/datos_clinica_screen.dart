@@ -1,11 +1,11 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/captura_foto.dart';
+import '../../../../core/utils/formato.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
@@ -158,11 +158,13 @@ class _FormularioState extends ConsumerState<_Formulario> {
   late final TextEditingController _ciudad;
   late final TextEditingController _direccion;
   late final TextEditingController _telefono;
+  late final TextEditingController _nit;
   late Clinica _actual;
   Uint8List? _preview;
   bool _quitar = false;
   bool _guardando = false;
   String? _errorNombre;
+  String? _errorNit;
   String? _error;
 
   @override
@@ -173,6 +175,7 @@ class _FormularioState extends ConsumerState<_Formulario> {
     _ciudad = TextEditingController(text: _actual.ciudad);
     _direccion = TextEditingController(text: _actual.direccion);
     _telefono = TextEditingController(text: _actual.telefono);
+    _nit = TextEditingController(text: _nitParaMostrar(_actual.nit));
   }
 
   @override
@@ -181,8 +184,12 @@ class _FormularioState extends ConsumerState<_Formulario> {
     _ciudad.dispose();
     _direccion.dispose();
     _telefono.dispose();
+    _nit.dispose();
     super.dispose();
   }
+
+  static String _nitParaMostrar(String? nit) =>
+      nit == null ? '' : formatearNit(nit);
 
   Future<void> _elegir(FuenteFoto fuente) async {
     final p = ref.read(miPlanProvider).value;
@@ -211,8 +218,14 @@ class _FormularioState extends ConsumerState<_Formulario> {
       setState(() => _errorNombre = 'Escribe el nombre de la clínica.');
       return;
     }
+    final nit = normalizarNit(_nit.text);
+    if (nit.error != null) {
+      setState(() => _errorNit = nit.error);
+      return;
+    }
     setState(() {
       _errorNombre = null;
+      _errorNit = null;
       _error = null;
       _guardando = true;
     });
@@ -228,6 +241,7 @@ class _FormularioState extends ConsumerState<_Formulario> {
             telefono: _telefono.text,
             nuevoLogo: _preview,
             quitarLogo: _quitar,
+            nit: nit.valor,
           );
       messenger.showSnackBar(
         const SnackBar(content: Text('Datos de la clínica guardados')),
@@ -235,6 +249,7 @@ class _FormularioState extends ConsumerState<_Formulario> {
       if (!mounted) return;
       setState(() {
         _actual = nueva;
+        _nit.text = _nitParaMostrar(nueva.nit);
         _preview = null;
         _quitar = false;
         _guardando = false;
@@ -362,6 +377,20 @@ class _FormularioState extends ConsumerState<_Formulario> {
           keyboardType: TextInputType.phone,
           maxLength: 30,
         ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          label: 'NIT o cédula (opcional)',
+          controller: _nit,
+          // Teclado de teléfono para que el guion quede a la mano.
+          keyboardType: TextInputType.phone,
+          maxLength: 15,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
+            const _UnSoloGuion(),
+          ],
+          helperText: 'Aparece en tus cotizaciones y cuentas de cobro.',
+          errorText: _errorNit,
+        ),
         const SizedBox(height: AppSpacing.lg),
         if (_error != null) ...[
           Text(
@@ -378,6 +407,17 @@ class _FormularioState extends ConsumerState<_Formulario> {
       ],
     );
   }
+}
+
+/// Rechaza el cambio si deja más de un guion (el del dígito de verificación).
+class _UnSoloGuion extends TextInputFormatter {
+  const _UnSoloGuion();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) => '-'.allMatches(newValue.text).length > 1 ? oldValue : newValue;
 }
 
 /// Fila de pista del plan: candado + texto discreto.

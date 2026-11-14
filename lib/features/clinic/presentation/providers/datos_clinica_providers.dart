@@ -27,7 +27,9 @@ final puedeEditarClinicaProvider = Provider.autoDispose<bool>(
 const int kMaxBytesLogo = 1048576;
 
 /// Guarda los datos de la clínica: sube el logo nuevo, llama a
-/// `actualizar_clinica` y limpia objetos huérfanos (best effort).
+/// `actualizar_clinica` y limpia objetos huérfanos (best effort). [nit] es
+/// reemplazo completo, como el logo: null lo borra (el formulario siempre
+/// envía el valor actual).
 class GuardarDatosClinica {
   GuardarDatosClinica(this._ref);
 
@@ -41,6 +43,7 @@ class GuardarDatosClinica {
     required String telefono,
     Uint8List? nuevoLogo,
     bool quitarLogo = false,
+    String? nit,
   }) async {
     if (nuevoLogo != null && nuevoLogo.length > kMaxBytesLogo) {
       throw const ClinicaFailure(
@@ -70,6 +73,7 @@ class GuardarDatosClinica {
             direccion: direccion.trim(),
             telefono: telefono.trim(),
             logoPath: subido ?? (quitarLogo ? null : actual.logoPath),
+            nit: nit,
           );
     } on ClinicaFailure {
       if (subido != null) {

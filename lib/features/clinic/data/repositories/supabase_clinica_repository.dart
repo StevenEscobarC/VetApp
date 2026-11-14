@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/data/limite_plan_postgrest.dart';
 import '../../../../core/errors/limite_plan.dart';
+import '../../../../core/utils/formato.dart';
 import '../../domain/clinica.dart';
 import '../../domain/clinica_failure.dart';
 
@@ -12,11 +13,15 @@ class SupabaseClinicaRepository {
 
   final SupabaseClient _client;
 
+  /// Columnas que lee [miClinica] (incluye `nit`, D-04).
+  static const columnasClinica =
+      'id, nombre, ciudad, direccion, telefono, logo_path, nit';
+
   Future<Clinica> miClinica(String clinicaId) async {
     try {
       final fila = await _client
           .from('clinicas')
-          .select('id, nombre, ciudad, direccion, telefono, logo_path')
+          .select(columnasClinica)
           .eq('id', clinicaId)
           .single();
       return Clinica.desdeJson(fila);
@@ -31,22 +36,26 @@ class SupabaseClinicaRepository {
     required String direccion,
     required String telefono,
     String? logoPath,
+    String? nit,
   }) => {
     'p_nombre': nombre.trim(),
     'p_ciudad': ciudad.trim(),
     'p_direccion': direccion.trim(),
     'p_telefono': telefono.trim(),
     'p_logo_path': logoPath,
+    // Siempre se envía (función de 6 argumentos de 07-04); null lo borra.
+    'p_nit': normalizarNit(nit ?? '').valor,
   };
 
   /// Reemplazo completo: [logoPath] con la ruta actual la conserva, null la
-  /// quita.
+  /// quita. Igual con [nit].
   Future<Clinica> actualizar({
     required String nombre,
     required String ciudad,
     required String direccion,
     required String telefono,
     String? logoPath,
+    String? nit,
   }) async {
     try {
       final r = await _client.rpc(
@@ -57,6 +66,7 @@ class SupabaseClinicaRepository {
           direccion: direccion,
           telefono: telefono,
           logoPath: logoPath,
+          nit: nit,
         ),
       );
       return Clinica.desdeJson(Map<String, dynamic>.from(r as Map));
