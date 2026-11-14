@@ -1260,7 +1260,8 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    const noDisponible = 'Esta cotización ya no se puede usar. Actualiza '
+    const noDisponible =
+        'Esta cotización ya no se puede usar. Actualiza '
         'la lista.';
 
     bool ctaHabilitada(WidgetTester tester) =>
@@ -1389,19 +1390,13 @@ void main() {
         'cotización convertida muestran el mismo aviso', (tester) async {
       for (final (m, origen) in [
         (ModoFormCobro.convertir, cobroDePrueba(id: 'q4')),
-        (
-          ModoFormCobro.editarCotizacion,
-          cot(estado: EstadoCobro.convertida),
-        ),
+        (ModoFormCobro.editarCotizacion, cot(estado: EstadoCobro.convertida)),
       ]) {
         await tester.pumpWidget(const SizedBox());
         await _abrir(
           tester,
           _appInv(
-            repo: FakeCobrosRepository(
-              servicios: _servicios,
-              cobros: [origen],
-            ),
+            repo: FakeCobrosRepository(servicios: _servicios, cobros: [origen]),
             prefill: modo(m, 'q4'),
             productos: [_amox],
           ),
@@ -1412,9 +1407,7 @@ void main() {
       }
     });
 
-    testWidgets('mientras carga el origen: filas de esqueleto', (
-      tester,
-    ) async {
+    testWidgets('mientras carga el origen: filas de esqueleto', (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -1425,9 +1418,8 @@ void main() {
           routes: [
             GoRoute(
               path: '/form',
-              builder: (_, _) => CobroFormScreen(
-                prefill: modo(ModoFormCobro.convertir, 'q4'),
-              ),
+              builder: (_, _) =>
+                  CobroFormScreen(prefill: modo(ModoFormCobro.convertir, 'q4')),
             ),
           ],
           overrides: [
