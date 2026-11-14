@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/data/clock_provider.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
+import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/billing/domain/entities/cobro.dart';
 import 'package:vetapp/features/billing/domain/entities/cobro_item.dart';
@@ -61,8 +62,10 @@ Cobro _cc({
   String? motivoAnulacion,
   String? clienteCedula = '1020304050',
   int numero = 12,
+  String creadoPor = 'vet1',
 }) => cobroDePrueba(
   id: id,
+  creadoPor: creadoPor,
   numero: numero,
   estado: estado,
   fecha: DateTime.utc(2026, 8, 18),
@@ -103,6 +106,7 @@ Future<void> _abrir(
   FakeCobrosRepository repo, {
   String id = 'c1',
   MiPlan? plan,
+  AuthProfile profile = vetProfile,
 }) async {
   tester.view.physicalSize = const Size(800, 3000);
   tester.view.devicePixelRatio = 1;
@@ -137,7 +141,7 @@ Future<void> _abrir(
           ),
         ),
         authProfileProvider.overrideWith(
-          () => FakeAuthProfileNotifier(profile: vetProfile),
+          () => FakeAuthProfileNotifier(profile: profile),
         ),
         cobrosRepositoryProvider.overrideWithValue(repo),
         clockProvider.overrideWithValue(() => _hoy),
@@ -490,6 +494,121 @@ void main() {
       expect(find.text('Pagada el 13/11/2026 · Nequi'), findsOneWidget);
       expect(find.text('Marcar como pagada'), findsNothing);
       expect(primarios(tester).single.label, 'Enviar al cliente');
+    });
+  });
+
+  group('anular (07-12)', () {
+    const anularCc = 'Anular cuenta de cobro';
+
+    List<AppButton> primarios(WidgetTester tester) => tester
+        .widgetList<AppButton>(find.byType(AppButton))
+        .where((b) => b.variant == AppButtonVariant.primary)
+        .toList();
+
+    Cobro pagada({String creadoPor = 'vet1'}) => _cc(
+      estado: EstadoCobro.pagada,
+      metodoPago: MetodoPago.nequi,
+      pagadaEl: DateTime.utc(2026, 8, 20),
+      creadoPor: creadoPor,
+    );
+
+    testWidgets('admin, CC pendiente: "Anular cuenta de cobro" destructiva '
+        'como última acción y abre la hoja', (tester) async {
+      await _abrir(tester, FakeCobrosRepository(cobros: [_cc()]));
+      final botones = tester
+          .widgetList<AppButton>(find.byType(AppButton))
+          .toList();
+      expect(botones.last.label, anularCc);
+      expect(botones.last.variant, AppButtonVariant.destructive);
+      expect(botones.last.icon, isNull);
+      expect(primarios(tester).single.label, 'Marcar como pagada');
+
+      await tester.tap(find.text(anularCc));
+      await tester.pumpAndSettle();
+      expect(find.text('Anular CC-0012'), findsOneWidget);
+      expect(find.text('Los productos vuelven al inventario.'), findsOneWidget);
+    });
+
+    testWidgets('autor no admin, CC pagada: ve la acción, un solo primario', (
+      tester,
+    ) async {
+      await _abrir(
+        tester,
+        FakeCobrosRepository(cobros: [pagada(creadoPor: 'vet-2')]),
+        profile: vetColegaProfile,
+      );
+      final botones = tester
+          .widgetList<AppButton>(find.byType(AppButton))
+          .toList();
+      expect(botones.last.label, anularCc);
+      expect(botones.last.variant, AppButtonVariant.destructive);
+      expect(primarios(tester).single.label, 'Enviar al cliente');
+    });
+
+    testWidgets('ni admin ni autor: sin acción y sin candado', (tester) async {
+      for (final c in [_cc(), pagada()]) {
+        await tester.pumpWidget(const SizedBox());
+        await _abrir(
+          tester,
+          FakeCobrosRepository(cobros: [c]),
+          profile: vetColegaProfile,
+        );
+        expect(find.textContaining('Anular'), findsNothing);
+        expect(find.byIcon(Icons.lock_outline), findsNothing);
+      }
+    });
+
+    testWidgets('solo lectura, autor: candado en su lugar y hoja del plan', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _abrir(
+        tester,
+        FakeCobrosRepository(cobros: [pagada(creadoPor: 'vet-2')]),
+        profile: vetColegaProfile,
+        plan: planSoloLectura,
+      );
+      final anular = tester.widget<AppButton>(
+        find.widgetWithText(AppButton, anularCc),
+      );
+      expect(anular.icon, Icons.lock_outline);
+      expect(anular.variant, AppButtonVariant.destructive);
+      expect(
+        find.bySemanticsLabel('$anularCc, bloqueado, solo lectura'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(anularCc));
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.text('Anular CC-0012'), findsNothing);
+      semantics.dispose();
+    });
+
+    testWidgets('tras anular: total tachado, chip, motivo y sin acciones', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(cobros: [_cc()]);
+      await _abrir(tester, repo);
+      await tester.tap(find.text(anularCc));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Error en el precio');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(AppButton, 'Anular'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('CC-0012 anulada. Los productos volvieron al inventario.'),
+        findsOneWidget,
+      );
+      expect(find.text('Anulada'), findsOneWidget);
+      expect(find.text('Motivo: Error en el precio'), findsOneWidget);
+      final totales = tester.widgetList<Text>(find.text('\$ 120.000'));
+      expect(totales.first.style?.decoration, TextDecoration.lineThrough);
+      expect(find.text('Marcar como pagada'), findsNothing);
+      expect(find.text('Enviar al cliente'), findsNothing);
+      expect(find.text(anularCc), findsNothing);
+      expect(find.byType(AppButton), findsNothing);
+      _sinFactura();
     });
   });
 }

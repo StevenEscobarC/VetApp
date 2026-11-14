@@ -18,6 +18,7 @@ import '../../domain/entities/cobro_item.dart';
 import '../../domain/numeracion.dart';
 import '../cobros_rutas.dart';
 import '../providers/cobros_providers.dart';
+import '../widgets/anular_cobro_sheet.dart';
 import '../widgets/cobro_fila.dart';
 import '../widgets/enviar_cobro_sheet.dart';
 import '../widgets/estado_cobro_chip.dart';
@@ -64,13 +65,15 @@ class CobroDetailScreen extends ConsumerWidget {
   }
 
   /// Bloque de acciones del estado actual (UI-SPEC §4): exactamente un
-  /// primario por estado. Los planes de conversión y anulación agregan sus
-  /// casos a este `switch`.
+  /// primario por estado. Los planes de conversión agregan sus casos a este
+  /// `switch`. Una CC anulada no tiene acciones (07-15 agrega "Emitir una
+  /// nueva").
   Widget _acciones(Cobro c) => switch ((c.tipo, c.estado)) {
     (TipoCobro.cuentaCobro, EstadoCobro.pendiente) => _AccionesCcPendiente(
       cobro: c,
     ),
     (TipoCobro.cuentaCobro, EstadoCobro.pagada) => _AccionesCcPagada(cobro: c),
+    (TipoCobro.cuentaCobro, EstadoCobro.anulada) => const SizedBox.shrink(),
     _ => const SizedBox.shrink(),
   };
 }
@@ -120,6 +123,7 @@ class _AccionesCcPendiente extends ConsumerWidget {
             variant: AppButtonVariant.outline,
             onPressed: () => showEnviarCobroSheet(context, cobro),
           ),
+          _AccionAnular(cobro: cobro),
         ],
       ),
     );
@@ -135,12 +139,65 @@ class _AccionesCcPagada extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: AppSpacing.lg),
-    child: AppButton(
-      label: 'Enviar al cliente',
-      icon: Icons.ios_share,
-      onPressed: () => showEnviarCobroSheet(context, cobro),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppButton(
+          label: 'Enviar al cliente',
+          icon: Icons.ios_share,
+          onPressed: () => showEnviarCobroSheet(context, cobro),
+        ),
+        _AccionAnular(cobro: cobro),
+      ],
     ),
   );
+}
+
+/// "Anular cuenta de cobro" (D-10, D-19): última acción, destructiva. Límite
+/// de rol: oculta (sin candado ni explicación) para quien no es el
+/// administrador ni quien la emitió; el servidor es la autoridad (42501). En
+/// solo lectura conserva su lugar con candado y abre `LimitePlanSheet`.
+class _AccionAnular extends ConsumerWidget {
+  const _AccionAnular({required this.cobro});
+
+  final Cobro cobro;
+
+  static const _label = 'Anular cuenta de cobro';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(puedeAnularCobroProvider(cobro.creadoPor))) {
+      return const SizedBox.shrink();
+    }
+    final puede = ref.watch(puedeEscribirProvider);
+
+    Future<void> anular() async {
+      if (!await asegurarEscritura(
+        context,
+        ref,
+        plan: ref.read(miPlanProvider).value,
+      )) {
+        return;
+      }
+      if (!context.mounted) return;
+      await showAnularCobroSheet(context, cobro);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: ControlEscritura(
+        puedeEscribir: puede,
+        label: _label,
+        onTap: anular,
+        child: AppButton(
+          label: _label,
+          icon: puede ? null : Icons.lock_outline,
+          variant: AppButtonVariant.destructive,
+          onPressed: anular,
+        ),
+      ),
+    );
+  }
 }
 
 class _Contenido extends ConsumerWidget {
