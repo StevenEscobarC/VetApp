@@ -12,7 +12,10 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../../appointments/domain/entities/cita.dart';
 import '../../../appointments/presentation/providers/citas_providers.dart';
+import '../../../billing/presentation/cobros_rutas.dart';
+import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../domain/consulta_failure.dart';
 import '../providers/consultas_providers.dart';
 
@@ -155,7 +158,7 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
     });
 
     try {
-      await ref.read(registrarConsultaProvider)(
+      final consultaId = await ref.read(registrarConsultaProvider)(
         mascotaId: widget.mascotaId,
         diagnostico: _diagnosticoCtrl.text,
         tratamiento: _tratamientoCtrl.text,
@@ -169,9 +172,35 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
         citaId: widget.citaId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Consulta guardada')));
+      // Messenger y router capturados antes del pop: la acción "Cobrar"
+      // vive más que esta pantalla (D-05). En solo lectura o sin dueño
+      // conocido no hay nada que cobrar desde aquí.
+      final messenger = ScaffoldMessenger.of(context);
+      final router = GoRouter.of(context);
+      final duenoId = ref
+          .read(mascotaProvider(widget.mascotaId))
+          .value
+          ?.duenoId;
+      final puedeCobrar = ref.read(puedeEscribirProvider) && duenoId != null;
+      final mascotaId = widget.mascotaId;
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text('Consulta guardada'),
+          duration: const Duration(seconds: 6),
+          action: puedeCobrar
+              ? SnackBarAction(
+                  label: 'Cobrar',
+                  onPressed: () => router.push(
+                    rutaNuevoCobro(
+                      clienteId: duenoId,
+                      mascotaId: mascotaId,
+                      consultaId: consultaId,
+                    ),
+                  ),
+                )
+              : null,
+        ),
+      );
       context.pop();
     } on ConsultaFailure catch (e) {
       // Respaldo del servidor (LP004 con bandera vencida): hoja explicativa,
@@ -190,6 +219,9 @@ class _ConsultaFormScreenState extends ConsumerState<ConsultaFormScreen> {
     final cita = citaId == null
         ? null
         : ref.watch(citaProvider(citaId)).asData?.value;
+    // Mantiene vivos el dueño y el plan para la acción "Cobrar" del snackbar.
+    ref.watch(mascotaProvider(widget.mascotaId));
+    ref.watch(puedeEscribirProvider);
     return Scaffold(
       appBar: const AppTopBar(title: 'Nueva consulta'),
       body: SingleChildScrollView(

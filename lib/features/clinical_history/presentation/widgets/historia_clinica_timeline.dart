@@ -4,8 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../../../../core/widgets/status/vet_avatar.dart';
+import '../../../billing/presentation/cobros_rutas.dart';
+import '../../../billing/presentation/widgets/cobrar_boton.dart';
+import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../../team/presentation/providers/team_providers.dart';
 import '../../domain/autor_consulta.dart';
 import '../../domain/entities/consulta.dart';
@@ -36,6 +40,8 @@ class HistoriaClinicaTimeline extends ConsumerWidget {
           data: (m) => m.where((x) => x.activo).map((x) => x.id).toSet(),
         );
     final indices = ref.watch(indicesColorVetProvider);
+    // Dueño de la mascota: sin él no se ofrece cobrar (D-05).
+    final duenoId = ref.watch(mascotaProvider(mascotaId)).value?.duenoId;
 
     return consultasAsync.when(
       data: (consultas) {
@@ -76,6 +82,7 @@ class HistoriaClinicaTimeline extends ConsumerWidget {
                     ),
                 retirado: autorRetirado(ordenadas[i], idsActivos),
                 indiceColor: indices[ordenadas[i].veterinarioId] ?? 0,
+                duenoId: duenoId,
               ),
             ],
           ],
@@ -93,19 +100,24 @@ class HistoriaClinicaTimeline extends ConsumerWidget {
 /// tocarla en cualquier parte (toda la tarjeta es el área tocable, per
 /// `AppCard.onTap`) la expande en el mismo lugar al registro completo.
 /// Estado puramente local (`_expandida`) — sin `IconButton`, sin ícono de
-/// editar/borrar, sin gesto de long-press ni swipe (HIST-04).
+/// editar/borrar, sin gesto de long-press ni swipe (HIST-04). Expandida
+/// ofrece solo navegar a cobrar (D-05): nunca modifica la consulta.
 class _ConsultaCard extends StatefulWidget {
   const _ConsultaCard({
     required this.consulta,
     required this.mostrarAutor,
     required this.retirado,
     required this.indiceColor,
+    this.duenoId,
   });
 
   final Consulta consulta;
   final bool mostrarAutor;
   final bool retirado;
   final int indiceColor;
+
+  /// Cliente dueño de la mascota; `null` mientras carga o si falla.
+  final String? duenoId;
 
   @override
   State<_ConsultaCard> createState() => _ConsultaCardState();
@@ -227,6 +239,23 @@ class _ConsultaCardState extends State<_ConsultaCard> {
           color: consulta.evolucion == null ? AppColors.textMuted : null,
         ),
       ),
+      if (widget.duenoId case final duenoId?) ...[
+        const SizedBox(height: AppSpacing.sm),
+        CobroVinculadoFila(
+          consultaId: consulta.id,
+          siNoHay: Align(
+            alignment: Alignment.centerLeft,
+            child: CobrarBoton(
+              ruta: rutaNuevoCobro(
+                clienteId: duenoId,
+                mascotaId: consulta.mascotaId,
+                consultaId: consulta.id,
+              ),
+              variant: AppButtonVariant.text,
+            ),
+          ),
+        ),
+      ],
     ];
   }
 }

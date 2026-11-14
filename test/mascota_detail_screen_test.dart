@@ -11,6 +11,7 @@ import 'package:vetapp/core/utils/captura_foto.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/core/widgets/media/app_photo_picker.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
 import 'package:vetapp/features/clinical_history/data/services/historia_clinica_pdf_service.dart';
 import 'package:vetapp/features/clinical_history/domain/consulta_failure.dart';
 import 'package:vetapp/features/clinical_history/presentation/providers/consultas_providers.dart';
@@ -28,6 +29,7 @@ import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
 
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_cobros.dart';
 import 'helpers/fake_consultas.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_mascotas.dart';
@@ -169,6 +171,10 @@ Widget _appUnderTest({
         path: '/agenda/nueva',
         builder: (_, state) => Text('nueva-cita ${state.uri.query}'),
       ),
+      GoRoute(
+        path: '/cobros/nuevo',
+        builder: (_, state) => Text('NUEVO COBRO ${state.uri.query}'),
+      ),
     ],
     overrides: [
       ...planOverrides(plan: plan),
@@ -200,6 +206,7 @@ Widget _appUnderTest({
       compartirPdfProvider.overrideWithValue(
         (compartir ?? CompartirPdfFalso()).call,
       ),
+      cobrosRepositoryProvider.overrideWithValue(FakeCobrosRepository()),
     ],
   );
 }
@@ -1148,5 +1155,128 @@ void main() {
         );
       },
     );
+  });
+
+  group('Cobrar desde la ficha (D-05)', () {
+    void pantallaAlta(WidgetTester tester) {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    Map<String, String> queryDestino(WidgetTester tester) {
+      final texto = tester
+          .widget<Text>(find.textContaining('NUEVO COBRO '))
+          .data!;
+      return Uri.splitQueryString(texto.substring('NUEVO COBRO '.length));
+    }
+
+    testWidgets(
+      'consulta expandida: "Cobrar" abre el formulario con Laura, Rocky y '
+      'la consulta; sin Editar ni Eliminar en la tarjeta',
+      (tester) async {
+        pantallaAlta(tester);
+        final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+        final consultaRepo = FakeConsultaRepository(
+          consultas: [consultaOtitis],
+        );
+        await tester.pumpWidget(
+          _appUnderTest(repo: repo, consultaRepo: consultaRepo),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.text('Otitis externa'));
+        await tester.tap(find.text('Otitis externa'));
+        await tester.pumpAndSettle();
+
+        final tarjeta = find.ancestor(
+          of: find.text('Mejoría a los 5 días'),
+          matching: find.byType(Card),
+        );
+        for (final prohibido in ['Editar', 'Eliminar']) {
+          expect(
+            find.descendant(of: tarjeta, matching: find.text(prohibido)),
+            findsNothing,
+          );
+        }
+
+        final cobrar = find.widgetWithText(TextButton, 'Cobrar');
+        await tester.ensureVisible(cobrar);
+        await tester.tap(cobrar);
+        await tester.pumpAndSettle();
+        final query = queryDestino(tester);
+        expect(query['clienteId'], 'c-1');
+        expect(query['mascotaId'], 'm-1');
+        expect(query['consultaId'], 'con-1');
+      },
+    );
+
+    testWidgets(
+      'guardar una consulta y tocar "Cobrar" en el snackbar abre el '
+      'formulario ligado a la consulta nueva',
+      (tester) async {
+        pantallaAlta(tester);
+        final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+        final consultaRepo = FakeConsultaRepository(idResultado: 'con-55');
+        await tester.pumpWidget(
+          _appUnderTest(
+            repo: repo,
+            consultaRepo: consultaRepo,
+            formularioReal: true,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.text('Nueva consulta'));
+        await tester.tap(find.text('Nueva consulta'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextFormField).at(0), 'Otitis');
+        await tester.enterText(find.byType(TextFormField).at(1), 'Gotas');
+        await tester.pump();
+        await tester.ensureVisible(find.text('Guardar consulta'));
+        await tester.tap(find.text('Guardar consulta'));
+        await tester.pump();
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(SnackBarAction, 'Cobrar'));
+        await tester.pumpAndSettle();
+        final query = queryDestino(tester);
+        expect(query['clienteId'], 'c-1');
+        expect(query['mascotaId'], 'm-1');
+        expect(query['consultaId'], 'con-55');
+      },
+    );
+
+    testWidgets('solo lectura: "Cobrar" de la consulta lleva candado', (
+      tester,
+    ) async {
+      pantallaAlta(tester);
+      final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+      final consultaRepo = FakeConsultaRepository(consultas: [consultaOtitis]);
+      await tester.pumpWidget(
+        _appUnderTest(
+          repo: repo,
+          consultaRepo: consultaRepo,
+          plan: planSoloLectura,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Otitis externa'));
+      await tester.tap(find.text('Otitis externa'));
+      await tester.pumpAndSettle();
+
+      final cobrar = find.widgetWithText(TextButton, 'Cobrar');
+      expect(
+        find.descendant(of: cobrar, matching: find.byIcon(Icons.lock_outline)),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(cobrar);
+      await tester.tap(cobrar);
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.textContaining('NUEVO COBRO'), findsNothing);
+    });
   });
 }
