@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/utils/telefono_co.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
+import 'package:vetapp/core/widgets/inputs/app_text_field.dart';
+import 'package:vetapp/features/clients/data/repositories/supabase_cliente_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/clients/domain/cliente_failure.dart';
 import 'package:vetapp/features/clients/domain/entities/cliente.dart';
@@ -544,6 +546,165 @@ void main() {
         textoVigencia(ahora.add(const Duration(minutes: 30)), ahora),
         'Válido por menos de 1 hora',
       );
+    });
+  });
+
+  group('Cédula opcional del cliente (D-24)', () {
+    const ritaConCedula = Cliente(
+      id: 'c-1',
+      clinicaId: 'cli-1',
+      nombre: 'Rita Gómez',
+      telefono: '3001234567',
+      cedula: '1020304050',
+      numeroMascotas: 2,
+    );
+
+    Finder campoCedula() => find.descendant(
+      of: find.widgetWithText(AppTextField, 'Cédula (opcional)'),
+      matching: find.byType(TextFormField),
+    );
+
+    String textoCedula(WidgetTester tester) =>
+        tester.widget<TextFormField>(campoCedula()).controller!.text;
+
+    AppButton botonGuardar(WidgetTester tester) => tester.widget<AppButton>(
+      find.widgetWithText(AppButton, 'Guardar cambios'),
+    );
+
+    Future<void> abrir(WidgetTester tester, FakeClienteRepository repo) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_appUnderTest(clienteRepo: repo));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> desenfocar(WidgetTester tester) async {
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> guardar(WidgetTester tester) async {
+      await tester.ensureVisible(find.text('Guardar cambios'));
+      await tester.tap(find.text('Guardar cambios'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+      'aparece entre Dirección y Notas con su ayuda; la pantalla rápida '
+      'no se toca',
+      (tester) async {
+        await abrir(
+          tester,
+          FakeClienteRepository(clientes: [clienteRita, clientePedro]),
+        );
+        expect(find.text('Cédula (opcional)'), findsOneWidget);
+        expect(
+          find.text('Sale en las cuentas de cobro de este cliente.'),
+          findsOneWidget,
+        );
+        final yDireccion = tester.getTopLeft(find.text('Dirección')).dy;
+        final yCedula = tester.getTopLeft(find.text('Cédula (opcional)')).dy;
+        final yNotas = tester.getTopLeft(find.text('Notas')).dy;
+        expect(yDireccion < yCedula, isTrue);
+        expect(yCedula < yNotas, isTrue);
+        final campo = tester.widget<TextField>(
+          find.descendant(of: campoCedula(), matching: find.byType(TextField)),
+        );
+        expect(campo.keyboardType, TextInputType.number);
+        expect(campo.maxLength, 12);
+      },
+    );
+
+    testWidgets(
+      'escribir 1.020.304.050 y guardar envía solo dígitos; sin foco se ve '
+      'con puntos',
+      (tester) async {
+        final repo = FakeClienteRepository(
+          clientes: [clienteRita, clientePedro],
+        );
+        await abrir(tester, repo);
+        await tester.enterText(campoCedula(), '1.020.304.050');
+        await tester.pump();
+        expect(botonGuardar(tester).onPressed, isNotNull);
+        await guardar(tester);
+        expect(repo.actualizados.single.cedula, '1020304050');
+        await desenfocar(tester);
+        expect(textoCedula(tester), '1.020.304.050');
+      },
+    );
+
+    testWidgets('una cédula guardada se muestra con puntos', (tester) async {
+      await abrir(
+        tester,
+        FakeClienteRepository(clientes: [ritaConCedula, clientePedro]),
+      );
+      expect(textoCedula(tester), '1.020.304.050');
+      expect(botonGuardar(tester).onPressed, isNull);
+    });
+
+    testWidgets('1234 muestra el error y no guarda nada', (tester) async {
+      final repo = FakeClienteRepository(clientes: [clienteRita, clientePedro]);
+      await abrir(tester, repo);
+      await tester.enterText(campoCedula(), '1234');
+      await desenfocar(tester);
+      expect(
+        find.text('Revisa la cédula: debe tener entre 5 y 12 números.'),
+        findsOneWidget,
+      );
+      expect(botonGuardar(tester).onPressed, isNull);
+      await guardar(tester);
+      expect(repo.actualizados, isEmpty);
+    });
+
+    testWidgets('vaciar la cédula marca el formulario y guarda null', (
+      tester,
+    ) async {
+      final repo = FakeClienteRepository(
+        clientes: [ritaConCedula, clientePedro],
+      );
+      await abrir(tester, repo);
+      await tester.enterText(campoCedula(), '');
+      await tester.pump();
+      expect(botonGuardar(tester).onPressed, isNotNull);
+      await guardar(tester);
+      expect(repo.actualizados.single.cedula, isNull);
+    });
+
+    testWidgets('cambiar solo la cédula marca el formulario como sucio', (
+      tester,
+    ) async {
+      await abrir(
+        tester,
+        FakeClienteRepository(clientes: [ritaConCedula, clientePedro]),
+      );
+      expect(botonGuardar(tester).onPressed, isNull);
+      await tester.enterText(campoCedula(), '1020304051');
+      await tester.pump();
+      expect(botonGuardar(tester).onPressed, isNotNull);
+      // Enfocar sin cambiar (solo quita los puntos) no ensucia el formulario.
+      await tester.enterText(campoCedula(), '1020304050');
+      await tester.pump();
+      expect(botonGuardar(tester).onPressed, isNull);
+    });
+
+    test('desdeFila mapea cedula y deja en null la cadena vacía', () {
+      Map<String, dynamic> fila(String? cedula) => {
+        'id': 'c-1',
+        'clinica_id': 'cli-1',
+        'nombre': 'Rita Gómez',
+        'telefono': '3001234567',
+        'cedula': cedula,
+        'mascotas': [
+          {'count': 1},
+        ],
+      };
+      expect(
+        SupabaseClienteRepository.desdeFila(fila('1020304050')).cedula,
+        '1020304050',
+      );
+      expect(SupabaseClienteRepository.desdeFila(fila('')).cedula, isNull);
+      expect(SupabaseClienteRepository.desdeFila(fila(null)).cedula, isNull);
     });
   });
 }

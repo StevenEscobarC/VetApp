@@ -226,4 +226,20 @@ void main() {
         );
     expect(t.repo.llamadasActualizar.single['logoPath'], isNull);
   });
+
+  test('nit pasa tal cual al repositorio (D-04)', () async {
+    final t = _armar(_conLogo);
+    final r = await t.c
+        .read(guardarDatosClinicaProvider)
+        .call(
+          actual: _conLogo,
+          nombre: 'A',
+          ciudad: '',
+          direccion: '',
+          telefono: '',
+          nit: '900123456-7',
+        );
+    expect(t.repo.llamadasActualizar.single['nit'], '900123456-7');
+    expect(r.nit, '900123456-7');
+  });
 }

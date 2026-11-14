@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/formato.dart';
 import '../../../../core/utils/telefono_co.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
@@ -41,6 +43,11 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
   final _direccionCtrl = TextEditingController();
   final _notasCtrl = TextEditingController();
 
+  /// Cédula (D-24): solo dígitos mientras tiene el foco; sin foco se muestra
+  /// con puntos de miles.
+  final _cedulaCtrl = TextEditingController();
+  final _cedulaFocus = FocusNode();
+
   /// Última versión guardada (o recién cargada), usada como base para medir
   /// si algo cambió y para conservar los campos no editables (perfilesId,
   /// código de vinculación) al construir el payload de `actualizar`.
@@ -57,9 +64,11 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
       _correoCtrl,
       _direccionCtrl,
       _notasCtrl,
+      _cedulaCtrl,
     ]) {
       controller.addListener(_onCamposCambiaron);
     }
+    _cedulaFocus.addListener(_onFocoCedula);
   }
 
   @override
@@ -69,10 +78,31 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
     _correoCtrl.dispose();
     _direccionCtrl.dispose();
     _notasCtrl.dispose();
+    _cedulaCtrl.dispose();
+    _cedulaFocus.dispose();
     super.dispose();
   }
 
   void _onCamposCambiaron() => setState(() {});
+
+  /// Con foco: solo dígitos para editar. Sin foco: con puntos si es válida.
+  void _onFocoCedula() {
+    final cedula = normalizarCedula(_cedulaCtrl.text);
+    if (_cedulaFocus.hasFocus) {
+      _cedulaCtrl.text = _cedulaCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+    } else if (cedula.valor != null) {
+      _cedulaCtrl.text = formatearCedula(cedula.valor!);
+    }
+    setState(() {});
+  }
+
+  String _cedulaParaMostrar(String? cedula) {
+    if (cedula == null) return '';
+    return _cedulaFocus.hasFocus ? cedula : formatearCedula(cedula);
+  }
+
+  String? get _errorCedula =>
+      _cedulaFocus.hasFocus ? null : normalizarCedula(_cedulaCtrl.text).error;
 
   bool get _avisoTelefono =>
       _telefonoTocado && requiereAvisoTelefono(_telefonoCtrl.text);
@@ -86,6 +116,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
     _correoCtrl.text = cliente.email ?? '';
     _direccionCtrl.text = cliente.direccion ?? '';
     _notasCtrl.text = cliente.notas ?? '';
+    _cedulaCtrl.text = _cedulaParaMostrar(cliente.cedula);
   }
 
   bool get _esDirty {
@@ -95,7 +126,13 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
         _telefonoCtrl.text != original.telefono ||
         _correoCtrl.text != (original.email ?? '') ||
         _direccionCtrl.text != (original.direccion ?? '') ||
-        _notasCtrl.text != (original.notas ?? '');
+        _notasCtrl.text != (original.notas ?? '') ||
+        _cedulaCambio(original);
+  }
+
+  bool _cedulaCambio(Cliente original) {
+    final cedula = normalizarCedula(_cedulaCtrl.text);
+    return cedula.error != null || cedula.valor != original.cedula;
   }
 
   bool get _correoValido {
@@ -107,7 +144,8 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
       _esDirty &&
       _nombreCtrl.text.trim().isNotEmpty &&
       telefonoGuardable(_telefonoCtrl.text) &&
-      _correoValido;
+      _correoValido &&
+      normalizarCedula(_cedulaCtrl.text).error == null;
 
   Future<void> _guardar() async {
     final original = _original;
@@ -136,6 +174,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           ? null
           : _direccionCtrl.text.trim(),
       notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
+      cedula: normalizarCedula(_cedulaCtrl.text).valor,
       perfilesId: original.perfilesId,
       codigoVinculacion: original.codigoVinculacion,
       codigoExpiraEn: original.codigoExpiraEn,
@@ -152,6 +191,7 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
         // Refleja el valor normalizado para que el formulario no quede
         // "sucio" tras guardar.
         _telefonoCtrl.text = resultado.telefono;
+        _cedulaCtrl.text = _cedulaParaMostrar(resultado.cedula);
       });
       ref.invalidate(clienteProvider(widget.clienteId));
       ref.read(clientesProvider.notifier).refrescar();
@@ -238,6 +278,19 @@ class _ClienteDetailScreenState extends ConsumerState<ClienteDetailScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
           AppTextField(label: 'Dirección', controller: _direccionCtrl),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            label: 'Cédula (opcional)',
+            controller: _cedulaCtrl,
+            focusNode: _cedulaFocus,
+            keyboardType: TextInputType.number,
+            // Los puntos solo se ponen por código al perder el foco; lo que
+            // se escribe o pega se reduce a dígitos antes del límite de 12.
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            maxLength: 12,
+            helperText: 'Sale en las cuentas de cobro de este cliente.',
+            errorText: _errorCedula,
+          ),
           const SizedBox(height: AppSpacing.md),
           AppTextField(label: 'Notas', controller: _notasCtrl, maxLines: 3),
           const SizedBox(height: AppSpacing.md),

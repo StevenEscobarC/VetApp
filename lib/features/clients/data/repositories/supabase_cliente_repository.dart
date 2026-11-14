@@ -78,7 +78,8 @@ class SupabaseClienteRepository {
   }
 
   /// Guarda los campos editables de [cliente] (nombre/telefono/email/
-  /// direccion/notas). Nunca envía `clinica_id` ni las columnas de
+  /// direccion/notas/cedula). [Cliente.cedula] ya llega normalizada (solo
+  /// dígitos) o null. Nunca envía `clinica_id` ni las columnas de
   /// vinculación (`perfiles_id`/`codigo_vinculacion`/`codigo_expira_en`) —
   /// esas solo las escribe `generar_codigo_vinculacion` o la futura RPC de
   /// reclamo (Fase 9).
@@ -94,6 +95,7 @@ class SupabaseClienteRepository {
                 : cliente.email!.trim(),
             'direccion': cliente.direccion?.trim() ?? '',
             'notas': cliente.notas?.trim() ?? '',
+            'cedula': cliente.cedula,
           })
           .eq('id', cliente.id)
           .select('*, mascotas(count)')
@@ -133,13 +135,18 @@ class SupabaseClienteRepository {
     }
   }
 
-  Cliente _fromRow(Map<String, dynamic> row) {
+  Cliente _fromRow(Map<String, dynamic> row) => desdeFila(row);
+
+  /// Fila de `clientes` (con `mascotas(count)` embebido) a [Cliente]. Las
+  /// cadenas vacías de direccion/notas/cedula quedan en null.
+  static Cliente desdeFila(Map<String, dynamic> row) {
     final mascotas = row['mascotas'] as List?;
     final numeroMascotas = (mascotas != null && mascotas.isNotEmpty)
         ? (mascotas.first['count'] as int? ?? 0)
         : 0;
     final direccion = row['direccion'] as String?;
     final notas = row['notas'] as String?;
+    final cedula = row['cedula'] as String?;
     final codigoExpiraEn = row['codigo_expira_en'] as String?;
     return Cliente(
       id: row['id'] as String,
@@ -149,6 +156,7 @@ class SupabaseClienteRepository {
       email: row['email'] as String?,
       direccion: (direccion == null || direccion.isEmpty) ? null : direccion,
       notas: (notas == null || notas.isEmpty) ? null : notas,
+      cedula: (cedula == null || cedula.isEmpty) ? null : cedula,
       perfilesId: row['perfiles_id'] as String?,
       codigoVinculacion: row['codigo_vinculacion'] as String?,
       codigoExpiraEn: codigoExpiraEn == null
