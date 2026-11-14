@@ -11,6 +11,7 @@ import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart'
 import 'package:vetapp/features/billing/domain/entities/cobro.dart';
 import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
 import 'package:vetapp/features/billing/presentation/screens/cobro_detail_screen.dart';
+import 'package:vetapp/features/billing/presentation/screens/cobro_form_screen.dart';
 import 'package:vetapp/features/billing/presentation/screens/cobros_screen.dart';
 import 'package:vetapp/features/clients/presentation/providers/clientes_providers.dart';
 import 'package:vetapp/features/home/presentation/app_shell.dart';
@@ -141,6 +142,27 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(_ubicacion(tester), '/cobros/c1');
     expect(find.byType(CobroDetailScreen), findsOneWidget);
+    expect(find.byType(AppShell, skipOffstage: false), findsOneWidget);
+
+    _container(tester).read(routerProvider).pop();
+    await tester.pumpAndSettle();
+    expect(_ubicacion(tester), '/cobros');
+    expect(find.byType(CobrosScreen), findsOneWidget);
+  });
+
+  testWidgets('Más > Cobros > FAB abre /cobros/nuevo con un solo AppShell y '
+      'Atrás vuelve a la lista', (tester) async {
+    await _abrirMas(tester);
+    await tester.tap(find.text('Cobros'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(_ubicacion(tester), '/cobros/nuevo');
+    expect(find.byType(CobroFormScreen), findsOneWidget);
+    expect(find.byType(CobroDetailScreen), findsNothing);
     expect(find.byType(AppShell, skipOffstage: false), findsOneWidget);
 
     _container(tester).read(routerProvider).pop();

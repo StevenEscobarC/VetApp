@@ -1,13 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/core/errors/limite_plan.dart';
+import 'package:vetapp/features/billing/domain/cobro_failure.dart';
 import 'package:vetapp/features/billing/domain/entities/cobro.dart';
+import 'package:vetapp/features/billing/domain/entities/cobro_item.dart';
 import 'package:vetapp/features/billing/domain/entities/servicio.dart';
+import 'package:vetapp/features/billing/presentation/cobros_routes.dart';
 import 'package:vetapp/features/billing/presentation/providers/borrador_cobro_provider.dart';
 import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
+import 'package:vetapp/features/billing/presentation/screens/cobro_detail_screen.dart';
 import 'package:vetapp/features/billing/presentation/screens/cobro_form_screen.dart';
 import 'package:vetapp/features/billing/presentation/widgets/linea_cobro_tile.dart';
 import 'package:vetapp/features/billing/presentation/widgets/total_cobro_bar.dart';
@@ -77,7 +85,6 @@ Widget _app({
   List<Servicio>? servicios,
   AuthProfile profile = vetProfile,
 }) {
-  var n = 0;
   final p = prefill ?? _prefill();
   return routerHarness(
     initialLocation: '/',
@@ -107,26 +114,35 @@ Widget _app({
             Scaffold(body: Text('Detalle ${s.pathParameters['id']}')),
       ),
     ],
-    overrides: [
-      ...planOverrides(),
-      authProfileProvider.overrideWith(
-        () => FakeAuthProfileNotifier(profile: profile),
-      ),
-      cobrosRepositoryProvider.overrideWithValue(
-        repo ?? FakeCobrosRepository(servicios: servicios ?? _servicios),
-      ),
-      clienteRepositoryProvider.overrideWithValue(
-        FakeClienteRepository(clientes: [_laura, _pedro]),
-      ),
-      clientesProvider.overrideWith(
-        () => FakeClientesNotifier(clientes: [_laura, _pedro]),
-      ),
-      mascotaRepositoryProvider.overrideWithValue(
-        FakeMascotaRepository(mascotas: [_rocky, _luna]),
-      ),
-      claveIdempotenciaProvider.overrideWithValue(() => 'clave-${++n}'),
-    ],
+    overrides: _overrides(repo: repo, servicios: servicios, profile: profile),
   );
+}
+
+List<Override> _overrides({
+  FakeCobrosRepository? repo,
+  List<Servicio>? servicios,
+  AuthProfile profile = vetProfile,
+}) {
+  var n = 0;
+  return [
+    ...planOverrides(),
+    authProfileProvider.overrideWith(
+      () => FakeAuthProfileNotifier(profile: profile),
+    ),
+    cobrosRepositoryProvider.overrideWithValue(
+      repo ?? FakeCobrosRepository(servicios: servicios ?? _servicios),
+    ),
+    clienteRepositoryProvider.overrideWithValue(
+      FakeClienteRepository(clientes: [_laura, _pedro]),
+    ),
+    clientesProvider.overrideWith(
+      () => FakeClientesNotifier(clientes: [_laura, _pedro]),
+    ),
+    mascotaRepositoryProvider.overrideWithValue(
+      FakeMascotaRepository(mascotas: [_rocky, _luna]),
+    ),
+    claveIdempotenciaProvider.overrideWithValue(() => 'clave-${++n}'),
+  ];
 }
 
 Future<void> _abrir(WidgetTester tester, Widget app) async {
@@ -461,5 +477,410 @@ void main() {
     await _abrir(tester, _app(prefill: _prefill(clienteId: 'cli1')));
     await _agregarConsulta(tester);
     expect(find.textContaining(RegExp('actura|escuento')), findsNothing);
+  });
+
+  group('emitir', () {
+    List<({String metodo, Map<String, Object?> args})> crear(
+      FakeCobrosRepository repo,
+    ) => repo.llamadas.where((l) => l.metodo.startsWith('crear')).toList();
+
+    Future<void> emitirCc(WidgetTester tester) async {
+      await tester.tap(find.text('Emitir cuenta de cobro'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Emitir'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('CC: confirma, Revisar no llama, Emitir llama una vez, abre '
+        'el detalle y avisa', (tester) async {
+      final repo = FakeCobrosRepository(servicios: _servicios);
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+
+      await tester.tap(find.text('Emitir cuenta de cobro'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Emitir la cuenta de cobro?'), findsOneWidget);
+      expect(
+        find.text(
+          'Total \$ 50.000 para Laura Gómez. Después no se puede editar: si '
+          'hay un error, la anulas y emites otra.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Revisar'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(crear(repo), isEmpty);
+
+      await emitirCc(tester);
+
+      expect(crear(repo), hasLength(1));
+      final args = crear(repo).single.args;
+      expect(crear(repo).single.metodo, 'crearCuentaCobro');
+      expect(args['clave'], 'clave-1');
+      expect(args['clienteId'], 'cli1');
+      final lineas = args['lineas']! as List<LineaCobroNueva>;
+      expect(lineas.single.servicioId, 's1');
+      expect(find.text('Detalle cobro-1'), findsOneWidget);
+      expect(find.text('Cuenta de cobro CC-0001 emitida.'), findsOneWidget);
+    });
+
+    testWidgets('CC repetida (yaExistia) también avisa emitida', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(servicios: _servicios);
+      await repo.crearCuentaCobro(
+        clave: 'clave-1',
+        clienteId: 'cli1',
+        lineas: const [],
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await emitirCc(tester);
+      expect(find.text('Detalle cobro-1'), findsOneWidget);
+      expect(find.text('Cuenta de cobro CC-0001 emitida.'), findsOneWidget);
+    });
+
+    testWidgets('cotización: se guarda sin diálogo', (tester) async {
+      final repo = FakeCobrosRepository(servicios: _servicios);
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1', tipo: TipoCobro.cotizacion),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await tester.tap(find.text('Guardar cotización'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(crear(repo).single.metodo, 'crearCotizacion');
+      expect(find.text('Detalle cobro-1'), findsOneWidget);
+      expect(find.text('Cotización COT-0001 guardada.'), findsOneWidget);
+    });
+
+    testWidgets('sin conexión: banner, conserva las líneas y el reintento '
+        'usa la MISMA clave', (tester) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure(
+          'Sin conexión',
+          tipo: ErrorCobro.sinConexion,
+        ),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await tester.tap(find.text('Otro'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_campo('descripcion-l2'), 'Baño');
+      await tester.enterText(_campo('precio-l2'), '20000');
+      await tester.pumpAndSettle();
+
+      await emitirCc(tester);
+      expect(find.text('Sin conexión, el cobro no se creó.'), findsOneWidget);
+      expect(
+        find.text(
+          'Tus datos siguen aquí. Inténtalo de nuevo cuando tengas señal.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.wifi_off), findsOneWidget);
+      expect(find.byType(LineaCobroTile), findsNWidgets(2));
+      expect(find.text('Emitir cuenta de cobro'), findsOneWidget);
+
+      await emitirCc(tester);
+      final llamadas = crear(repo);
+      expect(llamadas, hasLength(2));
+      expect(llamadas[0].args['clave'], 'clave-1');
+      expect(llamadas[1].args['clave'], llamadas[0].args['clave']);
+      expect(find.byType(LineaCobroTile), findsNWidgets(2));
+    });
+
+    testWidgets('otro fallo: banner genérico de cuenta de cobro', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure('crudo'),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await emitirCc(tester);
+      expect(
+        find.text('No pudimos crear el cobro. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+      expect(find.text('crudo'), findsNothing);
+      expect(find.byType(LineaCobroTile), findsOneWidget);
+    });
+
+    testWidgets('otro fallo: banner genérico de cotización', (tester) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCotizacion: const CobroFailure('crudo'),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1', tipo: TipoCobro.cotizacion),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await tester.tap(find.text('Guardar cotización'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No pudimos guardar la cotización. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('visita ya cobrada: el mensaje del fallo en el banner', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure(
+          'Esta visita ya tiene la cuenta de cobro CC-0003.',
+          tipo: ErrorCobro.visitaYaCobrada,
+        ),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await emitirCc(tester);
+      expect(
+        find.text('Esta visita ya tiene la cuenta de cobro CC-0003.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('stock insuficiente: Revisa las cantidades marcadas.', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure(
+          'Solo quedan 2 frascos de Amoxicilina.',
+          tipo: ErrorCobro.stockInsuficiente,
+        ),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await emitirCc(tester);
+      expect(find.text('Revisa las cantidades marcadas.'), findsOneWidget);
+    });
+
+    testWidgets('LP004: abre la hoja de solo lectura y conserva el borrador', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure(
+          'Tu cuenta está en solo lectura. Pide al administrador que active '
+          'el plan.',
+          tipo: ErrorCobro.soloLectura,
+          limite: LimitePlan.soloLectura,
+        ),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await emitirCc(tester);
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.byType(CobroFormScreen), findsOneWidget);
+      expect(find.byType(LineaCobroTile), findsOneWidget);
+    });
+
+    testWidgets('en vuelo: CTA cargando, entradas bloqueadas y un doble '
+        'toque no hace otra llamada', (tester) async {
+      final repo = FakeCobrosRepository(servicios: _servicios)
+        ..bloqueoCrear = Completer<void>();
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1', tipo: TipoCobro.cotizacion),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await tester.tap(find.text('Guardar cotización'));
+      await tester.pump();
+
+      expect(_enBarra(find.byType(CircularProgressIndicator)), findsOneWidget);
+      expect(
+        tester.widget<LineaCobroTile>(find.byType(LineaCobroTile)).habilitado,
+        isFalse,
+      );
+      await tester.tap(_enBarra(find.byType(ElevatedButton)));
+      await tester.pump();
+      await tester.tap(find.text('Consulta · \$ 50.000'));
+      await tester.pump();
+      expect(crear(repo), hasLength(1));
+      expect(find.text('Subtotal \$ 50.000'), findsOneWidget);
+
+      repo.bloqueoCrear!.complete();
+      await tester.pumpAndSettle();
+      expect(crear(repo), hasLength(1));
+      expect(find.text('Cotización COT-0001 guardada.'), findsOneWidget);
+    });
+
+    testWidgets('en vuelo (CC): doble toque tras Emitir no llama dos veces', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(servicios: _servicios)
+        ..bloqueoCrear = Completer<void>();
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await tester.tap(find.text('Emitir cuenta de cobro'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Emitir'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(_enBarra(find.byType(ElevatedButton)));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(crear(repo), hasLength(1));
+      repo.bloqueoCrear!.complete();
+      await tester.pumpAndSettle();
+      expect(crear(repo), hasLength(1));
+    });
+  });
+
+  group('salir', () {
+    testWidgets('con borrador sucio pregunta; Seguir editando se queda y '
+        'Descartar sale', (tester) async {
+      await _abrir(tester, _app(prefill: _prefill(clienteId: 'cli1')));
+      await _agregarConsulta(tester);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('¿Descartar este cobro?'), findsOneWidget);
+      expect(
+        find.text('Se perderán las líneas que agregaste.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Seguir editando'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CobroFormScreen), findsOneWidget);
+      expect(find.byType(LineaCobroTile), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Descartar'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CobroFormScreen), findsNothing);
+      expect(find.text('Abrir'), findsOneWidget);
+    });
+
+    testWidgets('limpio sale sin diálogo', (tester) async {
+      await _abrir(tester, _app(prefill: _prefill(clienteId: 'cli1')));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Abrir'), findsOneWidget);
+    });
+  });
+
+  group('ruta /cobros/nuevo', () {
+    Future<void> abrirRuta(WidgetTester tester, String ruta) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        routerHarness(
+          initialLocation: ruta,
+          routes: cobrosRoutes,
+          overrides: _overrides(),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tipo=cot y clienteId prellenan la cotización', (tester) async {
+      await abrirRuta(tester, '/cobros/nuevo?tipo=cot&clienteId=cli1');
+      expect(find.byType(CobroDetailScreen), findsNothing);
+      final f = tester.widget<CobroFormScreen>(find.byType(CobroFormScreen));
+      expect(f.prefill.modo, ModoFormCobro.nuevo);
+      expect(f.prefill.tipo, TipoCobro.cotizacion);
+      expect(f.prefill.clienteId, 'cli1');
+      expect(find.text('Nueva cotización'), findsOneWidget);
+      expect(find.text('Laura Gómez'), findsOneWidget);
+    });
+
+    testWidgets('sin parámetros: cuenta de cobro nueva, nunca el detalle', (
+      tester,
+    ) async {
+      await abrirRuta(tester, '/cobros/nuevo');
+      expect(find.byType(CobroDetailScreen), findsNothing);
+      expect(find.byType(CobroFormScreen), findsOneWidget);
+      expect(find.text('Nueva cuenta de cobro'), findsOneWidget);
+    });
+
+    testWidgets('cita, consulta, mascota y desdeCobroId se leen de la ruta', (
+      tester,
+    ) async {
+      await abrirRuta(
+        tester,
+        '/cobros/nuevo?clienteId=cli1&mascotaId=m1&citaId=ci1'
+        '&consultaId=co1&desdeCobroId=q9',
+      );
+      final p = tester
+          .widget<CobroFormScreen>(find.byType(CobroFormScreen))
+          .prefill;
+      expect(p.tipo, TipoCobro.cuentaCobro);
+      expect(p.mascotaId, 'm1');
+      expect(p.citaId, 'ci1');
+      expect(p.consultaId, 'co1');
+      expect(p.origenId, 'q9');
+      expect(p.modo, ModoFormCobro.copiar);
+    });
   });
 }
