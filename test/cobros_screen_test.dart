@@ -282,9 +282,14 @@ void main() {
       final semantics = tester.ensureSemantics();
       await _abrir(tester, _repo());
       expect(find.bySemanticsLabel('Tipo de documento'), findsOneWidget);
-      final cc = tester.getSemantics(find.text('Cuentas de cobro'));
-      expect(cc.flagsCollection.isInMutuallyExclusiveGroup, isTrue);
-      expect(cc.flagsCollection.isChecked, isTrue);
+      expect(
+        tester.getSemantics(find.text('Cuentas de cobro')),
+        isSemantics(isInMutuallyExclusiveGroup: true, isChecked: true),
+      );
+      expect(
+        tester.getSemantics(find.text('Cotizaciones')),
+        isSemantics(isInMutuallyExclusiveGroup: true, isChecked: false),
+      );
       semantics.dispose();
     });
 
@@ -316,10 +321,7 @@ void main() {
       final semantics = tester.ensureSemantics();
       await _abrir(tester, _repo());
       expect(find.text('Laura Gómez · Rocky'), findsOneWidget);
-      expect(
-        find.text('CC-0012 · 18/08/2026 · Consulta +2'),
-        findsOneWidget,
-      );
+      expect(find.text('CC-0012 · 18/08/2026 · Consulta +2'), findsOneWidget);
       expect(find.text('\$ 120.000'), findsOneWidget);
       final fila = find.ancestor(
         of: find.text('Laura Gómez · Rocky'),
@@ -331,8 +333,10 @@ void main() {
       );
       expect(
         find.bySemanticsLabel(
-          RegExp(r'^Cuenta de cobro CC-0012, Laura Gómez, Rocky, 120\.000 '
-              r'pesos, Pendiente, 18/08/2026\. Abrir detalle\.$'),
+          RegExp(
+            r'^Cuenta de cobro CC-0012, Laura Gómez, Rocky, 120\.000 '
+            r'pesos, Pendiente, 18/08/2026\. Abrir detalle\.$',
+          ),
         ),
         findsOneWidget,
       );
@@ -484,12 +488,17 @@ void main() {
       final repo = _repo();
       await _abrir(tester, repo);
       final antes = repo.llamadas.where((l) => l.metodo == 'resumen').length;
-      await tester.fling(
-        find.text('Laura Gómez · Rocky'),
-        const Offset(0, 400),
-        1000,
-      );
+      final antesLista = repo.llamadas
+          .where((l) => l.metodo == 'cobros')
+          .length;
+      await tester
+          .widget<RefreshIndicator>(find.byType(RefreshIndicator))
+          .onRefresh();
       await tester.pumpAndSettle();
+      expect(
+        repo.llamadas.where((l) => l.metodo == 'cobros').length,
+        greaterThan(antesLista),
+      );
       expect(
         repo.llamadas.where((l) => l.metodo == 'resumen').length,
         greaterThan(antes),
