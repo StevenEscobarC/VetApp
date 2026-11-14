@@ -193,7 +193,10 @@ void main() {
     });
 
     test('sin NIT ni cédula: se omiten', () {
-      final t = CobroPdfService.textosPdf(_cc(cedula: null), _clinica(nit: null));
+      final t = CobroPdfService.textosPdf(
+        _cc(cedula: null),
+        _clinica(nit: null),
+      );
       expect(t.where((s) => s.contains('NIT')), isEmpty);
       expect(t, contains('Debe a: VetCare'));
       expect(t.where((s) => s.startsWith('C.C.')), isEmpty);
@@ -251,58 +254,62 @@ void main() {
 
     test('sin logoPath nunca llama al cargador del logo', () async {
       var n = 0;
-      final bytes = await _servicio(
-        cargarLogo: (_) async {
-          n++;
-          return _png;
-        },
-      ).generar(
-        cobro: _cc(),
-        clinica: _clinica(),
-        generadoEn: DateTime.utc(2026, 8, 18),
-      );
+      final bytes =
+          await _servicio(
+            cargarLogo: (_) async {
+              n++;
+              return _png;
+            },
+          ).generar(
+            cobro: _cc(),
+            clinica: _clinica(),
+            generadoEn: DateTime.utc(2026, 8, 18),
+          );
       expect(_esPdf(bytes), isTrue);
       expect(n, 0);
     });
 
     test('con logoPath y PNG válido llama al cargador una vez', () async {
       final rutas = <String>[];
-      final bytes = await _servicio(
-        cargarLogo: (p) async {
-          rutas.add(p);
-          return _png;
-        },
-        validarImagen: (_) async => true,
-      ).generar(
-        cobro: _cc(),
-        clinica: _clinica(logoPath: 'c1/logo.png'),
-        generadoEn: DateTime.utc(2026, 8, 18),
-      );
+      final bytes =
+          await _servicio(
+            cargarLogo: (p) async {
+              rutas.add(p);
+              return _png;
+            },
+            validarImagen: (_) async => true,
+          ).generar(
+            cobro: _cc(),
+            clinica: _clinica(logoPath: 'c1/logo.png'),
+            generadoEn: DateTime.utc(2026, 8, 18),
+          );
       expect(_esPdf(bytes), isTrue);
       expect(rutas, ['c1/logo.png']);
     });
 
     test('cargador que lanza: genera sin logo', () async {
-      final bytes = await _servicio(
-        cargarLogo: (_) => throw Exception('sin red'),
-      ).generar(
-        cobro: _cc(),
-        clinica: _clinica(logoPath: 'c1/logo.png'),
-        generadoEn: DateTime.utc(2026, 8, 18),
-      );
+      final bytes =
+          await _servicio(
+            cargarLogo: (_) => throw Exception('sin red'),
+          ).generar(
+            cobro: _cc(),
+            clinica: _clinica(logoPath: 'c1/logo.png'),
+            generadoEn: DateTime.utc(2026, 8, 18),
+          );
       expect(_esPdf(bytes), isTrue);
     });
 
     testWidgets('imagen corrupta: genera sin logo', (tester) async {
       await tester.runAsync(() async {
-        final bytes = await _servicio(
-          cargarLogo: (_) async =>
-              Uint8List.fromList(utf8.encode('no es imagen')),
-        ).generar(
-          cobro: _cc(),
-          clinica: _clinica(logoPath: 'c1/logo.png'),
-          generadoEn: DateTime.utc(2026, 8, 18),
-        );
+        final bytes =
+            await _servicio(
+              cargarLogo: (_) async =>
+                  Uint8List.fromList(utf8.encode('no es imagen')),
+            ).generar(
+              cobro: _cc(),
+              clinica: _clinica(logoPath: 'c1/logo.png'),
+              generadoEn: DateTime.utc(2026, 8, 18),
+            );
         expect(_esPdf(bytes), isTrue);
       });
     });
