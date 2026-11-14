@@ -10,6 +10,8 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/chips/app_filter_chip.dart';
 import '../../../clients/domain/entities/cliente.dart';
 import '../../../clients/presentation/providers/clientes_providers.dart';
+import '../../../inventory/domain/entities/producto.dart';
+import '../../../inventory/presentation/providers/inventario_providers.dart';
 import '../../../patients/presentation/providers/mascotas_providers.dart';
 import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../domain/cobro_failure.dart';
@@ -27,10 +29,12 @@ import '../widgets/servicio_chip.dart';
 import '../widgets/tipo_cobro_toggle.dart';
 import '../widgets/total_cobro_bar.dart';
 
-/// Formulario de cuenta de cobro o cotización nueva (UI-SPEC §3). Todo el
-/// estado vive en [borradorCobroProvider], incluida la clave de
-/// idempotencia que se crea al abrir y se reutiliza en cada reintento
-/// (D-21). Solo se llega aquí después de `asegurarEscritura`.
+/// Formulario de cuenta de cobro o cotización (UI-SPEC §3): nueva, editar
+/// una cotización abierta, convertirla en cuenta de cobro (D-09) o emitir
+/// una nueva desde una CC anulada (D-10). Todo el estado vive en
+/// [borradorCobroProvider], incluida la clave de idempotencia que se crea al
+/// abrir y se reutiliza en cada reintento (D-21). Solo se llega aquí después
+/// de `asegurarEscritura`.
 class CobroFormScreen extends ConsumerStatefulWidget {
   const CobroFormScreen({super.key, required this.prefill});
 
@@ -64,17 +68,107 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
   GlobalKey _claveLinea(String key) =>
       _clavesLinea.putIfAbsent(key, GlobalKey.new);
 
+  /// Documento de origen ya copiado al borrador (editar, convertir, copiar).
+  bool _origenCargado = false;
+  bool _copiaProgramada = false;
+  Cobro? _origen;
+
+  /// La cotización ya no admite editar ni convertir (BC002 o una cotización
+  /// que no está abierta): CTA deshabilitado y "Volver".
+  bool _noUsable = false;
+  bool _errorOrigen = false;
+
   PrefillCobro get _p => widget.prefill;
   BorradorCobroNotifier get _n => ref.read(borradorCobroProvider(_p).notifier);
   BorradorCobro get _b => ref.read(borradorCobroProvider(_p));
 
-  String _titulo(TipoCobro tipo) => tipo == TipoCobro.cotizacion
-      ? 'Nueva cotización'
-      : 'Nueva cuenta de cobro';
+  bool get _editar => _p.modo == ModoFormCobro.editarCotizacion;
+  bool get _convertir => _p.modo == ModoFormCobro.convertir;
+  bool get _desdeOrigen =>
+      _p.modo != ModoFormCobro.nuevo && _p.origenId != null;
+  bool get _cargandoOrigen =>
+      _desdeOrigen && !_origenCargado && !_noUsable && !_errorOrigen;
 
-  String _cta(TipoCobro tipo) => tipo == TipoCobro.cotizacion
-      ? 'Guardar cotización'
-      : 'Emitir cuenta de cobro';
+  String _titulo(TipoCobro tipo) {
+    if (_editar) return 'Editar cotización';
+    if (_convertir) {
+      final o = _origen;
+      return o == null ? 'Convertir cotización' : 'Convertir ${o.numeroTexto}';
+    }
+    return tipo == TipoCobro.cotizacion
+        ? 'Nueva cotización'
+        : 'Nueva cuenta de cobro';
+  }
+
+  String _cta(TipoCobro tipo) {
+    if (_editar) return 'Guardar cambios';
+    return tipo == TipoCobro.cotizacion
+        ? 'Guardar cotización'
+        : 'Emitir cuenta de cobro';
+  }
+
+  /// Editar y convertir solo valen sobre una cotización abierta; el servidor
+  /// lo vuelve a exigir bajo bloqueo (BC002).
+  bool _origenValido(Cobro o) =>
+      _p.modo == ModoFormCobro.copiar || (o.esCotizacion && o.abierta);
+
+  /// Observa el documento de origen hasta copiarlo una sola vez al borrador.
+  /// Los productos solo se piden si el origen tiene líneas de producto.
+  void _observarOrigen() {
+    if (!_cargandoOrigen || _copiaProgramada) return;
+    final async = ref.watch(cobroProvider(_p.origenId!));
+    if (async.hasError && !async.hasValue) {
+      _programar(() => _errorOrigen = true);
+      return;
+    }
+    if (!async.hasValue) return;
+    final origen = async.value;
+    if (origen == null) {
+      // Copiar sin origen: queda lo que trajo la ruta.
+      _programar(
+        () => _p.modo == ModoFormCobro.copiar
+            ? _origenCargado = true
+            : _noUsable = true,
+      );
+      return;
+    }
+    if (!_origenValido(origen)) {
+      _programar(() => _noUsable = true);
+      return;
+    }
+    var productos = const <Producto>[];
+    var conInventario = true;
+    if (origen.productoIds.isNotEmpty) {
+      final p = ref.watch(productosProvider);
+      if (!p.hasValue && !p.hasError) return;
+      productos = p.value ?? const [];
+      // Sin inventario no se marca nada: el servidor decide al enviar.
+      conInventario = p.hasValue;
+    }
+    final lista = productos;
+    final marcar = conInventario;
+    _programar(() {
+      _n.cargarDesde(origen, productos: lista, marcarArchivados: marcar);
+      _origen = origen;
+      _origenCargado = true;
+    });
+  }
+
+  /// Los cambios de estado salen del build en el siguiente cuadro.
+  void _programar(VoidCallback cambio) {
+    _copiaProgramada = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(cambio);
+    });
+  }
+
+  void _volver() {
+    setState(() => _descartado = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
 
   String? _errorDescripcion(LineaBorrador l) =>
       _validar && l.tipo == TipoLinea.otro && l.descripcion.trim().isEmpty
@@ -276,8 +370,9 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
   /// Envía el borrador con SU clave: nunca se regenera tras un fallo, así un
   /// reintento después de una respuesta perdida no duplica (D-21, T-07-32).
   Future<void> _emitir() async {
-    if (_loading || _confirmando) return;
+    if (_loading || _confirmando || _noUsable || _cargandoOrigen) return;
     if (!_validarLocal()) return;
+    if (_editar) return _guardarCambios();
     final b = _b;
     final esCc = b.tipo == TipoCobro.cuentaCobro;
     if (esCc) {
@@ -329,11 +424,58 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
       // LP004: hoja del plan sobre el formulario; el borrador queda intacto.
       if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (!mounted) return;
+      if (_marcarNoUsable(e)) return;
       final stock =
           e.tipo == ErrorCobro.stockInsuficiente ||
           e.tipo == ErrorCobro.productoNoDisponible;
       final marcada = stock && _marcarLineaStock(e);
       setState(() => _banner = _bannerPara(e, b.tipo, lineaMarcada: marcada));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// BC002 al convertir o editar: la cotización cambió en el servidor.
+  bool _marcarNoUsable(CobroFailure e) {
+    if (e.tipo != ErrorCobro.cotizacionNoDisponible ||
+        !(_editar || _convertir)) {
+      return false;
+    }
+    setState(() {
+      _noUsable = true;
+      _banner = null;
+    });
+    return true;
+  }
+
+  /// Editar una cotización abierta: sin diálogo y sin clave (el servidor
+  /// reemplaza las líneas, repetirlo da lo mismo).
+  Future<void> _guardarCambios() async {
+    final b = _b;
+    setState(() {
+      _loading = true;
+      _banner = null;
+    });
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await ref
+          .read(cobrosActionsProvider)
+          .editarCotizacion(
+            id: _p.origenId!,
+            clienteId: b.clienteId!,
+            lineas: b.lineasNuevas(),
+            mascotaId: b.mascotaId,
+          );
+      if (mounted) setState(() => _descartado = true);
+      navigator.pop();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Cambios guardados.')),
+      );
+    } on CobroFailure catch (e) {
+      if (mounted && await manejarLimitePlan(context, ref, e)) return;
+      if (!mounted || _marcarNoUsable(e)) return;
+      setState(() => _banner = _bannerPara(e, TipoCobro.cotizacion));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -627,10 +769,24 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
     ref.listen(borradorCobroProvider(_p), (_, _) {
       if (_errorBarra != null) setState(() => _errorBarra = null);
     });
+    _observarOrigen();
     final mostrarTipo =
         _p.modo == ModoFormCobro.nuevo || _p.modo == ModoFormCobro.copiar;
+    final cargando = _cargandoOrigen;
+    final bloqueado = cargando || _noUsable || _errorOrigen;
+    final origen = _origen;
 
-    final banner = _banner;
+    final _Banner? banner = _noUsable
+        ? const _Banner(
+            mensaje: 'Esta cotización ya no se puede usar. Actualiza la lista.',
+            volver: true,
+          )
+        : _errorOrigen
+        ? const _Banner(
+            mensaje: 'No pudimos cargar el cobro. Intenta de nuevo.',
+            volver: true,
+          )
+        : _banner;
 
     return PopScope(
       canPop: _descartado || (!b.sucio && !_loading),
@@ -652,6 +808,15 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
                         label: _anuncio,
                         child: const SizedBox.shrink(),
                       ),
+                      if (_convertir && origen != null) ...[
+                        Text(
+                          'Desde la cotización ${origen.numeroTexto}. Revisa '
+                          'los precios y cantidades antes de emitir.',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: AppColors.textMuted),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
                       if (mostrarTipo) ...[
                         TipoCobroToggle(
                           valor: b.tipo,
@@ -662,8 +827,14 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
                         ),
                         const SizedBox(height: AppSpacing.lg),
                       ],
-                      _cliente(b),
-                      ..._mascota(b),
+                      if (cargando)
+                        const _EsqueletoOrigen(
+                          key: ValueKey('esqueleto-origen'),
+                        )
+                      else ...[
+                        _cliente(b),
+                        ..._mascota(b),
+                      ],
                       const SizedBox(height: AppSpacing.lg),
                       _seccion('Agregar', [_servicios()]),
                       const SizedBox(height: AppSpacing.lg),
@@ -673,7 +844,7 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
                 ),
               ),
             ),
-            if (banner != null) _BannerCobro(banner: banner),
+            if (banner != null) _BannerCobro(banner: banner, onVolver: _volver),
             TotalCobroBar(
               totalCop: b.totalCop,
               etiquetaCta: _cta(b.tipo),
@@ -682,8 +853,9 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
                       b.lineas.any((l) => l.tipo == TipoLinea.producto)
                   ? 'Al emitirla se descuentan los productos del inventario.'
                   : null,
-              habilitado: b.clienteId != null && b.lineas.isNotEmpty,
-              onTapDeshabilitado: _avisarFaltante,
+              habilitado:
+                  !bloqueado && b.clienteId != null && b.lineas.isNotEmpty,
+              onTapDeshabilitado: bloqueado ? null : _avisarFaltante,
               onPressed: _emitir,
               isLoading: _loading,
               error: _errorBarra,
@@ -702,17 +874,22 @@ class _Banner {
     required this.mensaje,
     this.detalle,
     this.sinConexion = false,
+    this.volver = false,
   });
 
   final String mensaje;
   final String? detalle;
   final bool sinConexion;
+
+  /// Agrega el `TextButton` "Volver" (cotización ya no usable).
+  final bool volver;
 }
 
 class _BannerCobro extends StatelessWidget {
-  const _BannerCobro({required this.banner});
+  const _BannerCobro({required this.banner, required this.onVolver});
 
   final _Banner banner;
+  final VoidCallback onVolver;
 
   @override
   Widget build(BuildContext context) {
@@ -762,12 +939,44 @@ class _BannerCobro extends StatelessWidget {
                         ),
                       ),
                     ],
+                    if (banner.volver)
+                      TextButton(
+                        onPressed: onVolver,
+                        child: const Text('Volver'),
+                      ),
                   ],
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Filas de cliente y mascota mientras llega el documento de origen.
+class _EsqueletoOrigen extends StatelessWidget {
+  const _EsqueletoOrigen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget fila() => Container(
+      height: AppSpacing.touchTarget,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+    );
+    return Semantics(
+      label: 'Cargando',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          fila(),
+          const SizedBox(height: AppSpacing.lg),
+          fila(),
+        ],
       ),
     );
   }

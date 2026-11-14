@@ -190,6 +190,65 @@ class BorradorCobroNotifier extends Notifier<BorradorCobro> {
 
   String _nuevaKey() => 'l${++_siguiente}';
 
+  bool _cargado = false;
+
+  /// Llena el borrador con el cliente, la mascota y las líneas de [origen]
+  /// (editar o convertir una cotización, emitir una nueva desde una CC
+  /// anulada). Solo la primera llamada cuenta y la clave nunca cambia: el
+  /// borrador sigue siendo uno solo (D-21). El vínculo de la visita solo se
+  /// copia en modo copiar (la CC anulada liberó la visita). Las líneas de
+  /// producto toman existencias y unidad de [productos] (activos); un
+  /// producto que ya no está ahí queda marcado para quitarlo. El servidor
+  /// vuelve a validar todo al enviar. Con [marcarArchivados] en `false`
+  /// (inventario sin cargar) no se marca ningún producto.
+  void cargarDesde(
+    Cobro origen, {
+    required List<Producto> productos,
+    bool marcarArchivados = true,
+  }) {
+    if (_cargado) return;
+    _cargado = true;
+    final activos = {for (final p in productos) p.id: p};
+    final copiar = prefill.modo == ModoFormCobro.copiar;
+    state = BorradorCobro(
+      clave: state.clave,
+      tipo: state.tipo,
+      clienteId: origen.clienteId,
+      mascotaId: origen.mascotaId,
+      citaId: copiar ? origen.citaId : null,
+      consultaId: copiar ? origen.consultaId : null,
+      cotizacionId: prefill.modo == ModoFormCobro.convertir ? origen.id : null,
+      clienteInicialId: origen.clienteId,
+      lineas: [
+        for (final i in origen.items) _lineaDesde(i, activos, marcarArchivados),
+      ],
+    );
+  }
+
+  LineaBorrador _lineaDesde(
+    CobroItem i,
+    Map<String, Producto> activos,
+    bool marcarArchivados,
+  ) {
+    final esProducto = i.tipo == TipoLinea.producto && i.productoId != null;
+    final p = esProducto ? activos[i.productoId] : null;
+    return LineaBorrador(
+      key: _nuevaKey(),
+      tipo: i.tipo,
+      descripcion: i.descripcion,
+      cantidad: i.cantidad,
+      precioUnitarioCop: i.precioUnitarioCop,
+      precioBaseCop: p?.precioVentaCop,
+      servicioId: i.servicioId,
+      productoId: i.productoId,
+      stock: p?.cantidad,
+      unidad: p?.unidad,
+      errorStock: esProducto && p == null && marcarArchivados
+          ? '${i.descripcion} ya no está disponible. Quítalo del cobro.'
+          : null,
+    );
+  }
+
   void _lineas(List<LineaBorrador> lineas) =>
       state = state.copyWith(lineas: lineas);
 

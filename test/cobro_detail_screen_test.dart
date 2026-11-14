@@ -607,8 +607,291 @@ void main() {
       expect(find.text('Marcar como pagada'), findsNothing);
       expect(find.text('Enviar al cliente'), findsNothing);
       expect(find.text(anularCc), findsNothing);
-      expect(find.byType(AppButton), findsNothing);
+      // 07-15: la única acción de una CC anulada es "Emitir una nueva".
+      expect(
+        tester
+            .widgetList<AppButton>(find.byType(AppButton))
+            .map((b) => b.label),
+        ['Emitir una nueva'],
+      );
       _sinFactura();
+    });
+  });
+
+  group('acciones completas (07-15)', () {
+    List<AppButton> botones(WidgetTester tester) =>
+        tester.widgetList<AppButton>(find.byType(AppButton)).toList();
+
+    int primarios(WidgetTester tester) => botones(
+      tester,
+    ).where((b) => b.variant == AppButtonVariant.primary).length;
+
+    AppButton boton(WidgetTester tester, String label) =>
+        tester.widget<AppButton>(find.widgetWithText(AppButton, label));
+
+    Cobro convertida() => _cot(
+      estado: EstadoCobro.convertida,
+      convertidaEnId: 'c13',
+      convertidaEnNumero: 13,
+    );
+
+    Cobro ccAnulada() => _cc(
+      estado: EstadoCobro.anulada,
+      citaId: 'cita1',
+      motivoAnulacion: 'Error en el precio',
+    );
+
+    /// El detalle con las rutas de destino de sus acciones como marcadores.
+    Future<void> abrirConRutas(
+      WidgetTester tester,
+      List<Cobro> cobros, {
+      required String id,
+      MiPlan? plan,
+      AuthProfile profile = vetProfile,
+    }) async {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Widget destino(GoRouterState s) => Scaffold(body: Text('RUTA ${s.uri}'));
+      await tester.pumpWidget(
+        routerHarness(
+          initialLocation: '/cobros/$id',
+          routes: [
+            GoRoute(path: '/cobros/nuevo', builder: (_, s) => destino(s)),
+            GoRoute(path: '/cobros/:id/editar', builder: (_, s) => destino(s)),
+            GoRoute(
+              path: '/cobros/:id/convertir',
+              builder: (_, s) => destino(s),
+            ),
+            GoRoute(
+              path: '/cobros/:id',
+              builder: (_, s) =>
+                  CobroDetailScreen(cobroId: s.pathParameters['id']!),
+            ),
+          ],
+          overrides: [
+            ...planOverrides(plan: plan),
+            authProfileProvider.overrideWith(
+              () => FakeAuthProfileNotifier(profile: profile),
+            ),
+            cobrosRepositoryProvider.overrideWithValue(
+              FakeCobrosRepository(cobros: cobros),
+            ),
+            clockProvider.overrideWithValue(() => _hoy),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('cotización abierta: primario Convertir, outline Enviar y '
+        'Editar, Anular cotización destructiva al final', (tester) async {
+      await abrirConRutas(tester, [_cot()], id: 'q1');
+      final bs = botones(tester);
+      expect(bs.map((b) => b.label), [
+        'Convertir en cuenta de cobro',
+        'Enviar al cliente',
+        'Editar cotización',
+        'Anular cotización',
+      ]);
+      expect(bs[0].variant, AppButtonVariant.primary);
+      expect(bs[0].icon, Icons.swap_horiz);
+      expect(bs[1].variant, AppButtonVariant.outline);
+      expect(bs[1].icon, Icons.ios_share);
+      expect(bs[2].variant, AppButtonVariant.outline);
+      expect(bs[2].icon, Icons.edit_outlined);
+      expect(bs[3].variant, AppButtonVariant.destructive);
+      _sinFactura();
+    });
+
+    testWidgets('Convertir y Editar abren sus rutas', (tester) async {
+      await abrirConRutas(tester, [_cot()], id: 'q1');
+      await tester.tap(find.text('Convertir en cuenta de cobro'));
+      await tester.pumpAndSettle();
+      expect(find.text('RUTA /cobros/q1/convertir'), findsOneWidget);
+
+      GoRouter.of(tester.element(find.textContaining('RUTA'))).pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Editar cotización'));
+      await tester.pumpAndSettle();
+      expect(find.text('RUTA /cobros/q1/editar'), findsOneWidget);
+    });
+
+    testWidgets('Anular cotización abre la hoja (07-12) y Enviar la de envío', (
+      tester,
+    ) async {
+      await abrirConRutas(tester, [_cot()], id: 'q1');
+      await tester.tap(find.text('Anular cotización'));
+      await tester.pumpAndSettle();
+      expect(find.text('Anular COT-0004'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Anular COT-0004'))).pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Enviar al cliente'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enviar COT-0004'), findsOneWidget);
+    });
+
+    testWidgets('cotización abierta, ni admin ni autor: sin Anular y sin '
+        'candado', (tester) async {
+      await abrirConRutas(
+        tester,
+        [_cot()],
+        id: 'q1',
+        profile: vetColegaProfile,
+      );
+      expect(find.text('Anular cotización'), findsNothing);
+      expect(find.byIcon(Icons.lock_outline), findsNothing);
+      expect(primarios(tester), 1);
+    });
+
+    testWidgets('cotización convertida: outline Ver CC-0013 y Enviar, sin '
+        'primario', (tester) async {
+      await abrirConRutas(tester, [
+        convertida(),
+        _cc(id: 'c13', numero: 13),
+      ], id: 'q1');
+      expect(botones(tester).map((b) => b.label), [
+        'Ver CC-0013',
+        'Enviar al cliente',
+      ]);
+      expect(primarios(tester), 0);
+      expect(boton(tester, 'Ver CC-0013').variant, AppButtonVariant.outline);
+      await tester.tap(find.text('Ver CC-0013'));
+      await tester.pumpAndSettle();
+      expect(find.text('CC-0013'), findsOneWidget);
+    });
+
+    testWidgets('cotización anulada: sin acciones', (tester) async {
+      await abrirConRutas(tester, [
+        _cot(estado: EstadoCobro.anulada),
+      ], id: 'q1');
+      expect(find.byType(AppButton), findsNothing);
+    });
+
+    testWidgets('CC anulada: outline Emitir una nueva abre el formulario con '
+        'cliente, mascota, visita y origen; sin enviar ni pagar', (
+      tester,
+    ) async {
+      await abrirConRutas(tester, [ccAnulada()], id: 'c1');
+      expect(botones(tester).map((b) => b.label), ['Emitir una nueva']);
+      expect(
+        boton(tester, 'Emitir una nueva').variant,
+        AppButtonVariant.outline,
+      );
+      expect(find.text('Enviar al cliente'), findsNothing);
+      expect(find.text('Marcar como pagada'), findsNothing);
+
+      await tester.tap(find.text('Emitir una nueva'));
+      await tester.pumpAndSettle();
+      final ruta = find.textContaining('RUTA /cobros/nuevo');
+      expect(ruta, findsOneWidget);
+      final uri = Uri.parse(
+        tester.widget<Text>(ruta).data!.replaceFirst('RUTA ', ''),
+      );
+      expect(uri.queryParameters, {
+        'tipo': 'cc',
+        'clienteId': 'cli1',
+        'mascotaId': 'm1',
+        'citaId': 'cita1',
+        'desdeCobroId': 'c1',
+      });
+    });
+
+    testWidgets('un solo primario en CC pendiente, CC pagada y cotización '
+        'abierta; ninguno en convertida, CC anulada y cotización anulada', (
+      tester,
+    ) async {
+      final casos = <(Cobro, int)>[
+        (_cc(), 1),
+        (
+          _cc(
+            estado: EstadoCobro.pagada,
+            metodoPago: MetodoPago.nequi,
+            pagadaEl: DateTime.utc(2026, 8, 20),
+          ),
+          1,
+        ),
+        (_cot(), 1),
+        (convertida(), 0),
+        (ccAnulada(), 0),
+        (_cot(estado: EstadoCobro.anulada), 0),
+      ];
+      for (final (c, n) in casos) {
+        await tester.pumpWidget(const SizedBox());
+        await abrirConRutas(tester, [c], id: c.id);
+        expect(primarios(tester), n, reason: '${c.tipo} ${c.estado}');
+      }
+    });
+
+    testWidgets('solo lectura: candado en Convertir, Editar y Anular; Enviar '
+        'sigue usable', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await abrirConRutas(tester, [_cot()], id: 'q1', plan: planSoloLectura);
+      for (final l in [
+        'Convertir en cuenta de cobro',
+        'Editar cotización',
+        'Anular cotización',
+      ]) {
+        expect(boton(tester, l).icon, Icons.lock_outline, reason: l);
+        expect(
+          find.bySemanticsLabel('$l, bloqueado, solo lectura'),
+          findsOneWidget,
+        );
+      }
+      expect(
+        boton(tester, 'Convertir en cuenta de cobro').variant,
+        AppButtonVariant.primary,
+      );
+      expect(boton(tester, 'Enviar al cliente').icon, Icons.ios_share);
+
+      await tester.tap(find.text('Convertir en cuenta de cobro'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.textContaining('RUTA'), findsNothing);
+      Navigator.of(
+        tester.element(find.text('Tu cuenta está en solo lectura')),
+      ).pop();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Editar cotización'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      Navigator.of(
+        tester.element(find.text('Tu cuenta está en solo lectura')),
+      ).pop();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Enviar al cliente'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enviar COT-0004'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('solo lectura: candado en Emitir una nueva; Ver CC sigue '
+        'usable', (tester) async {
+      await abrirConRutas(
+        tester,
+        [ccAnulada()],
+        id: 'c1',
+        plan: planSoloLectura,
+      );
+      expect(boton(tester, 'Emitir una nueva').icon, Icons.lock_outline);
+      await tester.tap(find.text('Emitir una nueva'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.textContaining('RUTA'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await abrirConRutas(
+        tester,
+        [convertida(), _cc(id: 'c13', numero: 13)],
+        id: 'q1',
+        plan: planSoloLectura,
+      );
+      expect(find.byIcon(Icons.lock_outline), findsNothing);
+      await tester.tap(find.text('Ver CC-0013'));
+      await tester.pumpAndSettle();
+      expect(find.text('CC-0013'), findsOneWidget);
     });
   });
 }
