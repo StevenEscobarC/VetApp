@@ -571,10 +571,7 @@ void main() {
       find.widgetWithText(AppButton, 'Guardar cambios'),
     );
 
-    Future<void> abrir(
-      WidgetTester tester,
-      FakeClienteRepository repo,
-    ) async {
+    Future<void> abrir(WidgetTester tester, FakeClienteRepository repo) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -647,9 +644,7 @@ void main() {
     });
 
     testWidgets('1234 muestra el error y no guarda nada', (tester) async {
-      final repo = FakeClienteRepository(
-        clientes: [clienteRita, clientePedro],
-      );
+      final repo = FakeClienteRepository(clientes: [clienteRita, clientePedro]);
       await abrir(tester, repo);
       await tester.enterText(campoCedula(), '1234');
       await desenfocar(tester);

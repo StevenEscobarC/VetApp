@@ -4,7 +4,8 @@
 /// dueño lo reclama desde su cuenta CLIENTE (Fase 9). [numeroMascotas] es un
 /// agregado de solo lectura calculado en cada consulta (`mascotas(count)`
 /// embebido) — nunca una lista almacenada, para que nunca se desincronice de
-/// la tabla `mascotas`.
+/// la tabla `mascotas`. [cedula] es opcional y se guarda como solo dígitos
+/// (D-24); sale en las cuentas de cobro.
 class Cliente {
   const Cliente({
     required this.id,
@@ -14,6 +15,7 @@ class Cliente {
     this.email,
     this.direccion,
     this.notas,
+    this.cedula,
     this.perfilesId,
     this.codigoVinculacion,
     this.codigoExpiraEn,
@@ -27,6 +29,7 @@ class Cliente {
   final String? email;
   final String? direccion;
   final String? notas;
+  final String? cedula;
   final String? perfilesId;
   final String? codigoVinculacion;
   final DateTime? codigoExpiraEn;
@@ -40,6 +43,7 @@ class Cliente {
     String? email,
     String? direccion,
     String? notas,
+    String? cedula,
   }) => Cliente(
     id: id,
     clinicaId: clinicaId,
@@ -48,6 +52,7 @@ class Cliente {
     email: email ?? this.email,
     direccion: direccion ?? this.direccion,
     notas: notas ?? this.notas,
+    cedula: cedula ?? this.cedula,
     perfilesId: perfilesId,
     codigoVinculacion: codigoVinculacion,
     codigoExpiraEn: codigoExpiraEn,
