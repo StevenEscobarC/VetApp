@@ -12,6 +12,8 @@ import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/status/app_status_chip.dart';
 import '../../../../core/widgets/status/vet_avatar.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../billing/presentation/cobros_rutas.dart';
+import '../../../billing/presentation/widgets/cobrar_boton.dart';
 import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../../plan/presentation/widgets/control_escritura.dart';
@@ -533,6 +535,20 @@ class _Contenido extends ConsumerWidget {
             ),
             gap,
           ],
+          // Cobrar la visita (D-05) o, si ya tiene CC activa, "Cobrada".
+          CobroVinculadoFila(
+            citaId: cita.id,
+            siNoHay: CobrarBoton(
+              ruta: rutaNuevoCobro(
+                clienteId: cita.clienteId,
+                citaId: cita.id,
+                mascotaId: cita.mascotas.length == 1
+                    ? cita.mascotas.first.id
+                    : null,
+              ),
+            ),
+          ),
+          gap,
           AppButton(
             label: 'Ver historia clínica',
             variant: AppButtonVariant.outline,
