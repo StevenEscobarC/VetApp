@@ -37,6 +37,7 @@ class FakeClinicaRepository implements SupabaseClinicaRepository {
     required String direccion,
     required String telefono,
     String? logoPath,
+    String? nit,
   }) async {
     llamadasActualizar.add({
       'nombre': nombre,
@@ -44,6 +45,7 @@ class FakeClinicaRepository implements SupabaseClinicaRepository {
       'direccion': direccion,
       'telefono': telefono,
       'logoPath': logoPath,
+      'nit': nit,
     });
     if (error != null) throw error!;
     clinica = Clinica(
@@ -53,6 +55,7 @@ class FakeClinicaRepository implements SupabaseClinicaRepository {
       direccion: direccion,
       telefono: telefono,
       logoPath: logoPath,
+      nit: nit,
     );
     return clinica;
   }

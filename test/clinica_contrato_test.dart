@@ -52,6 +52,7 @@ void main() {
       'p_direccion',
       'p_telefono',
       'p_logo_path',
+      'p_nit',
     });
     expect(p['p_nombre'], 'Vet Sol');
     expect(p['p_ciudad'], 'Cali');
@@ -99,5 +100,39 @@ void main() {
     final r = ClinicaLogoDatasource.rutaLogo(id, 1700000000000);
     expect(r, '$id/logo-1700000000000.jpg');
     expect(RegExp(r'^[0-9a-f-]{36}/logo-[0-9]{10,16}\.jpg$').hasMatch(r), isTrue);
+  });
+
+  group('NIT o cédula de la clínica (D-04)', () {
+    Map<String, dynamic> params(String? nit) =>
+        SupabaseClinicaRepository.paramsActualizarClinica(
+          nombre: 'Vet Sol',
+          ciudad: 'Cali',
+          direccion: '',
+          telefono: '300',
+          nit: nit,
+        );
+
+    test('p_nit se normaliza; vacío o null -> null', () {
+      expect(params(' 900.123.456-7 ')['p_nit'], '900123456-7');
+      expect(params('')['p_nit'], isNull);
+      expect(params(null)['p_nit'], isNull);
+      expect(params(null).containsKey('p_nit'), isTrue);
+    });
+
+    test('desdeJson mapea nit; vacío -> null', () {
+      expect(
+        Clinica.desdeJson({'id': 'c1', 'nit': '900123456-7'}).nit,
+        '900123456-7',
+      );
+      expect(Clinica.desdeJson({'id': 'c1', 'nit': ''}).nit, isNull);
+      expect(Clinica.desdeJson({'id': 'c1'}).nit, isNull);
+    });
+
+    test('miClinica selecciona nit', () {
+      expect(
+        SupabaseClinicaRepository.columnasClinica.split(', '),
+        contains('nit'),
+      );
+    });
   });
 }

@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/utils/captura_foto.dart';
+import 'package:vetapp/core/widgets/inputs/app_text_field.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
@@ -385,5 +386,87 @@ void main() {
     expect(find.text('El logo es parte de Pro'), findsOneWidget);
     expect(find.text('30099'), findsOneWidget);
     expect(find.text('El logo es parte de Pro y Clínica.'), findsNothing);
+  });
+
+  group('NIT o cédula (D-04)', () {
+    Finder campoNit() => find.descendant(
+      of: find.widgetWithText(AppTextField, 'NIT o cédula (opcional)'),
+      matching: find.byType(TextFormField),
+    );
+
+    testWidgets('aparece después de Teléfono con su ayuda', (tester) async {
+      await _abrir(
+        tester,
+        FakeClinicaRepository(),
+        FakeClinicaLogoDatasource(),
+      );
+      expect(find.text('NIT o cédula (opcional)'), findsOneWidget);
+      expect(
+        find.text('Aparece en tus cotizaciones y cuentas de cobro.'),
+        findsOneWidget,
+      );
+      expect(
+        tester.getTopLeft(find.text('Teléfono')).dy <
+            tester.getTopLeft(find.text('NIT o cédula (opcional)')).dy,
+        isTrue,
+      );
+      final campo = tester.widget<TextField>(
+        find.descendant(of: campoNit(), matching: find.byType(TextField)),
+      );
+      expect(campo.keyboardType, TextInputType.phone);
+      expect(campo.maxLength, 15);
+    });
+
+    testWidgets('900.123.456-7 + Guardar cambios guarda 900123456-7', (
+      tester,
+    ) async {
+      final repo = FakeClinicaRepository();
+      await _abrir(tester, repo, FakeClinicaLogoDatasource());
+      await tester.enterText(campoNit(), '900.123.456-7');
+      await _tocar(tester, find.text('Guardar cambios'));
+      expect(repo.llamadasActualizar.single['nit'], '900123456-7');
+    });
+
+    testWidgets('900-12 muestra el error y no guarda', (tester) async {
+      final repo = FakeClinicaRepository();
+      await _abrir(tester, repo, FakeClinicaLogoDatasource());
+      await tester.enterText(campoNit(), '900-12');
+      await _tocar(tester, find.text('Guardar cambios'));
+      expect(
+        find.text(
+          'Usa solo números y, si es NIT, el guion del dígito de verificación.',
+        ),
+        findsOneWidget,
+      );
+      expect(repo.llamadasActualizar, isEmpty);
+    });
+
+    testWidgets('el NIT guardado se muestra con puntos', (tester) async {
+      await _abrir(
+        tester,
+        FakeClinicaRepository(
+          clinica: clinicaDePrueba.copyWith(nit: '900123456-7'),
+        ),
+        FakeClinicaLogoDatasource(),
+      );
+      expect(
+        tester.widget<TextFormField>(campoNit()).controller!.text,
+        '900.123.456-7',
+      );
+    });
+
+    testWidgets('solo acepta dígitos, puntos y guion', (tester) async {
+      await _abrir(
+        tester,
+        FakeClinicaRepository(),
+        FakeClinicaLogoDatasource(),
+      );
+      await tester.enterText(campoNit(), 'ab9 0.0-1');
+      await tester.pump();
+      expect(
+        tester.widget<TextFormField>(campoNit()).controller!.text,
+        '90.0-1',
+      );
+    });
   });
 }
