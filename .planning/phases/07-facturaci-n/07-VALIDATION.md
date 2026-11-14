@@ -65,9 +65,9 @@ created: 2026-11-13
 | 07-07-T1 | 07-07 | 3 | BILL-02 | T-07-32 | Una clave por borrador, nunca se regenera; el precio por línea no toca el precio base | unit | `flutter test test/borrador_cobro_test.dart` -> `BORRADOR_OK` | ❌ W0 | ⬜ pending |
 | 07-07-T2 | 07-07 | 3 | BILL-01, BILL-02 | T-07-33 | Formulario con servicios, "Otro", líneas editables y total en vivo; sin descuento global | widget | `flutter test test/cobro_form_screen_test.dart` -> `FORM_LAYOUT_OK` | ❌ W0 | ⬜ pending |
 | 07-07-T3 | 07-07 | 3 | BILL-01, BILL-02 | T-07-32, T-07-34, T-07-35 | Confirmar y emitir; sin conexión conserva el borrador y reenvía el mismo p_clave; doble toque = una llamada; LP004 abre la hoja | widget/router + suite | `flutter test test/cobro_form_screen_test.dart test/router_cobros_cross_shell_test.dart` + `flutter test` -> `SLICE_EMITIR_OK` | ❌ W0 | ⬜ pending |
-| 07-08-T1 | 07-08 | 3 | BILL-01..04 | T-07-36 | Revisión estática antes de aplicar | grep (SQL) | -> `PREAPPLY_F7_OK` | ✅ | ⬜ pending |
-| 07-08-T2 | 07-08 | 3 | BILL-01..04 | T-07-36, T-07-37, T-07-39 | Delta en vivo; smoke completo en la nube | manual (usuario) | conteo -> `SMOKE_291_READY`; línea literal `RLS SMOKE: PASS (291 checks)` pegada por el usuario | ✅ | ⬜ pending |
-| 07-08-T3 | 07-08 | 3 | BILL-01..04 | T-07-24, T-07-38 | Superficie anon denegada en vivo; los embeds resuelven | script (nube) | `verify_live_schema.sh` -> `LIVE_F7_OK` | ✅ | ⬜ pending |
+| 07-08-T1 | 07-08 | 3 | BILL-01..04 | T-07-36 | Revisión estática antes de aplicar | grep (SQL) | -> `PREAPPLY_F7_OK` | ✅ | ✅ green |
+| 07-08-T2 | 07-08 | 3 | BILL-01..04 | T-07-36, T-07-37, T-07-39 | Delta en vivo; smoke completo en la nube | manual (usuario) | conteo -> `SMOKE_291_READY`; línea literal `RLS SMOKE: PASS (291 checks)` pegada por el usuario | ✅ | ✅ green |
+| 07-08-T3 | 07-08 | 3 | BILL-01..04 | T-07-24, T-07-38 | Superficie anon denegada en vivo; los embeds resuelven | script (nube) | `verify_live_schema.sh` -> `LIVE_F7_OK` | ✅ | ✅ green |
 | 07-09-T1 | 07-09 | 3 | BILL-01 | T-07-41, T-07-44 | PDF de la familia del carné: encabezado con NIT, C.C., "La suma de", estado; sin Factura/IVA/DIAN ni teléfono; logo opcional | unit | `flutter test test/cobro_pdf_service_test.dart` -> `PDF_COBRO_OK` | ❌ W0 | ⬜ pending |
 | 07-09-T2 | 07-09 | 3 | BILL-01 | T-07-40, T-07-42 | PDF + texto formal por la hoja de compartir; wa.me solo en la app; sin enlace público | widget | `flutter test test/compartir_cobro_test.dart` -> `ENVIAR_COBRO_OK` | ❌ W0 | ⬜ pending |
 | 07-09-T3 | 07-09 | 3 | BILL-04 | T-07-43 | Marcar pagada con método y fecha; un solo acento por estado; candado en solo lectura y compartir siempre disponible | widget + suite | `flutter test test/marcar_pagada_sheet_test.dart test/cobro_detail_screen_test.dart ...` + `flutter test` -> `SLICE_PAGO_PDF_OK` | ❌ W0 | ⬜ pending |
@@ -151,6 +151,7 @@ created: 2026-11-13
 | 07-05 | TDD por tarea; `flutter analyze` + `flutter test` | `LISTA_COBROS_OK` · `DETALLE_LECTURA_OK` · `SLICE_LISTA_OK`; `grep -rni factur lib` vacío | cobros_screen 23, detalle y entradas 19, router 5 | 2026-11-13 | `081e2c3` |
 | 07-06 | TDD por tarea; `flutter analyze` + `flutter test` | `CEDULA_CLIENTE_OK` · `NIT_CLINICA_OK` | clientes 53, clínica 44 (solo adiciones a pruebas existentes) | 2026-11-13 | `82e6d64` |
 | Ola 2 (master) | gate integrado | `No issues found!` · `01:05 +1217: All tests passed!` | suite completa | 2026-11-13 | `081e2c3` |
+| 07-08 | `apply_migration` fase_07_facturacion_a + _b (MCP, con OK del usuario); consultas de solo lectura; smoke pegado por el usuario; `verify_live_schema.sh` | `PREAPPLY_F7_OK` · `{"success":true}` x2 · tablas 0/0/0/0 · guarda en 13 tablas · `actualizar_clinica` de 6 argumentos · `RLS SMOKE: PASS (291 checks) - cambios revertidos` · `LIVE_SCHEMA_OK` · `LIVE_F7_OK` (tras arreglar el embed autorreferente, PGRST200) | smoke 291 en vivo; regresión `cobros_select_embed_test` | 2026-11-13 | `d86965c` |
 
 ---
 
