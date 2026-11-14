@@ -96,12 +96,14 @@ void main() {
         isTrue,
       );
     });
-    test('verdadero para subclases de ClientException (_ClientSocketException)',
-        () {
-      final e = _SubclaseClientException();
-      expect(e.runtimeType.toString(), isNot('ClientException'));
-      expect(esErrorDeRed(e), isTrue);
-    });
+    test(
+      'verdadero para subclases de ClientException (_ClientSocketException)',
+      () {
+        final e = _SubclaseClientException();
+        expect(e.runtimeType.toString(), isNot('ClientException'));
+        expect(esErrorDeRed(e), isTrue);
+      },
+    );
     test('verdadero si el nombre del tipo contiene SocketException', () {
       expect(esErrorDeRed(_MiSocketException()), isTrue);
     });
@@ -268,6 +270,31 @@ void main() {
         'created_at': '2026-10-31T15:00:00Z',
       });
       expect(m.autorNombre, isNull);
+    });
+    test('movimientoDesdeFila mapea la nota (null si no viene)', () {
+      final conNota = movimientoDesdeFila({
+        'id': 'm2',
+        'producto_id': 'p1',
+        'delta': -3,
+        'cantidad_resultante': 2,
+        'motivo': 'venta',
+        'origen': kOrigenCobro,
+        'nota': 'CC-0012',
+        'created_at': '2026-11-13T15:00:00Z',
+      });
+      expect(conNota.nota, 'CC-0012');
+      expect(conNota.origen, kOrigenCobro);
+      expect(conNota.motivo, MotivoMovimiento.venta);
+      final sinNota = movimientoDesdeFila({
+        'id': 'm3',
+        'producto_id': 'p1',
+        'delta': 1,
+        'cantidad_resultante': 1,
+        'motivo': 'alta',
+        'origen': 'ajuste',
+        'created_at': '2026-11-13T15:00:00Z',
+      });
+      expect(sinNota.nota, isNull);
     });
   });
 }
