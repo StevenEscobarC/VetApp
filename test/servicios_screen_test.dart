@@ -1,19 +1,86 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:vetapp/core/data/clock_provider.dart';
+import 'package:vetapp/core/router/app_router.dart';
+import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
+import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/billing/domain/cobro_failure.dart';
 import 'package:vetapp/features/billing/domain/entities/servicio.dart';
 import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
+import 'package:vetapp/features/billing/presentation/screens/cobros_screen.dart';
 import 'package:vetapp/features/billing/presentation/screens/servicios_screen.dart';
+import 'package:vetapp/features/clients/presentation/providers/clientes_providers.dart';
+import 'package:vetapp/features/home/presentation/app_shell.dart';
+import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
+import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/features/plan/domain/mi_plan.dart';
+import 'package:vetapp/features/team/domain/miembro.dart';
+import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
+import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
+import 'package:vetapp/main.dart';
 
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_citas.dart';
+import 'helpers/fake_clientes.dart';
 import 'helpers/fake_cobros.dart';
+import 'helpers/fake_inventario.dart';
+import 'helpers/fake_mascotas.dart';
 import 'helpers/fake_plan.dart';
+import 'helpers/fake_recordatorios.dart';
+import 'helpers/fake_team.dart';
+import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
+
+/// App real con `routerProvider` (y `AppShell`), como
+/// `router_cobros_cross_shell_test.dart`: el harness plano ocultaría una
+/// página de shell duplicada (G5).
+Widget _appReal() {
+  SharedPreferences.setMockInitialValues({});
+  return ProviderScope(
+    retry: (retryCount, error) => null,
+    overrides: [
+      ...planOverrides(),
+      authProfileProvider.overrideWith(
+        () => FakeAuthProfileNotifier(profile: vetProfile),
+      ),
+      citaRepositoryProvider.overrideWithValue(FakeCitaRepository()),
+      recordatoriosServiceProvider.overrideWithValue(
+        FakeRecordatoriosService(),
+      ),
+      clienteRepositoryProvider.overrideWithValue(FakeClienteRepository()),
+      mascotaRepositoryProvider.overrideWithValue(FakeMascotaRepository()),
+      teamRepositoryProvider.overrideWithValue(FakeTeamRepository()),
+      esClinicaMultiVetProvider.overrideWithValue(false),
+      miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
+      indicesColorVetProvider.overrideWithValue(const <String, int>{}),
+      inventarioRepositoryProvider.overrideWithValue(
+        FakeInventarioRepository(),
+      ),
+      vacunaRepositoryProvider.overrideWithValue(FakeVacunaRepository()),
+      cobrosRepositoryProvider.overrideWithValue(
+        FakeCobrosRepository(
+          cobros: [cobroDePrueba(id: 'c1')],
+          servicios: [servicioDePrueba()],
+        ),
+      ),
+      clockProvider.overrideWithValue(() => DateTime.utc(2026, 11, 13, 17)),
+    ],
+    child: const VetApp(),
+  );
+}
+
+ProviderContainer _container(WidgetTester tester) =>
+    ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+
+String _ubicacion(WidgetTester tester) => _container(
+  tester,
+).read(routerProvider).routerDelegate.currentConfiguration.last.matchedLocation;
 
 const _intro =
     'Los servicios que agregas con un toque al cobrar. En cada cobro puedes '
@@ -392,5 +459,51 @@ void main() {
     await tester.tap(find.text('Reintentar'));
     await tester.pumpAndSettle();
     expect(_llamadas(repo, 'servicios').length, greaterThan(antes));
+  });
+
+  group('ruta /servicios (router real)', () {
+    Future<void> abrirCobros(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_appReal());
+      await tester.pumpAndSettle();
+      _container(tester).read(routerProvider).go('/mas');
+      await tester.pumpAndSettle();
+      _container(tester).read(routerProvider).push('/cobros');
+      await tester.pumpAndSettle();
+      expect(_ubicacion(tester), '/cobros');
+    }
+
+    testWidgets('Cobros > Servicios y precios abre una sola ServiciosScreen '
+        'sin duplicar el shell; Atrás vuelve a Cobros', (tester) async {
+      await abrirCobros(tester);
+
+      await tester.tap(find.byTooltip('Servicios y precios'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(_ubicacion(tester), '/servicios');
+      expect(find.byType(ServiciosScreen), findsOneWidget);
+      expect(find.byType(AppShell, skipOffstage: false), findsOneWidget);
+      expect(find.text('\$ 50.000'), findsOneWidget);
+
+      _container(tester).read(routerProvider).pop();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(_ubicacion(tester), '/cobros');
+      expect(find.byType(CobrosScreen), findsOneWidget);
+      expect(find.byType(ServiciosScreen), findsNothing);
+    });
+
+    testWidgets('/servicios directo (como desde «Agregar servicios» del '
+        'formulario) es de primer nivel', (tester) async {
+      await abrirCobros(tester);
+      _container(tester).read(routerProvider).push('/servicios');
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ServiciosScreen), findsOneWidget);
+      expect(find.byType(AppShell, skipOffstage: false), findsOneWidget);
+    });
   });
 }
