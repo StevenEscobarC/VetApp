@@ -10,6 +10,7 @@ import '../../../../core/widgets/cards/app_card.dart';
 import '../../../appointments/presentation/providers/recordatorios_providers.dart';
 import '../../../appointments/presentation/screens/recordatorios_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../billing/presentation/cobros_rutas.dart';
 import '../../../inventory/presentation/inventario_routes.dart';
 import '../../../inventory/presentation/providers/inventario_providers.dart';
 import '../../../plan/presentation/plan_textos.dart';
@@ -223,6 +224,33 @@ class MasScreen extends ConsumerWidget {
                             texto: _textoBajos(bajosInventario),
                           ),
                         ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            // Estática, sin `ref.watch` (D-20): leer cobros nunca se bloquea
+            // y las pruebas de Más no necesitan otro override.
+            Semantics(
+              label: 'Cobros',
+              excludeSemantics: true,
+              button: true,
+              child: AppCard(
+                onTap: () => context.push(kRutaCobros),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 56),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.receipt_long_outlined),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'Cobros',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
                       const Icon(Icons.chevron_right),
                     ],
                   ),
