@@ -82,8 +82,8 @@ created: 2026-11-13
 | 07-13-T2 | 07-13 | 4 | BILL-01 | T-07-55 | "Cobrar" / "Cobrada: CC-…" en la cita completada; un error de cobros nunca bloquea | widget + suite | `flutter test test/cita_detail_screen_test.dart ...` + `flutter test` -> `SLICE_CITA_COBRAR_OK` | ✅ | ✅ green |
 | 07-14-T1 | 07-14 | 4 | BILL-01 | T-07-57, T-07-58, T-07-59 | "Cobrar" en el snackbar de la consulta y en el timeline; historia clínica solo-append | widget | `flutter test test/consulta_form_screen_test.dart test/historia_clinica_timeline_test.dart test/mascota_detail_screen_test.dart` -> `CONSULTA_COBRAR_OK` | ✅ | ✅ green |
 | 07-14-T2 | 07-14 | 4 | BILL-01 | T-07-59 | "Nueva cuenta de cobro" desde el cliente (push, G5) | widget + suite | `flutter test test/cliente_detail_screen_test.dart` + `flutter test` -> `SLICE_ENTRADAS_OK` | ✅ | ✅ green |
-| 07-15-T1 | 07-15 | 5 | BILL-01..03 | T-07-60, T-07-61 | Editar, convertir y copiar; BC002 deshabilita el envío; reemitir genera una clave nueva | unit + widget | `flutter test test/borrador_cobro_test.dart test/cobro_form_screen_test.dart` -> `MODOS_FORM_OK` | ✅ (07-07) | ⬜ pending |
-| 07-15-T2 | 07-15 | 5 | BILL-01, BILL-03 | T-07-62 | Tabla de acciones completa (un acento por estado); rutas editar/convertir antes de :id | widget/router + suite | `flutter test test/cobro_detail_screen_test.dart test/router_cobros_cross_shell_test.dart ...` + `flutter test` -> `SLICE_COTIZACIONES_OK` | ✅ | ⬜ pending |
+| 07-15-T1 | 07-15 | 5 | BILL-01..03 | T-07-60, T-07-61 | Editar, convertir y copiar; BC002 deshabilita el envío; reemitir genera una clave nueva | unit + widget | `flutter test test/borrador_cobro_test.dart test/cobro_form_screen_test.dart` -> `MODOS_FORM_OK` | ✅ (07-07) | ✅ green |
+| 07-15-T2 | 07-15 | 5 | BILL-01, BILL-03 | T-07-62 | Tabla de acciones completa (un acento por estado); rutas editar/convertir antes de :id | widget/router + suite | `flutter test test/cobro_detail_screen_test.dart test/router_cobros_cross_shell_test.dart ...` + `flutter test` -> `SLICE_COTIZACIONES_OK` | ✅ | ✅ green |
 | 07-16-T1 | 07-16 | 6 | BILL-01..04 | T-07-64, T-07-67 | Gate integrado, sonda en vivo, compuertas grep (vocabulario, capas, escrituras), auditoría de marca, revisión de código, documentación | suite + script | -> `PHASE7_GATE_OK` | ✅ | ⬜ pending |
 | 07-16-T2 | 07-16 | 6 | BILL-01..04 | T-07-63, T-07-65 | UAT en emulador contra el proyecto vivo (F1..F12) | manual (vetapp-qa) | -> `QA_REPORT_OK` + `QA: PASS` | ✅ | ⬜ pending |
 | 07-16-T3 | 07-16 | 6 | BILL-01..04 | T-07-66 | Visto bueno del usuario | manual (usuario) | -> `SIGNOFF_RECORDED` + respuesta literal | ✅ | ⬜ pending |
@@ -161,6 +161,8 @@ created: 2026-11-13
 | 07-13 | TDD por tarea; `flutter analyze` + `flutter test` | `FINALIZAR_COBRAR_OK` · `SLICE_CITA_COBRAR_OK`; pruebas existentes solo con adiciones | completar cita 20, cita y solo lectura 74 | 2026-11-14 | `41bbb12` |
 | 07-14 | TDD por tarea; `flutter analyze` + `flutter test` | `CONSULTA_COBRAR_OK` · `SLICE_ENTRADAS_OK` | consulta + línea de tiempo 67, cliente 30 | 2026-11-14 | `dfdb343` |
 | Ola 4 (master) | gate integrado | `No issues found!` · `00:41 +1413: All tests passed!` · solo `kOrigenCobro` contiene la palabra prohibida | suite completa | 2026-11-14 | `8b9aab2` |
+| 07-15 | TDD por tarea; `flutter analyze` + `flutter test` | `MODOS_FORM_OK` · `SLICE_COTIZACIONES_OK`; rutas `/editar` y `/convertir` antes de `/:id`; una aserción de 07-12 actualizada (la CC anulada ahora ofrece «Emitir una nueva») | formulario 79, detalle y rutas 97 | 2026-11-14 | `7d85c01` |
+| Ola 5 (master) | gate integrado | `No issues found!` · `00:41 +1441: All tests passed!` | suite completa | 2026-11-14 | `7d85c01` |
 
 ---
 
