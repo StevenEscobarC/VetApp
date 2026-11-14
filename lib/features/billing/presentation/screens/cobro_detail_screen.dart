@@ -10,13 +10,18 @@ import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../domain/entities/cobro.dart';
 import '../../domain/entities/cobro_item.dart';
 import '../../domain/numeracion.dart';
 import '../cobros_rutas.dart';
 import '../providers/cobros_providers.dart';
 import '../widgets/cobro_fila.dart';
+import '../widgets/enviar_cobro_sheet.dart';
 import '../widgets/estado_cobro_chip.dart';
+import '../widgets/marcar_pagada_sheet.dart';
 
 /// Detalle de lectura de una cotización o cuenta de cobro (UI-SPEC §4).
 /// Muestra lo que guardó el servidor: número, estado, total y las líneas
@@ -58,9 +63,84 @@ class CobroDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// Bloque de acciones del estado actual. Vacío en este plan: los planes de
-  /// pago, conversión y anulación reemplazan solo este método.
-  Widget _acciones(Cobro c) => const SizedBox.shrink();
+  /// Bloque de acciones del estado actual (UI-SPEC §4): exactamente un
+  /// primario por estado. Los planes de conversión y anulación agregan sus
+  /// casos a este `switch`.
+  Widget _acciones(Cobro c) => switch ((c.tipo, c.estado)) {
+    (TipoCobro.cuentaCobro, EstadoCobro.pendiente) => _AccionesCcPendiente(
+      cobro: c,
+    ),
+    (TipoCobro.cuentaCobro, EstadoCobro.pagada) => _AccionesCcPagada(cobro: c),
+    _ => const SizedBox.shrink(),
+  };
+}
+
+/// CC pendiente: primario "Marcar como pagada" (candado en solo lectura) y
+/// outline "Enviar al cliente", que sigue usable porque compartir no escribe.
+class _AccionesCcPendiente extends ConsumerWidget {
+  const _AccionesCcPendiente({required this.cobro});
+
+  final Cobro cobro;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final puede = ref.watch(puedeEscribirProvider);
+
+    Future<void> marcar() async {
+      if (!await asegurarEscritura(
+        context,
+        ref,
+        plan: ref.read(miPlanProvider).value,
+      )) {
+        return;
+      }
+      if (!context.mounted) return;
+      await showMarcarPagadaSheet(context, cobro);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ControlEscritura(
+            puedeEscribir: puede,
+            label: 'Marcar como pagada',
+            onTap: marcar,
+            child: AppButton(
+              label: 'Marcar como pagada',
+              icon: iconoEscritura(puede, Icons.payments_outlined),
+              onPressed: marcar,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: 'Enviar al cliente',
+            icon: Icons.ios_share,
+            variant: AppButtonVariant.outline,
+            onPressed: () => showEnviarCobroSheet(context, cobro),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// CC pagada: el envío pasa a ser la acción principal.
+class _AccionesCcPagada extends StatelessWidget {
+  const _AccionesCcPagada({required this.cobro});
+
+  final Cobro cobro;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: AppSpacing.lg),
+    child: AppButton(
+      label: 'Enviar al cliente',
+      icon: Icons.ios_share,
+      onPressed: () => showEnviarCobroSheet(context, cobro),
+    ),
+  );
 }
 
 class _Contenido extends ConsumerWidget {
