@@ -228,6 +228,51 @@ class BorradorCobroNotifier extends Notifier<BorradorCobro> {
     ]);
   }
 
+  /// El mismo producto otra vez suma 1 a su línea. [Producto.cantidad] solo
+  /// informa el tope en pantalla: el servidor decide el stock (D-12).
+  void agregarProducto(Producto p) {
+    final i = state.lineas.indexWhere((l) => l.productoId == p.id);
+    if (i >= 0) {
+      final l = state.lineas[i];
+      _editar(l.key, (l) => l.copyWith(cantidad: l.cantidad + 1));
+      return;
+    }
+    _lineas([
+      ...state.lineas,
+      LineaBorrador(
+        key: _nuevaKey(),
+        tipo: TipoLinea.producto,
+        descripcion: p.nombre,
+        precioUnitarioCop: p.precioVentaCop,
+        precioBaseCop: p.precioVentaCop,
+        productoId: p.id,
+        stock: p.cantidad,
+        unidad: p.unidad,
+      ),
+    ]);
+  }
+
+  /// Marca las líneas de [productoId] con el rechazo del servidor (IN001 /
+  /// IN002) y, si llegó, refresca sus existencias con [quedan].
+  void marcarErrorStock(
+    String productoId, {
+    int? quedan,
+    required String mensaje,
+  }) => _lineas([
+    for (final l in state.lineas)
+      l.productoId == productoId
+          ? l.copyWith(errorStock: mensaje, stock: quedan ?? l.stock)
+          : l,
+  ]);
+
+  void limpiarErroresStock() {
+    if (state.lineas.every((l) => l.errorStock == null)) return;
+    _lineas([
+      for (final l in state.lineas)
+        l.errorStock == null ? l : l.copyWith(errorStock: null),
+    ]);
+  }
+
   void agregarOtro() => _lineas([
     ...state.lineas,
     LineaBorrador(key: _nuevaKey(), tipo: TipoLinea.otro, descripcion: ''),

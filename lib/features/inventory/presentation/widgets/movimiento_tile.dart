@@ -28,9 +28,16 @@ class MovimientoTile extends StatelessWidget {
     final m = movimiento;
     final entra = m.delta > 0;
     final n = m.delta.abs();
+    // Ventas y anulaciones de cuentas de cobro llevan el número del documento
+    // en vez de "Venta" / "Ajuste deshecho" (UI-SPEC §7). Sin deshacer aquí.
+    final motivo = m.origen == kOrigenCobro
+        ? (m.motivo == MotivoMovimiento.deshacer
+              ? (m.nota ?? 'Anulada')
+              : 'Cuenta de cobro${m.nota == null ? '' : ' ${m.nota}'}')
+        : m.motivo.etiqueta;
     final titulo =
         '${entra ? '+' : '−'}${formatearMiles(n)} ${unidad.etiqueta(n)} · '
-        '${m.motivo.etiqueta}';
+        '$motivo';
     final autor = (m.autorNombre ?? '').trim();
     final subtitulo =
         'Quedaron ${formatearMiles(m.cantidadResultante)} · '

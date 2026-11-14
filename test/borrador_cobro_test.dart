@@ -5,7 +5,10 @@ import 'package:vetapp/features/billing/domain/entities/cobro.dart';
 import 'package:vetapp/features/billing/domain/entities/cobro_item.dart';
 import 'package:vetapp/features/billing/presentation/providers/borrador_cobro_provider.dart';
 
+import 'package:vetapp/features/inventory/domain/entities/producto.dart';
+
 import 'helpers/fake_cobros.dart';
+import 'helpers/fake_inventario.dart';
 
 const PrefillCobro _nuevo = (
   modo: ModoFormCobro.nuevo,
@@ -270,6 +273,73 @@ void main() {
       expect(leer().sucio, isFalse);
       notifier().elegirCliente('cli1');
       expect(leer().sucio, isTrue);
+    });
+  });
+  group('productos', () {
+    late ProviderSubscription<BorradorCobro> sub;
+    setUp(
+      () => sub = container.listen(borradorCobroProvider(_nuevo), (_, _) {}),
+    );
+    tearDown(() => sub.close());
+
+    test('agregarProducto: precio de venta, existencias y unidad', () {
+      notifier().agregarProducto(
+        productoDePrueba(cantidad: 3, precioVentaCop: 85000),
+      );
+      final l = leer().lineas.single;
+      expect(l.tipo, TipoLinea.producto);
+      expect(l.descripcion, 'Amoxicilina');
+      expect(l.cantidad, 1);
+      expect(l.precioUnitarioCop, 85000);
+      expect(l.precioBaseCop, 85000);
+      expect(l.productoId, 'p1');
+      expect(l.stock, 3);
+      expect(l.unidad, Unidad.frasco);
+      expect(leer().lineasNuevas().single.productoId, 'p1');
+    });
+
+    test('el mismo producto otra vez suma cantidad', () {
+      final p = productoDePrueba(cantidad: 3, precioVentaCop: 85000);
+      notifier().agregarProducto(p);
+      notifier().agregarProducto(p);
+      expect(leer().lineas, hasLength(1));
+      expect(leer().lineas.single.cantidad, 2);
+    });
+
+    test('un producto sin precio deja el precio vacío', () {
+      notifier().agregarProducto(productoDePrueba());
+      expect(leer().lineas.single.precioUnitarioCop, isNull);
+      expect(leer().lineas.single.precioBaseCop, isNull);
+    });
+
+    test('marcarErrorStock marca solo esa línea; limpiarErroresStock '
+        'los quita', () {
+      notifier().agregarProducto(
+        productoDePrueba(cantidad: 3, precioVentaCop: 85000),
+      );
+      notifier().agregarProducto(
+        productoDePrueba(id: 'p2', nombre: 'Gasas', cantidad: 9),
+      );
+      notifier().agregarServicio(servicioDePrueba());
+      notifier().marcarErrorStock(
+        'p1',
+        quedan: 2,
+        mensaje: 'Solo quedan 2 frascos de Amoxicilina.',
+      );
+      final ls = leer().lineas;
+      expect(ls[0].errorStock, 'Solo quedan 2 frascos de Amoxicilina.');
+      expect(ls[0].stock, 2);
+      expect(ls[1].errorStock, isNull);
+      expect(ls[1].stock, 9);
+      expect(ls[2].errorStock, isNull);
+
+      notifier().marcarErrorStock('p2', mensaje: 'Gasas ya no está.');
+      expect(leer().lineas[1].stock, 9);
+      expect(leer().lineas[1].errorStock, 'Gasas ya no está.');
+
+      notifier().limpiarErroresStock();
+      expect(leer().lineas.every((l) => l.errorStock == null), isTrue);
+      expect(leer().lineas[0].stock, 2);
     });
   });
 }
