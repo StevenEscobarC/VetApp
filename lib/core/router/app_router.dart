@@ -8,6 +8,7 @@ import '../../features/auth/presentation/screens/client_home_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/reset_password_screen.dart';
+import '../../features/billing/presentation/cobros_routes.dart';
 import '../../features/clients/presentation/clientes_routes.dart';
 import '../../features/appointments/presentation/screens/recordatorios_screen.dart';
 import '../../features/home/presentation/app_shell.dart';
@@ -92,6 +93,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       ...vacunacionRoutes,
       ...inventarioRoutes,
+      ...cobrosRoutes,
       citaNuevaRaizRoute,
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
