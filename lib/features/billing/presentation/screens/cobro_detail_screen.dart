@@ -64,18 +64,176 @@ class CobroDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// Bloque de acciones del estado actual (UI-SPEC §4): exactamente un
-  /// primario por estado. Los planes de conversión agregan sus casos a este
-  /// `switch`. Una CC anulada no tiene acciones (07-15 agrega "Emitir una
-  /// nueva").
+  /// Bloque de acciones del estado actual (UI-SPEC §4): a lo sumo un
+  /// primario por estado (CC pendiente, CC pagada y cotización abierta tienen
+  /// uno; convertida y anuladas, ninguno). Una cotización anulada no tiene
+  /// acciones.
   Widget _acciones(Cobro c) => switch ((c.tipo, c.estado)) {
     (TipoCobro.cuentaCobro, EstadoCobro.pendiente) => _AccionesCcPendiente(
       cobro: c,
     ),
     (TipoCobro.cuentaCobro, EstadoCobro.pagada) => _AccionesCcPagada(cobro: c),
-    (TipoCobro.cuentaCobro, EstadoCobro.anulada) => const SizedBox.shrink(),
+    (TipoCobro.cuentaCobro, EstadoCobro.anulada) => _AccionesCcAnulada(
+      cobro: c,
+    ),
+    (TipoCobro.cotizacion, EstadoCobro.abierta) => _AccionesCotAbierta(
+      cobro: c,
+    ),
+    (TipoCobro.cotizacion, EstadoCobro.convertida) => _AccionesCotConvertida(
+      cobro: c,
+    ),
     _ => const SizedBox.shrink(),
   };
+}
+
+/// Acción que escribe (UI-SPEC §8): en solo lectura conserva su lugar y
+/// variante, muestra el candado y abre `LimitePlanSheet`; el servidor es la
+/// autoridad (LP004).
+class _BotonEscritura extends ConsumerWidget {
+  const _BotonEscritura({
+    required this.label,
+    required this.icono,
+    required this.alTocar,
+    this.variant = AppButtonVariant.primary,
+  });
+
+  final String label;
+  final IconData? icono;
+  final AppButtonVariant variant;
+  final Future<void> Function(BuildContext context) alTocar;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final puede = ref.watch(puedeEscribirProvider);
+    final icono = this.icono;
+
+    Future<void> tocar() async {
+      if (!await asegurarEscritura(
+        context,
+        ref,
+        plan: ref.read(miPlanProvider).value,
+      )) {
+        return;
+      }
+      if (!context.mounted) return;
+      await alTocar(context);
+    }
+
+    return ControlEscritura(
+      puedeEscribir: puede,
+      label: label,
+      onTap: tocar,
+      child: AppButton(
+        label: label,
+        icon: icono == null
+            ? (puede ? null : Icons.lock_outline)
+            : iconoEscritura(puede, icono),
+        variant: variant,
+        onPressed: tocar,
+      ),
+    );
+  }
+}
+
+/// Cotización abierta (D-09, D-10): convertirla es la acción principal;
+/// enviarla nunca se bloquea porque compartir no escribe.
+class _AccionesCotAbierta extends StatelessWidget {
+  const _AccionesCotAbierta({required this.cobro});
+
+  final Cobro cobro;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: AppSpacing.lg),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BotonEscritura(
+          label: 'Convertir en cuenta de cobro',
+          icono: Icons.swap_horiz,
+          alTocar: (ctx) => ctx.push(rutaConvertirCotizacion(cobro.id)),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppButton(
+          label: 'Enviar al cliente',
+          icon: Icons.ios_share,
+          variant: AppButtonVariant.outline,
+          onPressed: () => showEnviarCobroSheet(context, cobro),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _BotonEscritura(
+          label: 'Editar cotización',
+          icono: Icons.edit_outlined,
+          variant: AppButtonVariant.outline,
+          alTocar: (ctx) => ctx.push(rutaEditarCotizacion(cobro.id)),
+        ),
+        _AccionAnular(cobro: cobro),
+      ],
+    ),
+  );
+}
+
+/// Cotización convertida: solo lectura, lleva a su CC y se puede reenviar.
+class _AccionesCotConvertida extends StatelessWidget {
+  const _AccionesCotConvertida({required this.cobro});
+
+  final Cobro cobro;
+
+  @override
+  Widget build(BuildContext context) {
+    final ccId = cobro.convertidaEnId;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (ccId != null) ...[
+            AppButton(
+              label:
+                  'Ver '
+                  '${formatearNumeroCobro(TipoCobro.cuentaCobro, cobro.convertidaEnNumero ?? 0)}',
+              variant: AppButtonVariant.outline,
+              onPressed: () => context.push(rutaCobro(ccId)),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          AppButton(
+            label: 'Enviar al cliente',
+            icon: Icons.ios_share,
+            variant: AppButtonVariant.outline,
+            onPressed: () => showEnviarCobroSheet(context, cobro),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// CC anulada (D-10): se reemite como un borrador nuevo (otra clave) con el
+/// mismo cliente, mascota, visita y líneas. No se envía ni se cobra.
+class _AccionesCcAnulada extends StatelessWidget {
+  const _AccionesCcAnulada({required this.cobro});
+
+  final Cobro cobro;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: AppSpacing.lg),
+    child: _BotonEscritura(
+      label: 'Emitir una nueva',
+      icono: null,
+      variant: AppButtonVariant.outline,
+      alTocar: (ctx) => ctx.push(
+        rutaNuevoCobro(
+          clienteId: cobro.clienteId,
+          mascotaId: cobro.mascotaId,
+          citaId: cobro.citaId,
+          consultaId: cobro.consultaId,
+          desdeCobroId: cobro.id,
+        ),
+      ),
+    ),
+  );
 }
 
 /// CC pendiente: primario "Marcar como pagada" (candado en solo lectura) y
@@ -153,48 +311,30 @@ class _AccionesCcPagada extends StatelessWidget {
   );
 }
 
-/// "Anular cuenta de cobro" (D-10, D-19): última acción, destructiva. Límite
-/// de rol: oculta (sin candado ni explicación) para quien no es el
-/// administrador ni quien la emitió; el servidor es la autoridad (42501). En
-/// solo lectura conserva su lugar con candado y abre `LimitePlanSheet`.
+/// "Anular cuenta de cobro" / "Anular cotización" (D-10, D-19): última
+/// acción, destructiva. Límite de rol: oculta (sin candado ni explicación)
+/// para quien no es el administrador ni quien la emitió; el servidor es la
+/// autoridad (42501). En solo lectura conserva su lugar con candado y abre
+/// `LimitePlanSheet`.
 class _AccionAnular extends ConsumerWidget {
   const _AccionAnular({required this.cobro});
 
   final Cobro cobro;
-
-  static const _label = 'Anular cuenta de cobro';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(puedeAnularCobroProvider(cobro.creadoPor))) {
       return const SizedBox.shrink();
     }
-    final puede = ref.watch(puedeEscribirProvider);
-
-    Future<void> anular() async {
-      if (!await asegurarEscritura(
-        context,
-        ref,
-        plan: ref.read(miPlanProvider).value,
-      )) {
-        return;
-      }
-      if (!context.mounted) return;
-      await showAnularCobroSheet(context, cobro);
-    }
-
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: ControlEscritura(
-        puedeEscribir: puede,
-        label: _label,
-        onTap: anular,
-        child: AppButton(
-          label: _label,
-          icon: puede ? null : Icons.lock_outline,
-          variant: AppButtonVariant.destructive,
-          onPressed: anular,
-        ),
+      child: _BotonEscritura(
+        label: cobro.esCotizacion
+            ? 'Anular cotización'
+            : 'Anular cuenta de cobro',
+        icono: null,
+        variant: AppButtonVariant.destructive,
+        alTocar: (ctx) => showAnularCobroSheet(ctx, cobro),
       ),
     );
   }

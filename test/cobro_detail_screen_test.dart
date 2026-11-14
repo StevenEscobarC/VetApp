@@ -710,7 +710,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('RUTA /cobros/q1/convertir'), findsOneWidget);
 
-      await tester.pageBack();
+      GoRouter.of(tester.element(find.textContaining('RUTA'))).pop();
       await tester.pumpAndSettle();
       await tester.tap(find.text('Editar cotización'));
       await tester.pumpAndSettle();

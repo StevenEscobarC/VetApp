@@ -44,6 +44,34 @@ final List<GoRoute> cobrosRoutes = [
     },
   ),
   GoRoute(
+    path: '/cobros/:id/editar',
+    builder: (_, state) => CobroFormScreen(
+      prefill: (
+        modo: ModoFormCobro.editarCotizacion,
+        tipo: TipoCobro.cotizacion,
+        clienteId: null,
+        mascotaId: null,
+        citaId: null,
+        consultaId: null,
+        origenId: state.pathParameters['id']!,
+      ),
+    ),
+  ),
+  GoRoute(
+    path: '/cobros/:id/convertir',
+    builder: (_, state) => CobroFormScreen(
+      prefill: (
+        modo: ModoFormCobro.convertir,
+        tipo: TipoCobro.cuentaCobro,
+        clienteId: null,
+        mascotaId: null,
+        citaId: null,
+        consultaId: null,
+        origenId: state.pathParameters['id']!,
+      ),
+    ),
+  ),
+  GoRoute(
     path: '/cobros/:id',
     builder: (_, state) =>
         CobroDetailScreen(cobroId: state.pathParameters['id']!),
