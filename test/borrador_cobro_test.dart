@@ -70,20 +70,25 @@ void main() {
       expect(generadas, 1);
     });
 
-    test('un borrador nuevo (tras liberar el anterior) trae otra clave', () async {
-      final sub = container.listen(borradorCobroProvider(_nuevo), (_, _) {});
-      expect(leer().clave, 'clave-1');
-      sub.close();
-      await container.pump();
-      final sub2 = container.listen(borradorCobroProvider(_nuevo), (_, _) {});
-      addTearDown(sub2.close);
-      expect(leer().clave, 'clave-2');
-    });
+    test(
+      'un borrador nuevo (tras liberar el anterior) trae otra clave',
+      () async {
+        final sub = container.listen(borradorCobroProvider(_nuevo), (_, _) {});
+        expect(leer().clave, 'clave-1');
+        sub.close();
+        await container.pump();
+        final sub2 = container.listen(borradorCobroProvider(_nuevo), (_, _) {});
+        addTearDown(sub2.close);
+        expect(leer().clave, 'clave-2');
+      },
+    );
   });
 
   group('servicios', () {
     late ProviderSubscription<BorradorCobro> sub;
-    setUp(() => sub = container.listen(borradorCobroProvider(_nuevo), (_, _) {}));
+    setUp(
+      () => sub = container.listen(borradorCobroProvider(_nuevo), (_, _) {}),
+    );
     tearDown(() => sub.close());
 
     test('el mismo servicio dos veces suma cantidad en una sola línea', () {
@@ -108,7 +113,9 @@ void main() {
 
   group('Otro y edición', () {
     late ProviderSubscription<BorradorCobro> sub;
-    setUp(() => sub = container.listen(borradorCobroProvider(_nuevo), (_, _) {}));
+    setUp(
+      () => sub = container.listen(borradorCobroProvider(_nuevo), (_, _) {}),
+    );
     tearDown(() => sub.close());
 
     test('agregarOtro crea una línea libre vacía', () {
@@ -150,7 +157,9 @@ void main() {
 
   group('cantidades', () {
     late ProviderSubscription<BorradorCobro> sub;
-    setUp(() => sub = container.listen(borradorCobroProvider(_nuevo), (_, _) {}));
+    setUp(
+      () => sub = container.listen(borradorCobroProvider(_nuevo), (_, _) {}),
+    );
     tearDown(() => sub.close());
 
     test('cambiarCantidad a 0 se ajusta a 1', () {
