@@ -74,29 +74,30 @@ Future<_Resultado> _abrir(
 }
 
 void main() {
-  testWidgets('encabezado, búsqueda con autofocus que filtra y sin resultados', (
-    tester,
-  ) async {
-    await _abrir(tester, productos: [_gasas, _amox]);
-    expect(find.text('Agregar producto'), findsOneWidget);
-    final campo = tester.widget<TextField>(find.byType(TextField));
-    expect(campo.autofocus, isTrue);
-    expect(campo.decoration?.hintText, 'Buscar producto');
+  testWidgets(
+    'encabezado, búsqueda con autofocus que filtra y sin resultados',
+    (tester) async {
+      await _abrir(tester, productos: [_gasas, _amox]);
+      expect(find.text('Agregar producto'), findsOneWidget);
+      final campo = tester.widget<TextField>(find.byType(TextField));
+      expect(campo.autofocus, isTrue);
+      expect(campo.decoration?.hintText, 'Buscar producto');
 
-    // A–Z.
-    final yAmox = tester.getTopLeft(find.text('Amoxicilina')).dy;
-    final yGasas = tester.getTopLeft(find.text('Gasas')).dy;
-    expect(yAmox, lessThan(yGasas));
+      // A–Z.
+      final yAmox = tester.getTopLeft(find.text('Amoxicilina')).dy;
+      final yGasas = tester.getTopLeft(find.text('Gasas')).dy;
+      expect(yAmox, lessThan(yGasas));
 
-    await tester.enterText(find.byType(TextField), 'amox');
-    await tester.pumpAndSettle();
-    expect(find.text('Amoxicilina'), findsOneWidget);
-    expect(find.text('Gasas'), findsNothing);
+      await tester.enterText(find.byType(TextField), 'amox');
+      await tester.pumpAndSettle();
+      expect(find.text('Amoxicilina'), findsOneWidget);
+      expect(find.text('Gasas'), findsNothing);
 
-    await tester.enterText(find.byType(TextField), 'xyz');
-    await tester.pumpAndSettle();
-    expect(find.text('No encontramos productos con «xyz»'), findsOneWidget);
-  });
+      await tester.enterText(find.byType(TextField), 'xyz');
+      await tester.pumpAndSettle();
+      expect(find.text('No encontramos productos con «xyz»'), findsOneWidget);
+    },
+  );
 
   testWidgets('filas: existencias y precio, o Sin precio', (tester) async {
     await _abrir(tester, productos: [_amox, _gasas]);
@@ -148,7 +149,11 @@ void main() {
       extra: [productosProvider.overrideWith((ref) => pendiente.future)],
     );
     expect(
-      find.byKey(const ValueKey('esqueleto-producto')),
+      find.byWidgetPredicate(
+        (w) =>
+            w.key is ValueKey<String> &&
+            (w.key! as ValueKey<String>).value.startsWith('esqueleto-producto'),
+      ),
       findsNWidgets(4),
     );
   });
