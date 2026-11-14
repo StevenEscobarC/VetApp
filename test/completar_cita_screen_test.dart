@@ -8,8 +8,15 @@ import 'package:vetapp/features/appointments/presentation/providers/citas_provid
 import 'package:vetapp/features/appointments/presentation/screens/completar_cita_screen.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/vaccination/presentation/providers/vacuna_providers.dart';
+import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/billing/domain/entities/cobro.dart';
+import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 
+import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_cobros.dart';
+import 'helpers/fake_plan.dart';
 import 'helpers/fake_vacunas.dart';
 import 'helpers/router_harness.dart';
 
@@ -27,6 +34,8 @@ Widget _app(
   FakeCitaRepository repo,
   String id, [
   FakeVacunaRepository? vacunas,
+  FakeCobrosRepository? cobros,
+  MiPlan? plan,
 ]) => routerHarness(
   initialLocation: '/agenda/$id/completar',
   routes: [
@@ -54,11 +63,27 @@ Widget _app(
       path: '/dosis/nueva',
       builder: (_, state) => Scaffold(body: Text('dosis ${state.uri}')),
     ),
+    GoRoute(
+      path: '/cobros/nuevo',
+      builder: (_, state) => Scaffold(body: Text('cobro ${state.uri}')),
+    ),
+    GoRoute(
+      path: '/cobros/:id',
+      builder: (_, state) =>
+          Scaffold(body: Text('detalle ${state.pathParameters['id']}')),
+    ),
   ],
   overrides: [
     citaRepositoryProvider.overrideWithValue(repo),
     vacunaRepositoryProvider.overrideWithValue(
       vacunas ?? FakeVacunaRepository(),
+    ),
+    cobrosRepositoryProvider.overrideWithValue(
+      cobros ?? FakeCobrosRepository(),
+    ),
+    ...planOverrides(plan: plan ?? planBeta),
+    authProfileProvider.overrideWith(
+      () => FakeAuthProfileNotifier(profile: vetProfile),
     ),
   ],
 );
@@ -73,6 +98,21 @@ Future<void> _abrir(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(_app(repo, id, vacunas));
+  await tester.pumpAndSettle();
+}
+
+/// Como [_abrir], con cobros y plan propios.
+Future<void> _abrirCon(
+  WidgetTester tester,
+  FakeCitaRepository repo,
+  String id, {
+  FakeCobrosRepository? cobros,
+  MiPlan? plan,
+}) async {
+  tester.view.physicalSize = const Size(800, 2400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(_app(repo, id, null, cobros, plan));
   await tester.pumpAndSettle();
 }
 
@@ -314,5 +354,210 @@ void main() {
       expect(find.text('Registrar consulta'), findsNWidgets(2));
       expect(find.text('Omitir'), findsNWidgets(2));
     });
+  });
+
+  group('Finalizar y cobrar (D-05, D-19)', () {
+    /// Omite las mascotas pendientes: Finalizar queda habilitado.
+    Future<void> omitirTodo(WidgetTester tester) async {
+      while (find.text('Omitir').evaluate().isNotEmpty) {
+        await tester.tap(find.text('Omitir').first);
+        await tester.pumpAndSettle();
+      }
+    }
+
+    final completadaLuna = citaLunaHoy.copyWith(
+      estado: EstadoCita.completada,
+      mascotasConConsulta: {'m-luna'},
+    );
+
+    testWidgets('outline con recibo, 8px bajo Finalizar cita y misma regla', (
+      tester,
+    ) async {
+      await _abrirCon(
+        tester,
+        FakeCitaRepository(citas: [citaLunaHoy]),
+        'cita-1',
+      );
+
+      final cobrar = _boton(tester, 'Finalizar y cobrar');
+      expect(cobrar.variant, AppButtonVariant.outline);
+      expect(cobrar.icon, Icons.receipt_long_outlined);
+      expect(cobrar.onPressed, isNull); // Luna pendiente
+      expect(_boton(tester, 'Finalizar cita').onPressed, isNull);
+      final yFinalizar = tester
+          .getBottomLeft(find.widgetWithText(AppButton, 'Finalizar cita'))
+          .dy;
+      final yCobrar = tester
+          .getTopLeft(find.widgetWithText(AppButton, 'Finalizar y cobrar'))
+          .dy;
+      expect(yCobrar - yFinalizar, 8);
+
+      await omitirTodo(tester);
+      expect(_boton(tester, 'Finalizar y cobrar').onPressed, isNotNull);
+      expect(_boton(tester, 'Finalizar cita').onPressed, isNotNull);
+    });
+
+    testWidgets(
+      'completa con snackbar y Deshacer y abre la CC con cliente, cita y '
+      'la única mascota',
+      (tester) async {
+        final repo = FakeCitaRepository(citas: [citaLunaHoy]);
+        await _abrirCon(tester, repo, 'cita-1');
+        await omitirTodo(tester);
+
+        await tester.tap(find.text('Finalizar y cobrar'));
+        await tester.pumpAndSettle();
+
+        expect(repo.estadosCambiados.single, (
+          citaId: 'cita-1',
+          estado: EstadoCita.completada,
+        ));
+        expect(
+          find.text(
+            'cobro /cobros/nuevo?tipo=cc&clienteId=c-maria&mascotaId=m-luna'
+            '&citaId=cita-1',
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('agenda'), findsNothing);
+        expect(find.text('Cita completada'), findsOneWidget);
+        expect(find.text('Deshacer'), findsOneWidget);
+      },
+    );
+
+    testWidgets('con varias mascotas no prellena la mascota', (tester) async {
+      final repo = FakeCitaRepository(
+        citas: [
+          citaRockyLunaHoy.copyWith(mascotasConConsulta: {'m-rocky', 'm-luna'}),
+        ],
+      );
+      await _abrirCon(tester, repo, 'cita-2');
+
+      await tester.tap(find.text('Finalizar y cobrar'));
+      await tester.pumpAndSettle();
+
+      expect(repo.estadosCambiados.single.estado, EstadoCita.completada);
+      expect(
+        find.text(
+          'cobro /cobros/nuevo?tipo=cc&clienteId=c-maria&citaId=cita-2',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('si falla completar no navega', (tester) async {
+      await _abrirCon(tester, _FakeFallaEstado(citas: [citaLunaHoy]), 'cita-1');
+      await omitirTodo(tester);
+
+      await tester.tap(find.text('Finalizar y cobrar'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No pudimos completar la cita. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('cobro /cobros'), findsNothing);
+      expect(find.text('¿Registrar la consulta?'), findsOneWidget);
+    });
+
+    testWidgets('cita ya completada sin CC abre el cobro sin recompletar', (
+      tester,
+    ) async {
+      final repo = FakeCitaRepository(citas: [completadaLuna]);
+      await _abrirCon(tester, repo, 'cita-1');
+
+      await tester.tap(find.text('Finalizar y cobrar'));
+      await tester.pumpAndSettle();
+
+      expect(repo.estadosCambiados, isEmpty);
+      expect(
+        find.text(
+          'cobro /cobros/nuevo?tipo=cc&clienteId=c-maria&mascotaId=m-luna'
+          '&citaId=cita-1',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('cita completada con CC muestra Cobrada en su lugar', (
+      tester,
+    ) async {
+      final cobros = FakeCobrosRepository(
+        vinculado: const CobroVinculado(
+          id: 'cc-12',
+          numero: 12,
+          estado: EstadoCobro.pagada,
+        ),
+      );
+      await _abrirCon(
+        tester,
+        FakeCitaRepository(citas: [completadaLuna]),
+        'cita-1',
+        cobros: cobros,
+      );
+
+      expect(find.text('Finalizar y cobrar'), findsNothing);
+      expect(find.text('Cobrada: CC-0012'), findsOneWidget);
+      expect(find.text('Pagada'), findsOneWidget);
+      expect(find.text('Finalizar cita'), findsOneWidget);
+      expect(
+        cobros.llamadas.firstWhere((l) => l.metodo == 'cobroVinculado').args,
+        {'citaId': 'cita-1', 'consultaId': null},
+      );
+
+      await tester.tap(find.text('Cobrada: CC-0012'));
+      await tester.pumpAndSettle();
+      expect(find.text('detalle cc-12'), findsOneWidget);
+    });
+
+    testWidgets('si falla leer el cobro muestra Finalizar y cobrar', (
+      tester,
+    ) async {
+      await _abrirCon(
+        tester,
+        FakeCitaRepository(citas: [citaLunaHoy]),
+        'cita-1',
+        cobros: FakeCobrosRepository(error: Exception('boom')),
+      );
+
+      expect(find.text('Finalizar y cobrar'), findsOneWidget);
+      expect(find.textContaining('boom'), findsNothing);
+    });
+
+    testWidgets(
+      'solo lectura: candado y hoja, sin completar ni navegar; Finalizar '
+      'cita igual que antes',
+      (tester) async {
+        final repo = FakeCitaRepository(citas: [citaLunaHoy]);
+        await _abrirCon(tester, repo, 'cita-1', plan: planSoloLectura);
+        await omitirTodo(tester);
+
+        final cobrar = find.widgetWithText(AppButton, 'Finalizar y cobrar');
+        expect(
+          find.descendant(
+            of: cobrar,
+            matching: find.byIcon(Icons.lock_outline),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel('Finalizar y cobrar, bloqueado, solo lectura'),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.widgetWithText(AppButton, 'Finalizar cita'),
+            matching: find.byIcon(Icons.lock_outline),
+          ),
+          findsNothing,
+        );
+
+        await tester.tap(cobrar);
+        await tester.pumpAndSettle();
+        expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+        expect(repo.estadosCambiados, isEmpty);
+        expect(find.textContaining('cobro /cobros'), findsNothing);
+      },
+    );
   });
 }
