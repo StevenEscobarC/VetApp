@@ -29,6 +29,10 @@ class LineaCobroTile extends StatefulWidget {
     this.errorPrecio,
     this.notaStock,
     this.errorStock,
+    this.limiteStock,
+    this.pasosBloqueados = false,
+    this.ayudaPrecio,
+    this.autofocusPrecio = false,
   });
 
   final LineaBorrador linea;
@@ -43,6 +47,17 @@ class LineaCobroTile extends StatefulWidget {
   final String? errorPrecio;
   final String? notaStock;
   final String? errorStock;
+
+  /// Existencias en una cuenta de cobro: "+" se detiene aquí. Escribir más
+  /// sí se permite y el formulario muestra [errorStock] (D-12).
+  final int? limiteStock;
+
+  /// Producto que el servidor rechazó (IN002): pasos deshabilitados.
+  final bool pasosBloqueados;
+
+  /// Ayuda bajo el precio cuando no hay precio base (producto sin precio).
+  final String? ayudaPrecio;
+  final bool autofocusPrecio;
 
   @override
   State<LineaCobroTile> createState() => _LineaCobroTileState();
@@ -143,8 +158,13 @@ class _LineaCobroTileState extends State<LineaCobroTile> {
     final base = _l.precioBaseCop;
     final precio = _l.precioUnitarioCop;
     final esOtro = _l.tipo == TipoLinea.otro;
-    final puedeMenos = habilitado && _l.cantidad > 1;
-    final puedeMas = habilitado && _l.cantidad < widget.cantidadMaxima;
+    final pasos = habilitado && !widget.pasosBloqueados;
+    final limite = widget.limiteStock;
+    final puedeMenos = pasos && _l.cantidad > 1;
+    final puedeMas =
+        pasos &&
+        _l.cantidad < widget.cantidadMaxima &&
+        (limite == null || _l.cantidad < limite);
 
     return Semantics(
       container: true,
@@ -234,7 +254,7 @@ class _LineaCobroTileState extends State<LineaCobroTile> {
                             hideLabel: true,
                             controller: _cantidadCtrl,
                             focusNode: _cantidadFocus,
-                            enabled: habilitado,
+                            enabled: habilitado && !widget.pasosBloqueados,
                             textAlign: TextAlign.center,
                             keyboardType: TextInputType.number,
                             inputFormatters: [
@@ -270,6 +290,7 @@ class _LineaCobroTileState extends State<LineaCobroTile> {
                     label: 'Precio unitario',
                     controller: _precioCtrl,
                     focusNode: _precioFocus,
+                    autofocus: widget.autofocusPrecio,
                     enabled: habilitado,
                     prefixText: '\$ ',
                     keyboardType: TextInputType.number,
@@ -279,7 +300,9 @@ class _LineaCobroTileState extends State<LineaCobroTile> {
                     errorText: _errorPrecioLocal ?? widget.errorPrecio,
                     helperText: base != null && precio != null && precio != base
                         ? 'Precio base ${formatearCop(base)}'
-                        : null,
+                        : (base == null && precio == null
+                              ? widget.ayudaPrecio
+                              : null),
                     onChanged: _precioEscrito,
                   ),
                 ),

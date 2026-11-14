@@ -22,6 +22,7 @@ import '../providers/borrador_cobro_provider.dart';
 import '../providers/cobros_providers.dart';
 import '../widgets/elegir_cliente_sheet.dart';
 import '../widgets/linea_cobro_tile.dart';
+import '../widgets/producto_cobro_sheet.dart';
 import '../widgets/servicio_chip.dart';
 import '../widgets/tipo_cobro_toggle.dart';
 import '../widgets/total_cobro_bar.dart';
@@ -50,7 +51,18 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
   String? _errorBarra;
   Cliente? _clienteElegido;
   String? _focoOtro;
+  String? _focoPrecio;
   String _anuncio = '';
+
+  /// Productos que el servidor rechazó por archivados (IN002): sus pasos se
+  /// deshabilitan hasta el próximo envío.
+  final _noDisponibles = <String>{};
+
+  /// Una clave por línea para llevar la vista a la primera línea inválida.
+  final _clavesLinea = <String, GlobalKey>{};
+
+  GlobalKey _claveLinea(String key) =>
+      _clavesLinea.putIfAbsent(key, GlobalKey.new);
 
   PrefillCobro get _p => widget.prefill;
   BorradorCobroNotifier get _n => ref.read(borradorCobroProvider(_p).notifier);
@@ -73,6 +85,56 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
       _validar && l.precioUnitarioCop == null
       ? 'Escribe el precio (puede ser 0).'
       : null;
+
+  static String _mensajeStock(LineaBorrador l, int quedan) {
+    if (quedan <= 0) return '${l.descripcion} está agotado.';
+    final unidad = l.unidad?.etiqueta(quedan) ?? '';
+    final verbo = quedan == 1 ? 'queda' : 'quedan';
+    return 'Solo $verbo ${formatearMiles(quedan)} $unidad de ${l.descripcion}.';
+  }
+
+  /// Tope local de existencias, solo en una cuenta de cobro (D-12). Es una
+  /// cortesía: el servidor es la autoridad y responde IN001 si cambió.
+  String? _errorStockLocal(LineaBorrador l, TipoCobro tipo) {
+    final stock = l.stock;
+    if (tipo != TipoCobro.cuentaCobro ||
+        l.tipo != TipoLinea.producto ||
+        stock == null ||
+        l.cantidad <= stock) {
+      return null;
+    }
+    return _mensajeStock(l, stock);
+  }
+
+  bool _lineaInvalida(LineaBorrador l, TipoCobro tipo) =>
+      _errorDescripcion(l) != null ||
+      _errorPrecio(l) != null ||
+      _errorStockLocal(l, tipo) != null;
+
+  void _mostrarLinea(String key) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _clavesLinea[key]?.currentContext;
+      if (ctx != null && ctx.mounted) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 250),
+        );
+      }
+    });
+  }
+
+  Future<void> _agregarProducto() async {
+    final esCc = _b.tipo == TipoCobro.cuentaCobro;
+    final p = await showProductoCobroSheet(context, esCuentaCobro: esCc);
+    if (p == null || !mounted) return;
+    final nueva = !_b.lineas.any((l) => l.productoId == p.id);
+    _n.agregarProducto(p);
+    final l = _b.lineas.firstWhere((l) => l.productoId == p.id);
+    setState(() {
+      if (nueva && p.precioVentaCop == null) _focoPrecio = l.key;
+      _anuncio = '${p.nombre} agregado. Total ${formatearCop(_b.totalCop)}.';
+    });
+  }
 
   Future<void> _elegirCliente() async {
     final c = await mostrarElegirClienteSheet(context);
@@ -113,10 +175,11 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
       _avisarFaltante();
       return false;
     }
-    final lineasMal = b.lineas.any(
-      (l) => _errorDescripcion(l) != null || _errorPrecio(l) != null,
-    );
-    if (lineasMal) return false;
+    final mala = b.lineas.where((l) => _lineaInvalida(l, b.tipo)).firstOrNull;
+    if (mala != null) {
+      _mostrarLinea(mala.key);
+      return false;
+    }
     if (b.totalCop <= 0) {
       setState(() => _errorBarra = 'El total debe ser mayor que \$ 0.');
       return false;
@@ -165,7 +228,33 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
     return ok ?? false;
   }
 
-  _Banner _bannerPara(CobroFailure e, TipoCobro tipo) => switch (e.tipo) {
+  /// IN001 / IN002 con producto conocido: marca la línea exacta y refresca su
+  /// nota de existencias. Devuelve `false` si no hay línea de ese producto.
+  bool _marcarLineaStock(CobroFailure e) {
+    final id = e.productoId;
+    if (id == null) return false;
+    final l = _b.lineas.where((l) => l.productoId == id).firstOrNull;
+    if (l == null) return false;
+    final quedan = e.quedan;
+    final noDisponible = e.tipo == ErrorCobro.productoNoDisponible;
+    final mensaje = noDisponible
+        ? '${l.descripcion} ya no está disponible. Quítalo del cobro.'
+        : quedan != null
+        ? _mensajeStock(l, quedan)
+        : e.message;
+    _n.marcarErrorStock(id, quedan: quedan, mensaje: mensaje);
+    if (noDisponible) _noDisponibles.add(id);
+    _mostrarLinea(l.key);
+    return true;
+  }
+
+  /// [lineaMarcada]: el rechazo de stock ya quedó en su línea (IN002 entonces
+  /// no necesita banner).
+  _Banner? _bannerPara(
+    CobroFailure e,
+    TipoCobro tipo, {
+    bool lineaMarcada = false,
+  }) => switch (e.tipo) {
     ErrorCobro.sinConexion => const _Banner(
       sinConexion: true,
       mensaje: 'Sin conexión, el cobro no se creó.',
@@ -174,6 +263,8 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
     ErrorCobro.stockInsuficiente => const _Banner(
       mensaje: 'Revisa las cantidades marcadas.',
     ),
+    ErrorCobro.productoNoDisponible =>
+      lineaMarcada ? null : _Banner(mensaje: e.message),
     ErrorCobro.visitaYaCobrada => _Banner(mensaje: e.message),
     _ => _Banner(
       mensaje: tipo == TipoCobro.cotizacion
@@ -195,7 +286,11 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
       _confirmando = false;
       if (!ok || !mounted) return;
     }
+    // Los rechazos de stock anteriores se limpian: el servidor vuelve a decidir
+    // con el mismo borrador y la misma clave (D-12, D-21).
+    _n.limpiarErroresStock();
     setState(() {
+      _noDisponibles.clear();
       _loading = true;
       _banner = null;
     });
@@ -233,7 +328,12 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
     } on CobroFailure catch (e) {
       // LP004: hoja del plan sobre el formulario; el borrador queda intacto.
       if (mounted && await manejarLimitePlan(context, ref, e)) return;
-      if (mounted) setState(() => _banner = _bannerPara(e, b.tipo));
+      if (!mounted) return;
+      final stock =
+          e.tipo == ErrorCobro.stockInsuficiente ||
+          e.tipo == ErrorCobro.productoNoDisponible;
+      final marcada = stock && _marcarLineaStock(e);
+      setState(() => _banner = _bannerPara(e, b.tipo, lineaMarcada: marcada));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -463,6 +563,13 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
             otro,
           ],
         ),
+        const SizedBox(height: AppSpacing.sm),
+        AppButton(
+          label: 'Agregar producto',
+          variant: AppButtonVariant.outline,
+          icon: Icons.inventory_2_outlined,
+          onPressed: _agregarProducto,
+        ),
       ],
     );
   }
@@ -481,21 +588,37 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
     return [
       for (final (i, l) in b.lineas.indexed) ...[
         if (i > 0) const SizedBox(height: AppSpacing.sm),
-        LineaCobroTile(
-          key: ValueKey(l.key),
-          linea: l,
-          habilitado: !_loading,
-          autofocusDescripcion: l.key == _focoOtro,
-          errorDescripcion: _errorDescripcion(l),
-          errorPrecio: _errorPrecio(l),
-          errorStock: l.errorStock,
-          onCantidad: (n) => _n.cambiarCantidad(l.key, n),
-          onPrecio: (v) => _n.cambiarPrecio(l.key, v),
-          onDescripcion: (s) => _n.cambiarDescripcion(l.key, s),
-          onQuitar: () => _n.quitar(l.key),
-        ),
+        KeyedSubtree(key: _claveLinea(l.key), child: _linea(l, b.tipo)),
       ],
     ];
+  }
+
+  Widget _linea(LineaBorrador l, TipoCobro tipo) {
+    final esProducto = l.tipo == TipoLinea.producto;
+    final stock = l.stock;
+    final unidad = l.unidad;
+    return LineaCobroTile(
+      key: ValueKey(l.key),
+      linea: l,
+      habilitado: !_loading,
+      autofocusDescripcion: l.key == _focoOtro,
+      autofocusPrecio: l.key == _focoPrecio,
+      errorDescripcion: _errorDescripcion(l),
+      errorPrecio: _errorPrecio(l),
+      notaStock: esProducto && stock != null && unidad != null
+          ? 'Quedan ${formatearMiles(stock)} ${unidad.etiqueta(stock)}'
+          : null,
+      limiteStock: esProducto && tipo == TipoCobro.cuentaCobro ? stock : null,
+      pasosBloqueados: _noDisponibles.contains(l.productoId),
+      ayudaPrecio: esProducto
+          ? 'Este producto no tiene precio de venta. Escribe el precio.'
+          : null,
+      errorStock: _errorStockLocal(l, tipo) ?? l.errorStock,
+      onCantidad: (n) => _n.cambiarCantidad(l.key, n),
+      onPrecio: (v) => _n.cambiarPrecio(l.key, v),
+      onDescripcion: (s) => _n.cambiarDescripcion(l.key, s),
+      onQuitar: () => _n.quitar(l.key),
+    );
   }
 
   @override
@@ -554,6 +677,11 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
             TotalCobroBar(
               totalCop: b.totalCop,
               etiquetaCta: _cta(b.tipo),
+              ayuda:
+                  b.tipo == TipoCobro.cuentaCobro &&
+                      b.lineas.any((l) => l.tipo == TipoLinea.producto)
+                  ? 'Al emitirla se descuentan los productos del inventario.'
+                  : null,
               habilitado: b.clienteId != null && b.lineas.isNotEmpty,
               onTapDeshabilitado: _avisarFaltante,
               onPressed: _emitir,
