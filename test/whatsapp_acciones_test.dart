@@ -10,11 +10,13 @@ import 'package:vetapp/features/appointments/presentation/providers/citas_provid
 import 'package:vetapp/features/appointments/presentation/screens/agenda_screen.dart';
 import 'package:vetapp/features/appointments/presentation/screens/cita_detail_screen.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
 import 'package:vetapp/features/team/domain/miembro.dart';
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_cobros.dart';
 import 'helpers/fake_url_launcher.dart';
 import 'helpers/router_harness.dart';
 
@@ -22,6 +24,7 @@ final _ahora = deBogota(2026, 9, 30, 9, 35);
 
 List<Override> _overrides(FakeCitaRepository repo, FakeLanzadorExterno l) => [
   citaRepositoryProvider.overrideWithValue(repo),
+  cobrosRepositoryProvider.overrideWithValue(FakeCobrosRepository()),
   lanzadorExternoProvider.overrideWithValue(l),
   authProfileProvider.overrideWith(
     () => FakeAuthProfileNotifier(profile: vetProfile),

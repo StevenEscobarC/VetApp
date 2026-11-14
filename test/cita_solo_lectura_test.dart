@@ -13,12 +13,14 @@ import 'package:vetapp/features/appointments/presentation/providers/citas_provid
 import 'package:vetapp/features/appointments/presentation/screens/agenda_screen.dart';
 import 'package:vetapp/features/appointments/presentation/screens/cita_detail_screen.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
 import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/team/domain/miembro.dart';
 import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_cobros.dart';
 import 'helpers/fake_plan.dart';
 import 'helpers/fake_url_launcher.dart';
 import 'helpers/router_harness.dart';
@@ -60,10 +62,15 @@ Widget _app(
         ),
       ],
     ),
+    GoRoute(
+      path: '/cobros/nuevo',
+      builder: (_, _) => const Scaffold(body: Text('cobro-stub')),
+    ),
   ],
   overrides: <Override>[
     ...planOverrides(plan: plan),
     citaRepositoryProvider.overrideWithValue(repo),
+    cobrosRepositoryProvider.overrideWithValue(FakeCobrosRepository()),
     lanzadorExternoProvider.overrideWithValue(
       lanzador ?? FakeLanzadorExterno(),
     ),
@@ -331,6 +338,37 @@ void main() {
       expect(_candadoEn(_boton('Ver historia clínica')), findsNothing);
       await _bloqueado(tester, _boton('Registrar consulta pendiente'));
       expect(find.text('completar-stub'), findsNothing);
+    });
+
+    testWidgets('completada: Cobrar lleva candado y abre la hoja (D-19)', (
+      tester,
+    ) async {
+      final repo = FakeCitaRepository(
+        citas: [citaLunaHoy.copyWith(estado: EstadoCita.completada)],
+      );
+      await _abrir(tester, '/agenda/cita-1', repo);
+
+      expect(_candadoEn(_boton('Cobrar')), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Cobrar, bloqueado, solo lectura'),
+        findsOneWidget,
+      );
+      await _bloqueado(tester, _boton('Cobrar'));
+      expect(find.text('cobro-stub'), findsNothing);
+    });
+
+    testWidgets('completada con plan Beta: Cobrar sin candado navega', (
+      tester,
+    ) async {
+      final repo = FakeCitaRepository(
+        citas: [citaLunaHoy.copyWith(estado: EstadoCita.completada)],
+      );
+      await _abrir(tester, '/agenda/cita-1', repo, plan: planBeta);
+
+      expect(_candadoEn(_boton('Cobrar')), findsNothing);
+      await tester.tap(_boton('Cobrar'));
+      await tester.pumpAndSettle();
+      expect(find.text('cobro-stub'), findsOneWidget);
     });
 
     testWidgets('con plan Beta no hay candados', (tester) async {

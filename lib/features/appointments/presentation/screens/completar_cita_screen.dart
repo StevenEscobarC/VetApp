@@ -8,6 +8,11 @@ import '../../../../core/utils/zona_bogota.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
+import '../../../billing/presentation/cobros_rutas.dart';
+import '../../../billing/presentation/widgets/cobrar_boton.dart';
+import '../../../plan/presentation/limite_plan_gate.dart';
+import '../../../plan/presentation/providers/plan_providers.dart';
+import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../../vaccination/presentation/providers/dosis_cita_providers.dart';
 import '../../../vaccination/presentation/vacunacion_routes.dart';
 import '../../../vaccination/presentation/widgets/dosis_registrada_snackbar.dart';
@@ -31,16 +36,45 @@ class CompletarCitaScreen extends ConsumerStatefulWidget {
       _CompletarCitaScreenState();
 }
 
-enum _Boton { finalizar, sinConsulta }
+enum _Boton { finalizar, sinConsulta, cobrar }
 
 class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
   final Set<String> _omitidas = {};
   _Boton? _finalizando;
 
-  Future<void> _finalizar(Cita cita, _Boton boton) async {
+  /// Formulario de cuenta de cobro ligado a la cita (D-05). La mascota solo
+  /// se prellena si la cita tiene una; con varias el veterinario la elige.
+  static String _rutaCobro(Cita cita) => rutaNuevoCobro(
+    clienteId: cita.clienteId,
+    citaId: cita.id,
+    mascotaId: cita.mascotas.length == 1 ? cita.mascotas.first.id : null,
+  );
+
+  /// "Finalizar y cobrar": el candado aplica solo al cobro (D-19); la
+  /// finalización es la misma de "Finalizar cita".
+  Future<void> _finalizarYCobrar(Cita cita) async {
+    if (_finalizando != null) return;
+    final ok = await asegurarEscritura(
+      context,
+      ref,
+      plan: ref.read(miPlanProvider).value,
+    );
+    if (!ok || !mounted) return;
+    await _finalizar(cita, _Boton.cobrar, cobrar: true);
+  }
+
+  Future<void> _finalizar(
+    Cita cita,
+    _Boton boton, {
+    bool cobrar = false,
+  }) async {
     if (_finalizando != null || !_completable(cita)) return;
     if (cita.estado == EstadoCita.completada) {
-      context.pop();
+      if (cobrar) {
+        context.push(_rutaCobro(cita));
+      } else {
+        context.pop();
+      }
       return;
     }
     setState(() => _finalizando = boton);
@@ -59,7 +93,12 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
     );
     if (!mounted) return;
     setState(() => _finalizando = null);
-    if (ok) context.go(destino);
+    if (!ok) return;
+    if (cobrar) {
+      context.push(_rutaCobro(cita));
+    } else {
+      context.go(destino);
+    }
   }
 
   @override
@@ -187,6 +226,28 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
     );
   }
 
+  Widget _finalizarYCobrarBoton(Cita cita, bool hayPendientes) {
+    const label = 'Finalizar y cobrar';
+    final puede = ref.watch(puedeEscribirProvider);
+    final deshabilitado = hayPendientes || _finalizando != null;
+    void tocar() {
+      if (!deshabilitado) _finalizarYCobrar(cita);
+    }
+
+    return ControlEscritura(
+      puedeEscribir: puede,
+      label: label,
+      onTap: tocar,
+      child: AppButton(
+        label: label,
+        variant: AppButtonVariant.outline,
+        icon: iconoEscritura(puede, Icons.receipt_long_outlined),
+        isLoading: _finalizando == _Boton.cobrar,
+        onPressed: deshabilitado ? null : tocar,
+      ),
+    );
+  }
+
   Widget _contenido(Cita cita) {
     final textTheme = Theme.of(context).textTheme;
     if (!_completable(cita)) {
@@ -274,6 +335,11 @@ class _CompletarCitaScreenState extends ConsumerState<CompletarCitaScreen> {
             onPressed: hayPendientes || _finalizando != null
                 ? null
                 : () => _finalizar(cita, _Boton.finalizar),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          CobroVinculadoFila(
+            citaId: cita.id,
+            siNoHay: _finalizarYCobrarBoton(cita, hayPendientes),
           ),
         ],
       ),
