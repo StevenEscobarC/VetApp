@@ -755,7 +755,8 @@ void main() {
       );
       await tester.tap(_enBarra(find.byType(ElevatedButton)));
       await tester.pump();
-      await tester.tap(find.text('Consulta · \$ 50.000'));
+      // Las entradas están bloqueadas: el toque no debe llegar al chip.
+      await tester.tap(find.text('Consulta · \$ 50.000'), warnIfMissed: false);
       await tester.pump();
       expect(crear(repo), hasLength(1));
       expect(find.text('Subtotal \$ 50.000'), findsOneWidget);
