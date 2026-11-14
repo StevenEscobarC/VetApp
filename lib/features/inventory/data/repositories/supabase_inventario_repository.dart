@@ -270,6 +270,7 @@ MovimientoStock movimientoDesdeFila(Map<String, dynamic> f) {
     deshaceId: f['deshace_id'] as String?,
     autorNombre: autor is Map ? autor['nombre'] as String? : null,
     creadoEn: DateTime.parse(f['created_at'] as String).toLocal(),
+    nota: f['nota'] as String?,
   );
 }
 

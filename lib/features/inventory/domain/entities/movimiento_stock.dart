@@ -39,6 +39,7 @@ class MovimientoStock {
     required this.creadoEn,
     this.deshaceId,
     this.autorNombre,
+    this.nota,
   });
 
   final String id;
@@ -50,7 +51,14 @@ class MovimientoStock {
   final String? deshaceId;
   final String? autorNombre;
   final DateTime creadoEn;
+
+  /// Número del documento que movió el stock ("CC-0012" o
+  /// "Anulada CC-0012"); `null` en los ajustes manuales.
+  final String? nota;
 }
+
+/// Valor interno del origen de cobro reservado en la Fase 6; nunca se muestra.
+const String kOrigenCobro = 'factura';
 
 /// Respuesta del servidor tras un ajuste: la cantidad la decide él.
 class ResultadoAjuste {
