@@ -9,13 +9,16 @@ import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/appointments/domain/entities/cita.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
+import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
 import 'package:vetapp/features/clinical_history/domain/consulta_failure.dart';
 import 'package:vetapp/features/clinical_history/presentation/providers/consultas_providers.dart';
 import 'package:vetapp/features/clinical_history/presentation/screens/consulta_form_screen.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_cobros.dart';
 import 'helpers/fake_consultas.dart';
 import 'helpers/fake_mascotas.dart';
 import 'helpers/fake_plan.dart';
@@ -55,6 +58,10 @@ Widget _appUnderTest({
           ),
         ],
       ),
+      GoRoute(
+        path: '/cobros/nuevo',
+        builder: (_, state) => Text('NUEVO ${state.uri.query}'),
+      ),
     ],
     overrides: [
       ...planOverrides(),
@@ -66,6 +73,7 @@ Widget _appUnderTest({
       mascotaRepositoryProvider.overrideWithValue(
         mascotaRepo ?? FakeMascotaRepository(mascotas: [mascotaRocky]),
       ),
+      cobrosRepositoryProvider.overrideWithValue(FakeCobrosRepository()),
     ],
   );
 }
@@ -88,6 +96,36 @@ Future<void> _expandirDetalles(WidgetTester tester) async {
   await tester.tap(find.text('Agregar más detalles'));
   await tester.pumpAndSettle();
 }
+
+/// Formulario en un plan dado (solo lectura para los casos de cobro).
+Widget _appConPlan({required FakeConsultaRepository repo, MiPlan? plan}) =>
+    routerHarness(
+      initialLocation: '/pacientes/m-1/consultas/nueva',
+      routes: [
+        GoRoute(
+          path: '/pacientes/:id',
+          builder: (_, state) => Text('FICHA ${state.pathParameters['id']}'),
+          routes: [
+            GoRoute(
+              path: 'consultas/nueva',
+              builder: (_, state) =>
+                  ConsultaFormScreen(mascotaId: state.pathParameters['id']!),
+            ),
+          ],
+        ),
+      ],
+      overrides: [
+        ...planOverrides(plan: plan),
+        authProfileProvider.overrideWith(
+          () => FakeAuthProfileNotifier(profile: vetProfile),
+        ),
+        consultaRepositoryProvider.overrideWithValue(repo),
+        mascotaRepositoryProvider.overrideWithValue(
+          FakeMascotaRepository(mascotas: [mascotaRocky]),
+        ),
+        cobrosRepositoryProvider.overrideWithValue(FakeCobrosRepository()),
+      ],
+    );
 
 void main() {
   testWidgets(
@@ -463,5 +501,80 @@ void main() {
           .text,
       'Vómito desde ayer',
     );
+  });
+
+  group('Cobrar desde el snackbar (D-05)', () {
+    Future<void> guardar(WidgetTester tester) async {
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoDiagnostico),
+        'Otitis',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(_campoTratamiento),
+        'Gotas',
+      );
+      await tester.pump();
+      await tester.ensureVisible(find.text('Guardar consulta'));
+      await tester.tap(find.text('Guardar consulta'));
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets(
+      '"Consulta guardada" ofrece "Cobrar" por 6 s; abre el formulario con '
+      'el dueño, la mascota y la consulta nueva',
+      (tester) async {
+        final repo = FakeConsultaRepository(idResultado: 'con-77');
+        await tester.pumpWidget(_appUnderTest(repo: repo));
+        await tester.pumpAndSettle();
+        await guardar(tester);
+
+        expect(find.text('FICHA m-1'), findsOneWidget);
+        final snack = tester.widget<SnackBar>(find.byType(SnackBar));
+        expect(snack.duration, const Duration(seconds: 6));
+        expect(snack.action?.label, 'Cobrar');
+
+        await tester.tap(find.widgetWithText(SnackBarAction, 'Cobrar'));
+        await tester.pumpAndSettle();
+        final destino = tester
+            .widget<Text>(find.textContaining('NUEVO '))
+            .data!;
+        final query = Uri.splitQueryString(destino.substring(6));
+        expect(query['tipo'], 'cc');
+        expect(query['clienteId'], 'c-1');
+        expect(query['mascotaId'], 'm-1');
+        expect(query['consultaId'], 'con-77');
+      },
+    );
+
+    testWidgets('solo lectura: el snackbar no ofrece "Cobrar"', (
+      tester,
+    ) async {
+      final repo = FakeConsultaRepository();
+      await tester.pumpWidget(
+        _appConPlan(repo: repo, plan: planSoloLectura),
+      );
+      await tester.pumpAndSettle();
+      await guardar(tester);
+
+      expect(find.text('Consulta guardada'), findsOneWidget);
+      expect(find.byType(SnackBarAction), findsNothing);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('sin dueño conocido el snackbar no ofrece "Cobrar"', (
+      tester,
+    ) async {
+      final repo = FakeConsultaRepository();
+      await tester.pumpWidget(
+        _appUnderTest(repo: repo, mascotaRepo: FakeMascotaRepository()),
+      );
+      await tester.pumpAndSettle();
+      await guardar(tester);
+
+      expect(find.text('Consulta guardada'), findsOneWidget);
+      expect(find.byType(SnackBarAction), findsNothing);
+      await tester.pumpAndSettle();
+    });
   });
 }
