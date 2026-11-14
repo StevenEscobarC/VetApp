@@ -3,11 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/data/clock_provider.dart';
+import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
 import 'package:vetapp/features/billing/domain/entities/cobro.dart';
 import 'package:vetapp/features/billing/domain/entities/cobro_item.dart';
 import 'package:vetapp/features/billing/presentation/providers/cobros_providers.dart';
 import 'package:vetapp/features/billing/presentation/screens/cobro_detail_screen.dart';
+import 'package:vetapp/features/clients/domain/entities/cliente.dart';
+import 'package:vetapp/features/clients/presentation/providers/clientes_providers.dart';
+import 'package:vetapp/features/plan/domain/mi_plan.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_cobros.dart';
@@ -98,6 +102,7 @@ Future<void> _abrir(
   WidgetTester tester,
   FakeCobrosRepository repo, {
   String id = 'c1',
+  MiPlan? plan,
 }) async {
   tester.view.physicalSize = const Size(800, 3000);
   tester.view.devicePixelRatio = 1;
@@ -122,7 +127,15 @@ Future<void> _abrir(
         ),
       ],
       overrides: [
-        ...planOverrides(),
+        ...planOverrides(plan: plan),
+        clienteProvider.overrideWith(
+          (ref, id) async => Cliente(
+            id: id,
+            clinicaId: 'cli-1',
+            nombre: 'Laura Gómez',
+            telefono: '3001234567',
+          ),
+        ),
         authProfileProvider.overrideWith(
           () => FakeAuthProfileNotifier(profile: vetProfile),
         ),
@@ -368,5 +381,115 @@ void main() {
       greaterThan(antes),
     );
     _sinFactura();
+  });
+
+  group('acciones (07-09)', () {
+    List<AppButton> primarios(WidgetTester tester) => tester
+        .widgetList<AppButton>(find.byType(AppButton))
+        .where((b) => b.variant == AppButtonVariant.primary)
+        .toList();
+
+    AppButton boton(WidgetTester tester, String label) =>
+        tester.widget<AppButton>(find.widgetWithText(AppButton, label));
+
+    testWidgets('CC pendiente: un solo primario "Marcar como pagada" y '
+        'outline "Enviar al cliente"', (tester) async {
+      await _abrir(tester, FakeCobrosRepository(cobros: [_cc()]));
+      final p = primarios(tester);
+      expect(p, hasLength(1));
+      expect(p.single.label, 'Marcar como pagada');
+      expect(p.single.icon, Icons.payments_outlined);
+      final enviar = boton(tester, 'Enviar al cliente');
+      expect(enviar.variant, AppButtonVariant.outline);
+      expect(enviar.icon, Icons.ios_share);
+    });
+
+    testWidgets('CC pagada: un solo primario "Enviar al cliente"', (
+      tester,
+    ) async {
+      await _abrir(
+        tester,
+        FakeCobrosRepository(
+          cobros: [
+            _cc(
+              estado: EstadoCobro.pagada,
+              metodoPago: MetodoPago.nequi,
+              pagadaEl: DateTime.utc(2026, 8, 20),
+            ),
+          ],
+        ),
+      );
+      final p = primarios(tester);
+      expect(p, hasLength(1));
+      expect(p.single.label, 'Enviar al cliente');
+      expect(find.text('Marcar como pagada'), findsNothing);
+    });
+
+    testWidgets('CC anulada: ni pagar ni enviar', (tester) async {
+      await _abrir(
+        tester,
+        FakeCobrosRepository(
+          cobros: [_cc(estado: EstadoCobro.anulada, motivoAnulacion: 'Error')],
+        ),
+      );
+      expect(find.text('Marcar como pagada'), findsNothing);
+      expect(find.text('Enviar al cliente'), findsNothing);
+    });
+
+    testWidgets('solo lectura: candado en pagar, Enviar sigue usable', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _abrir(
+        tester,
+        FakeCobrosRepository(cobros: [_cc()]),
+        plan: planSoloLectura,
+      );
+      final pagar = boton(tester, 'Marcar como pagada');
+      expect(pagar.icon, Icons.lock_outline);
+      expect(pagar.variant, AppButtonVariant.primary);
+      expect(
+        find.bySemanticsLabel('Marcar como pagada, bloqueado, solo lectura'),
+        findsOneWidget,
+      );
+      expect(boton(tester, 'Enviar al cliente').icon, Icons.ios_share);
+
+      await tester.tap(find.text('Marcar como pagada'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+      expect(find.text('Confirmar pago'), findsNothing);
+
+      Navigator.of(
+        tester.element(find.text('Tu cuenta está en solo lectura')),
+      ).pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Enviar al cliente'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enviar CC-0012'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('Enviar al cliente abre la hoja de envío', (tester) async {
+      await _abrir(tester, FakeCobrosRepository(cobros: [_cc()]));
+      await tester.tap(find.text('Enviar al cliente'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enviar CC-0012'), findsOneWidget);
+      expect(find.text('Para Laura Gómez'), findsOneWidget);
+    });
+
+    testWidgets('pagar refresca el detalle a Pagada', (tester) async {
+      final repo = FakeCobrosRepository(cobros: [_cc()]);
+      await _abrir(tester, repo);
+      await tester.tap(find.text('Marcar como pagada'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nequi'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(AppButton, 'Confirmar pago'));
+      await tester.pumpAndSettle();
+      expect(find.text('CC-0012 marcada como pagada.'), findsOneWidget);
+      expect(find.text('Pagada el 13/11/2026 · Nequi'), findsOneWidget);
+      expect(find.text('Marcar como pagada'), findsNothing);
+      expect(primarios(tester).single.label, 'Enviar al cliente');
+    });
   });
 }
