@@ -5271,6 +5271,294 @@ begin
 end;
 $$;
 
+-- ----- Fase 7, parte B: editar cotización, resumen, datos del PDF, servicios y NIT -----
+
+-- RPC: editar_cotizacion (solo una cotización abierta, D-10). Reemplaza las líneas y el cliente/mascota con
+-- snapshots nuevos; nunca mueve stock y nunca cambia número, fecha ni valida_hasta (D-23). El borrado y la
+-- reinserción van en la misma función: si algo falla, las líneas anteriores se conservan.
+drop function if exists public.editar_cotizacion(uuid, uuid, jsonb, uuid);
+create or replace function public.editar_cotizacion(
+  p_id uuid,
+  p_cliente_id uuid,
+  p_items jsonb,
+  p_mascota_id uuid default null
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_cot public.cobros%rowtype;
+  v_cli_nombre text;
+  v_cli_cedula text;
+  v_mascota_nombre text;
+  v_total int;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede editar cotizaciones.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_cot from public.cobros c
+   where c.id = p_id and c.clinica_id = v_clinica and c.tipo = 'cotizacion'
+   for update;
+  if not found then
+    raise exception 'La cotización no existe.' using errcode = 'BC001';
+  end if;
+  if v_cot.estado <> 'abierta' then
+    raise exception 'La cotización ya no está abierta.' using errcode = 'BC002';
+  end if;
+
+  select cl.nombre, cl.cedula into v_cli_nombre, v_cli_cedula
+    from public.clientes cl where cl.id = p_cliente_id and cl.clinica_id = v_clinica;
+  if not found then
+    raise exception 'Revisa el cliente de la cotización.' using errcode = 'check_violation';
+  end if;
+
+  if p_mascota_id is not null then
+    select m.nombre into v_mascota_nombre
+      from public.mascotas m
+     where m.id = p_mascota_id and m.clinica_id = v_clinica and m.dueno_id = p_cliente_id;
+    if not found then
+      raise exception 'Revisa la mascota de la cotización.' using errcode = 'check_violation';
+    end if;
+  end if;
+
+  v_total := public._total_items_cobro(v_clinica, p_items);
+
+  delete from public.cobro_items where cobro_id = p_id and clinica_id = v_clinica;
+  perform public._insertar_items_cobro(v_clinica, p_id, p_items, false, null);
+
+  update public.cobros
+     set total_cop = v_total,
+         cliente_id = p_cliente_id,
+         cliente_nombre = btrim(v_cli_nombre),
+         cliente_cedula = v_cli_cedula,
+         mascota_id = p_mascota_id,
+         mascota_nombre = v_mascota_nombre
+   where id = p_id and clinica_id = v_clinica;
+end;
+$$;
+
+-- RPC: cobros_resumen (tarjeta de Cobros, D-17): cobrado este mes de Bogotá, por cobrar y pendientes. Solo cuentas
+-- de cobro; las anuladas y las cotizaciones nunca cuentan.
+drop function if exists public.cobros_resumen();
+create or replace function public.cobros_resumen()
+returns table (cobrado_mes bigint, por_cobrar bigint, pendientes int)
+language plpgsql
+stable
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede ver los cobros.' using errcode = 'insufficient_privilege';
+  end if;
+
+  return query
+    select
+      coalesce(sum(total_cop) filter (where estado = 'pagada' and pagada_el >= date_trunc('month', v_hoy)::date and pagada_el <= v_hoy), 0)::bigint,
+      coalesce(sum(total_cop) filter (where estado = 'pendiente'), 0)::bigint,
+      (count(*) filter (where estado = 'pendiente'))::int
+    from public.cobros
+    where clinica_id = v_clinica and tipo = 'cuenta_cobro';
+end;
+$$;
+
+-- RPC: cobro_para_pdf (D-04, D-22, D-24): documento + líneas + encabezado de la clínica con NIT. Los datos del
+-- cliente salen solo del snapshot del documento (nunca su teléfono); el logo se anula si el plan no lo permite,
+-- igual que carne_de_mascota (5.1 D-06). La clave de idempotencia no sale del servidor.
+drop function if exists public.cobro_para_pdf(uuid);
+create or replace function public.cobro_para_pdf(p_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_c public.cobros%rowtype;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede ver el documento.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_c from public.cobros c where c.id = p_id and c.clinica_id = v_clinica;
+  if not found then
+    raise exception 'El documento no existe.' using errcode = 'BC001';
+  end if;
+
+  return jsonb_build_object(
+    'cobro', (to_jsonb(v_c) - 'clave_idempotencia') || jsonb_build_object(
+      'autor_nombre', (select pf.nombre from public.perfiles pf where pf.id = v_c.creado_por),
+      'anulada_por_nombre', (select pf.nombre from public.perfiles pf where pf.id = v_c.anulada_por),
+      'convertida_en_numero', (select o.numero from public.cobros o where o.id = v_c.convertida_en_id and o.clinica_id = v_clinica),
+      'cotizacion_origen_numero', (select o.numero from public.cobros o where o.id = v_c.cotizacion_origen_id and o.clinica_id = v_clinica)
+    ),
+    'items', coalesce((
+      select jsonb_agg(to_jsonb(i) order by i.orden)
+        from public.cobro_items i
+       where i.cobro_id = v_c.id and i.clinica_id = v_clinica
+    ), '[]'::jsonb),
+    'clinica', (
+      select jsonb_build_object(
+        'nombre', k.nombre, 'ciudad', k.ciudad, 'direccion', k.direccion, 'telefono', k.telefono, 'nit', k.nit,
+        'logo_path', case when coalesce((select e.logo_permitido from public._plan_efectivo(k.id) e), false) then k.logo_path end
+      )
+      from public.clinicas k where k.id = v_clinica
+    )
+  );
+end;
+$$;
+
+-- RPC: guardar_servicio (D-06): solo el admin crea (p_id null) o edita un servicio activo. Un nombre repetido
+-- entre los activos sale como 23505 desde clinica_servicios_nombre_activo_uq.
+drop function if exists public.guardar_servicio(uuid, text, int);
+create or replace function public.guardar_servicio(p_id uuid, p_nombre text, p_precio_cop int)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_nombre text := btrim(coalesce(p_nombre, ''));
+  v_id uuid;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede gestionar servicios.' using errcode = 'insufficient_privilege';
+  end if;
+  if not public.es_admin_clinica() then
+    raise exception 'Solo el administrador de la clínica puede hacer esto.' using errcode = 'insufficient_privilege';
+  end if;
+  if char_length(v_nombre) not between 1 and 60
+     or p_precio_cop is null or p_precio_cop not between 0 and 100000000 then
+    raise exception 'Revisa el nombre y el precio del servicio.' using errcode = 'check_violation';
+  end if;
+
+  if p_id is null then
+    insert into public.clinica_servicios (clinica_id, nombre, precio_cop, creado_por)
+    values (v_clinica, v_nombre, p_precio_cop, auth.uid())
+    returning id into v_id;
+  else
+    update public.clinica_servicios
+       set nombre = v_nombre, precio_cop = p_precio_cop
+     where id = p_id and clinica_id = v_clinica and archivado_at is null
+    returning id into v_id;
+    if v_id is null then
+      raise exception 'El servicio no existe o está archivado.' using errcode = 'BC001';
+    end if;
+  end if;
+
+  return v_id;
+end;
+$$;
+
+-- RPC: archivar_servicio (solo admin; nunca DELETE: las líneas emitidas conservan su servicio_id).
+drop function if exists public.archivar_servicio(uuid);
+create or replace function public.archivar_servicio(p_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_s public.clinica_servicios%rowtype;
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede gestionar servicios.' using errcode = 'insufficient_privilege';
+  end if;
+  if not public.es_admin_clinica() then
+    raise exception 'Solo el administrador de la clínica puede hacer esto.' using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_s from public.clinica_servicios s
+   where s.id = p_id and s.clinica_id = v_clinica
+   for update;
+  if not found or v_s.archivado_at is not null then
+    raise exception 'El servicio no existe o ya está archivado.' using errcode = 'BC001';
+  end if;
+
+  update public.clinica_servicios
+     set archivado_at = now(), archivado_por = auth.uid()
+   where id = p_id and clinica_id = v_clinica;
+end;
+$$;
+
+-- actualizar_clinica con NIT (6 argumentos). Reemplaza la firma de 5 argumentos de la Fase 5: en una
+-- re-ejecución completa del archivo la Fase 5 la recrea y este bloque, que va después, la vuelve a quitar.
+-- Mismo cuerpo que la Fase 5 (incluida la validación del logo) más el NIT normalizado (sin puntos ni espacios).
+drop function if exists public.actualizar_clinica(text, text, text, text, text);
+create or replace function public.actualizar_clinica(p_nombre text, p_ciudad text, p_direccion text, p_telefono text, p_logo_path text, p_nit text default null)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_nombre text := trim(coalesce(p_nombre, ''));
+  v_ciudad text := trim(coalesce(p_ciudad, ''));
+  v_direccion text := trim(coalesce(p_direccion, ''));
+  v_telefono text := trim(coalesce(p_telefono, ''));
+  v_nit text := nullif(regexp_replace(btrim(coalesce(p_nit, '')), '[.[:space:]]', '', 'g'), '');
+  v_row public.clinicas;
+begin
+  if not public.es_admin_clinica() or v_clinica is null then
+    raise exception 'Solo los administradores pueden cambiar los datos de la clínica.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if v_nombre = '' or length(v_nombre) > 120
+     or length(v_ciudad) > 80
+     or length(v_direccion) > 160
+     or length(v_telefono) > 30 then
+    raise exception 'Revisa los datos de la clínica.' using errcode = 'check_violation';
+  end if;
+
+  if v_nit is not null and v_nit !~ '^[0-9]{5,12}(-[0-9])?$' then
+    raise exception 'Revisa el NIT o la cédula.' using errcode = 'check_violation';
+  end if;
+
+  if p_logo_path is not null then
+    if p_logo_path !~ ('^' || v_clinica::text || '/logo-[0-9]{10,16}\.jpg$')
+       or not exists (
+         select 1 from storage.objects
+         where bucket_id = 'clinica-logos' and name = p_logo_path
+       ) then
+      raise exception 'El logo no es válido. Súbelo de nuevo.' using errcode = 'check_violation';
+    end if;
+  end if;
+
+  update public.clinicas
+     set nombre = v_nombre,
+         ciudad = v_ciudad,
+         direccion = v_direccion,
+         telefono = v_telefono,
+         logo_path = p_logo_path,
+         nit = v_nit
+   where id = v_clinica
+   returning * into v_row;
+
+  return jsonb_build_object(
+    'id', v_row.id,
+    'nombre', v_row.nombre,
+    'ciudad', v_row.ciudad,
+    'direccion', v_row.direccion,
+    'telefono', v_row.telefono,
+    'logo_path', v_row.logo_path,
+    'nit', v_row.nit
+  );
+end;
+$$;
+
 -- Solo lectura (D-14): guard_solo_lectura también sobre facturación (corre bajo las RPC definer -> LP004).
 drop trigger if exists guard_solo_lectura on public.cobros;
 create trigger guard_solo_lectura before insert or update or delete on public.cobros for each row execute function public.guard_solo_lectura();
@@ -5325,5 +5613,19 @@ revoke all on function public.marcar_cobro_pagado(uuid, text, date) from public,
 grant execute on function public.marcar_cobro_pagado(uuid, text, date) to authenticated;
 revoke all on function public.anular_cobro(uuid, text) from public, anon;
 grant execute on function public.anular_cobro(uuid, text) to authenticated;
+
+-- Grants de la parte B (solo authenticated; ninguna escritura directa, D-18 sin límite de plan).
+revoke all on function public.editar_cotizacion(uuid, uuid, jsonb, uuid) from public, anon;
+grant execute on function public.editar_cotizacion(uuid, uuid, jsonb, uuid) to authenticated;
+revoke all on function public.cobros_resumen() from public, anon;
+grant execute on function public.cobros_resumen() to authenticated;
+revoke all on function public.cobro_para_pdf(uuid) from public, anon;
+grant execute on function public.cobro_para_pdf(uuid) to authenticated;
+revoke all on function public.guardar_servicio(uuid, text, int) from public, anon;
+grant execute on function public.guardar_servicio(uuid, text, int) to authenticated;
+revoke all on function public.archivar_servicio(uuid) from public, anon;
+grant execute on function public.archivar_servicio(uuid) to authenticated;
+revoke all on function public.actualizar_clinica(text, text, text, text, text, text) from public, anon;
+grant execute on function public.actualizar_clinica(text, text, text, text, text, text) to authenticated;
 
 notify pgrst, 'reload schema';
