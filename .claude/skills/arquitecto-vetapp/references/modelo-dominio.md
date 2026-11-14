@@ -13,6 +13,7 @@ Derivado de `supabase/schema.sql` (la fuente de verdad). Si algo aquí difiere d
 7. RLS en resumen
 8. Planeado (sin columnas definidas)
 9. productos y movimientos_inventario (Fase 6)
+10. cobros, cobro_items, clinica_servicios, cobro_contadores (Fase 7)
 
 ## 1. Convenciones generales
 
@@ -103,10 +104,9 @@ Historia clínica. Columnas: `id`, `mascota_id` (cascade), `veterinario_id` (FK 
 No existen tablas ni columnas para esto en `schema.sql`; no inventes columnas al diseñarlas, defínelas en la fase correspondiente con `vetapp-supabase`.
 
 - Vacunas y desparasitación: Fase 5.
-- Facturas/cotizaciones con ítems y descuento de inventario: Fase 7.
 - Directorio de veterinarias, reclamo del código de vinculación, citas `solicitada` y reseñas (estrellas + comentario, una por cliente y clínica): Fase 9.
 
-Las entidades Dart de `lib/features/billing/domain/entities/` (`factura.dart`) son stubs del scaffolding original y **todavía no se mapean a ninguna tabla**.
+
 
 ## 9. productos y movimientos_inventario (Fase 6)
 
@@ -123,4 +123,37 @@ RPCs (únicas vías de escritura; el cliente nunca hace insert/update/delete sob
 - `mover_stock` bloquea la fila con `for update` y rechaza un stock negativo.
 - Códigos de error: `IN001` (stock insuficiente), `IN002` (producto no disponible o archivado) e `IN003` (ya deshecho). La capa de datos los traduce a `InventarioFailure`.
 - `guard_solo_lectura` (plan vencido) cubre ambas tablas, que suman 9 tablas protegidas en total.
+
+## 10. cobros, cobro_items, clinica_servicios, cobro_contadores (Fase 7)
+
+Hay dos documentos en la tabla `cobros` (columna `tipo`): **cotización** (`abierta`, `convertida`, `anulada`) y **cuenta de cobro** (`pendiente`, `pagada`, `anulada`). La palabra "factura" no aparece nunca en la UI, el PDF ni WhatsApp (D-01). Su único uso es el origen interno `'factura'` de `movimientos_inventario` (constante `kOrigenCobro`). [DB + App]
+
+**Numeración e idempotencia:**
+- Numeración sin huecos por clínica y tipo: `cobro_contadores` (`insert … on conflict do update`) va en el mismo sub-bloque que el encabezado, los ítems y el stock. Nunca un `SEQUENCE`. El número visible es `CC-0012` / `COT-0004` (`_numero_cobro`). [DB]
+- `clave_idempotencia` (uuid generado en el cliente) es única por clínica. El reintento devuelve el mismo id y número con `ya_existia = true` y no vuelve a mover stock (D-21). [DB]
+
+**Contenido del documento:**
+- `cobro_items` guarda copias de la descripción y el precio. El precio por línea no cambia el precio base (D-07). [DB]
+- `cobros` guarda copias del nombre y la cédula del cliente y del nombre de la mascota. Las FK a cliente, mascota, cita y consulta usan `on delete set null`, así que borrar un cliente nunca borra un documento. [DB]
+- Hay una sola cuenta de cobro no anulada por cita o consulta: índices parciales y el error `BC003`. [DB]
+
+**Stock:**
+- Emitir una CC descuenta stock con el helper privado `_aplicar_movimiento_stock` (origen `factura`, `ref_id` = la CC, motivo `venta`). Si no alcanza el stock, toda la CC falla con `IN001` y no se consume número. [DB]
+- Anular revierte los movimientos del libro (motivo `deshacer` + `deshace_id`), aunque el producto se haya archivado. `mover_stock` sigue aceptando solo `ajuste` (WR-04). [DB]
+
+**Estados y permisos:**
+- La cuenta de cobro es de solo inserción: no se edita; se anula con motivo y se reemite. La cotización se edita mientras está abierta y se convierte en CC con un toque (`p_cotizacion_id`). [DB]
+- Pago: cambia a `pagada` con el método (`efectivo`/`nequi`/`daviplata`/`transferencia`/`tarjeta`/`otro`) y una fecha entre la emisión y hoy. No hay pagos parciales. [DB]
+- Anular: solo el admin o quien emitió el documento. Los servicios guardados los edita solo el admin. Los colegas en solo lectura quedan bloqueados por `guard_solo_lectura`, que cubre 13 tablas (`LP004`). [DB]
+
+**RPC (todas `security definer` con validación de clínica):**
+- `crear_cuenta_cobro`, `crear_cotizacion`, `editar_cotizacion`, `marcar_cobro_pagado` y `anular_cobro`;
+- `cobros_resumen` (cobrado este mes / por cobrar);
+- `cobro_para_pdf` (sin teléfono del cliente ni clave, y logo según el plan);
+- `guardar_servicio` y `archivar_servicio`;
+- `actualizar_clinica` con `p_nit` (6 argumentos).
+
+Las 4 tablas no reciben escrituras directas, y `cobro_contadores` ni siquiera se puede leer. [DB]
+
+**PostgREST:** un embed de `cobros` hacia sí mismo usa la columna como hint (`cobros!convertida_en_id`). El hint por nombre de constraint da 400 PGRST200 en vivo. [App]
 
