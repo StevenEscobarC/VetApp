@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme/app_spacing.dart';
+
 /// Wraps [TextFormField] with a visible label above the field —
 /// per the design system's accessibility rule, labels are never
 /// placeholder-only. Set [hideLabel] to skip the visible label (e.g. search
@@ -67,7 +69,7 @@ class AppTextField extends StatelessWidget {
       children: [
         if (!hideLabel) ...[
           Text(label, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.xs),
         ],
         Semantics(
           label: label,

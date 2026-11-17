@@ -48,7 +48,10 @@ class AppStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final spec = _spec;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: spec.color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
@@ -58,7 +61,7 @@ class AppStatusChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(spec.icon, size: 16, color: spec.color),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppSpacing.xs),
           Text(
             spec.label,
             style: Theme.of(context)

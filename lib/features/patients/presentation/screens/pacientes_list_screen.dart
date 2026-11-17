@@ -18,7 +18,7 @@ import '../widgets/mascota_foto_avatar.dart';
 /// Primera pantalla real de Pacientes (PAT-04, D-06): lista + búsqueda
 /// instantánea (nombre, dueño o especie) contra Supabase, más chips de
 /// especie que filtran el resultado ya cargado en memoria (sin disparar una
-/// nueva consulta), reemplazando `ComingSoonScreen` en `/pacientes`. Sin
+/// nueva consulta), en `/pacientes`. Sin
 /// botón "Nuevo paciente": toda mascota se crea siempre desde la ficha de un
 /// cliente (D-02/D-03) — ver `02-UI-SPEC.md`.
 class PacientesListScreen extends ConsumerStatefulWidget {
