@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5.1: Planes y límites** (INSERTED) - Suscripción por clínica: límites de pacientes/miembros, pantalla Mi plan (sin pago en la app), oferta Clínica al invitar
  (completed 2026-10-31)
 - [x] **Phase 6: Inventario** - Control de stock de medicamentos/insumos con alertas de mínimo (completed 2026-11-13)
-- [ ] **Phase 7: Facturación** - Cotizaciones/facturas en PDF con descuento automático de inventario
+- [x] **Phase 7: Facturación** - Cotizaciones/facturas en PDF con descuento automático de inventario (completed 2026-11-16)
 - [ ] **Phase 8: Dashboard y Diseño Visual** - Resumen operativo real y diseño terracota/crema aplicado a toda la app
 - [ ] **Phase 9: Directorio de Veterinarias** - El cliente explora, busca y califica las clínicas de la plataforma, con reseñas públicas
 
@@ -380,42 +380,43 @@ Plans:
   3. Al facturar un producto de inventario, el stock se descuenta automáticamente
   4. El veterinario puede marcar una factura como pagada/pendiente
 
-**Plans:** 16 plans
+**Plans:** 17/17 plans complete (incl. 07-17 gap closure)
 
 Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Contrato del servidor A: cobros/cobro_items/contadores/servicios, cédula y NIT, helper privado de stock, emitir CC (idempotente, sin huecos, conversión), cotización, pagar, anular; smoke T1..T23 (284) + R44 a 13 tablas
-- [ ] 07-02-PLAN.md — Contrato Dart: Cobro/CobroItem/enums, CobroFailure tipado, repositorio, providers + acciones que invalidan siempre (cobros + inventario), rutas, fake
-- [ ] 07-03-PLAN.md — Helpers puros: clave de idempotencia (Random.secure), valor en letras, mensaje formal de WhatsApp, cédula/NIT
+- [x] 07-01-PLAN.md — Contrato del servidor A: cobros/cobro_items/contadores/servicios, cédula y NIT, helper privado de stock, emitir CC (idempotente, sin huecos, conversión), cotización, pagar, anular; smoke T1..T23 (284) + R44 a 13 tablas
+- [x] 07-02-PLAN.md — Contrato Dart: Cobro/CobroItem/enums, CobroFailure tipado, repositorio, providers + acciones que invalidan siempre (cobros + inventario), rutas, fake
+- [x] 07-03-PLAN.md — Helpers puros: clave de idempotencia (Random.secure), valor en letras, mensaje formal de WhatsApp, cédula/NIT
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 07-04-PLAN.md — Contrato del servidor B: editar cotización, resumen del mes, payload del PDF, servicios (admin), actualizar_clinica con p_nit; smoke T24..T30 (291) + sondas
-- [ ] 07-05-PLAN.md — Más > Cobros: resumen, Cotizaciones/Cuentas de cobro, tarjetas con estado, detalle en lectura, botón Cobrar y fila Cobrada
-- [ ] 07-06-PLAN.md — Cédula opcional del cliente y NIT o cédula de la clínica
+- [x] 07-04-PLAN.md — Contrato del servidor B: editar cotización, resumen del mes, payload del PDF, servicios (admin), actualizar_clinica con p_nit; smoke T24..T30 (291) + sondas
+- [x] 07-05-PLAN.md — Más > Cobros: resumen, Cotizaciones/Cuentas de cobro, tarjetas con estado, detalle en lectura, botón Cobrar y fila Cobrada
+- [x] 07-06-PLAN.md — Cédula opcional del cliente y NIT o cédula de la clínica
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 07-07-PLAN.md — Emitir cuenta de cobro o cotización con servicios y "Otro" (borrador con clave estable, sin conexión sin duplicar)
-- [ ] 07-08-PLAN.md — [BLOCKING] Aplicar el delta Fase 7 en vivo (MCP con OK) y pegar el smoke (291 checks) + sonda
-- [ ] 07-09-PLAN.md — Marcar como pagada y PDF por WhatsApp / hoja de compartir
-- [ ] 07-10-PLAN.md — Servicios y precios (solo admin, sugerencias sin precio)
+- [x] 07-07-PLAN.md — Emitir cuenta de cobro o cotización con servicios y "Otro" (borrador con clave estable, sin conexión sin duplicar)
+- [x] 07-08-PLAN.md — [BLOCKING] Aplicar el delta Fase 7 en vivo (MCP con OK) y pegar el smoke (291 checks) + sonda
+- [x] 07-09-PLAN.md — Marcar como pagada y PDF por WhatsApp / hoja de compartir
+- [x] 07-10-PLAN.md — Servicios y precios (solo admin, sugerencias sin precio)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 07-11-PLAN.md — Productos de inventario en el cobro: tope de stock, errores en la línea, historial "Cuenta de cobro CC-0012"
-- [ ] 07-12-PLAN.md — Anular con motivo (admin o autor) y devolución del stock
-- [ ] 07-13-PLAN.md — "Finalizar y cobrar" y "Cobrar"/"Cobrada" en la cita
-- [ ] 07-14-PLAN.md — "Cobrar" tras la consulta y en la historia; "Nueva cuenta de cobro" en el cliente
+- [x] 07-11-PLAN.md — Productos de inventario en el cobro: tope de stock, errores en la línea, historial "Cuenta de cobro CC-0012"
+- [x] 07-12-PLAN.md — Anular con motivo (admin o autor) y devolución del stock
+- [x] 07-13-PLAN.md — "Finalizar y cobrar" y "Cobrar"/"Cobrada" en la cita
+- [x] 07-14-PLAN.md — "Cobrar" tras la consulta y en la historia; "Nueva cuenta de cobro" en el cliente
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 07-15-PLAN.md — Cotizaciones: editar, convertir en cuenta de cobro con un toque, reemitir una anulada
+- [x] 07-15-PLAN.md — Cotizaciones: editar, convertir en cuenta de cobro con un toque, reemitir una anulada
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 07-16-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca, code review, UAT vetapp-qa en emulador y aprobación
+- [x] 07-16-PLAN.md — Cierre: gate, sonda en vivo, auditoría de marca, code review, UAT vetapp-qa en emulador y aprobación
+- [x] 07-17 (gap closure del code review) — reintento sin conexión bloqueado, re-búsqueda de la clave (BC002/BC003), filtros en el servidor, stock como aviso, NIT con centinela; smoke 293 en vivo
 **UI hint**: yes
 
 ### Phase 8: Dashboard y Diseño Visual
@@ -447,7 +448,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 4. Agenda y Citas | 11/11 | Complete    | 2026-10-01 |
 | 5. Vacunación y Desparasitación | 17/17 | Complete    | 2026-10-03 |
 | 6. Inventario | 10/10 | Complete    | 2026-11-13 |
-| 7. Facturación | 0/TBD | Not started | - |
+| 7. Facturación | 17/17 | Complete    | 2026-11-16 |
 | 8. Dashboard y Diseño Visual | 0/TBD | Not started | - |
 | 9. Directorio de Veterinarias | 0/TBD | Not started | - |
 

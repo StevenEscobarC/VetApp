@@ -81,10 +81,10 @@ Requisitos para el primer release real (reemplazo del UI mockeado por datos real
 
 ### Facturación (BILL)
 
-- [ ] **BILL-01**: El veterinario puede generar una cotización o factura simple en PDF para un cliente
-- [ ] **BILL-02**: Una factura puede incluir uno o más ítems (servicios/productos) con precio
-- [ ] **BILL-03**: Al facturar un producto de inventario, el stock se descuenta automáticamente
-- [ ] **BILL-04**: El veterinario puede marcar una factura como pagada/pendiente
+- [x] **BILL-01**: El veterinario puede generar una cotización o factura simple en PDF para un cliente
+- [x] **BILL-02**: Una factura puede incluir uno o más ítems (servicios/productos) con precio
+- [x] **BILL-03**: Al facturar un producto de inventario, el stock se descuenta automáticamente
+- [x] **BILL-04**: El veterinario puede marcar una factura como pagada/pendiente
 
 ### Dashboard y diseño (DASH)
 
@@ -159,7 +159,7 @@ Exclusiones explícitas. Documentadas para prevenir scope creep.
 | VAC-01..05 | Phase 5 — Vacunación y Desparasitación | Complete |
 | PLAN-01..06 | Phase 5.1 — Planes y límites | Pending |
 | INV-01..03 | Phase 6 — Inventario | Complete |
-| BILL-01..04 | Phase 7 — Facturación | Pending |
+| BILL-01..04 | Phase 7 — Facturación | Complete |
 | DASH-01..04 | Phase 8 — Dashboard y Diseño Visual | Pending |
 | DIR-01..06 | Phase 9 — Directorio de Veterinarias | Pending |
 | REV-01..05 | Phase 9 — Directorio de Veterinarias | Pending |

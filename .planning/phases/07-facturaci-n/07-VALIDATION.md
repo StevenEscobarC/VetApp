@@ -84,9 +84,9 @@ created: 2026-11-13
 | 07-14-T2 | 07-14 | 4 | BILL-01 | T-07-59 | "Nueva cuenta de cobro" desde el cliente (push, G5) | widget + suite | `flutter test test/cliente_detail_screen_test.dart` + `flutter test` -> `SLICE_ENTRADAS_OK` | ✅ | ✅ green |
 | 07-15-T1 | 07-15 | 5 | BILL-01..03 | T-07-60, T-07-61 | Editar, convertir y copiar; BC002 deshabilita el envío; reemitir genera una clave nueva | unit + widget | `flutter test test/borrador_cobro_test.dart test/cobro_form_screen_test.dart` -> `MODOS_FORM_OK` | ✅ (07-07) | ✅ green |
 | 07-15-T2 | 07-15 | 5 | BILL-01, BILL-03 | T-07-62 | Tabla de acciones completa (un acento por estado); rutas editar/convertir antes de :id | widget/router + suite | `flutter test test/cobro_detail_screen_test.dart test/router_cobros_cross_shell_test.dart ...` + `flutter test` -> `SLICE_COTIZACIONES_OK` | ✅ | ✅ green |
-| 07-16-T1 | 07-16 | 6 | BILL-01..04 | T-07-64, T-07-67 | Gate integrado, sonda en vivo, compuertas grep (vocabulario, capas, escrituras), auditoría de marca, revisión de código, documentación | suite + script | -> `PHASE7_GATE_OK` | ✅ | ⬜ pending |
-| 07-16-T2 | 07-16 | 6 | BILL-01..04 | T-07-63, T-07-65 | UAT en emulador contra el proyecto vivo (F1..F12) | manual (vetapp-qa) | -> `QA_REPORT_OK` + `QA: PASS` | ✅ | ⬜ pending |
-| 07-16-T3 | 07-16 | 6 | BILL-01..04 | T-07-66 | Visto bueno del usuario | manual (usuario) | -> `SIGNOFF_RECORDED` + respuesta literal | ✅ | ⬜ pending |
+| 07-16-T1 | 07-16 | 6 | BILL-01..04 | T-07-64, T-07-67 | Gate integrado, sonda en vivo, compuertas grep (vocabulario, capas, escrituras), auditoría de marca, revisión de código, documentación | suite + script | -> `PHASE7_GATE_OK` | ✅ | ✅ green |
+| 07-16-T2 | 07-16 | 6 | BILL-01..04 | T-07-63, T-07-65 | UAT en emulador contra el proyecto vivo (F1..F12) | manual (vetapp-qa) | -> `QA_REPORT_OK` + `QA: PASS` | ✅ | ✅ green |
+| 07-16-T3 | 07-16 | 6 | BILL-01..04 | T-07-66 | Visto bueno del usuario | manual (usuario) | -> `SIGNOFF_RECORDED` + respuesta literal | ✅ | ✅ aprobado ("Aprobado", 2026-11-16) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
