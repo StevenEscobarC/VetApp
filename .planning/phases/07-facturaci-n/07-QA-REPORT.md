@@ -18,8 +18,8 @@
 | F3 CC-0001 con cantidad 2, Otro, precio cambiado (BILL-01, BILL-02) | 07-16-PLAN Task 2 | PASS |
 | F4 Producto, tope de stock, descuento e historial (BILL-03, D-12) | 07-16-PLAN Task 2 | PASS |
 | F5 Marcar como pagada, Nequi, resumen del mes (BILL-04, D-15) | 07-16-PLAN Task 2 | PASS |
-| F6 Cédula/NIT, PDF, hoja de compartir, WhatsApp (D-16, D-22, D-24) | 07-16-PLAN Task 2 | FAIL (el aviso de WhatsApp no instalado queda oculto tras la hoja; el resto PASS) |
-| F7 Cotización y conversión (D-09, D-23) | 07-16-PLAN Task 2 | FAIL (enlaces "COT-0000" / "CC-0000" en vez de los números reales; el resto PASS) |
+| F6 Cédula/NIT, PDF, hoja de compartir, WhatsApp (D-16, D-22, D-24) | 07-16-PLAN Task 2 | PASS (re-QA 3513f99; antes FAIL: aviso oculto tras la hoja) |
+| F7 Cotización y conversión (D-09, D-23) | 07-16-PLAN Task 2 | PASS (re-QA 3513f99; antes FAIL: enlaces COT-0000 / CC-0000) |
 | F8 Anular CC-0002 (D-10, D-13) | 07-16-PLAN Task 2 | PASS |
 | F9 Cobrar desde cita, cliente y consulta (D-05) | 07-16-PLAN Task 2 | PASS |
 | F10 Modo avión, reintento sin duplicado (D-21) | 07-16-PLAN Task 2 | PASS |
@@ -119,4 +119,34 @@ Recomendación: `/gsd-plan-phase 7 --gaps` con ambos fallos (o `/gsd-debug` para
 - El emulador se reinició por caída y la app se reinstaló con `flutter run` (la sesión se conservó).
 - Datos en la clínica QA (Supabase vivo, falsos, no se borra nada; los documentos son de solo agregar): servicio "Consulta", producto "Amoxicilina QA" (stock final 2 frascos, histórico en F4/F7/F8), cliente "QA Dueno Lote 51" con teléfono y cédula, NIT de la clínica, cita completada con consulta "Control QA", documentos COT-0001 (convertida), CC-0001 (pagada), CC-0002 (anulada), CC-0003, CC-0004, CC-0005 (pendientes).
 
-QA: FAIL — F6 (aviso de WhatsApp oculto tras la hoja) y F7 (COT-0000/CC-0000 en enlaces de conversión); F11 (sesión del colega) pendiente
+## Re-QA (3513f99)
+
+- Fecha: 2026-11-16. Mismo AVD (emulator-5554), `flutter run` relanzado de master tras `3513f99`, sesión admin de "QA Clinica 51" conservada (sin cierre de sesión, sin SQL, sin Linear). La conexión de `flutter run` con la VM se cayó ("Lost connection to device") pero la app quedó viva (pid presente) y se probó con adb. Capturas: `qa/07-R-*.png`.
+
+### F6 PASS (aviso dentro de la hoja)
+
+- CC-0003 (pendiente) > Enviar al cliente > Abrir chat de WhatsApp (el emulador no tiene WhatsApp). El árbol, con la hoja `Enviar CC-0003` todavía abierta (`Abrir chat de WhatsApp`, `Compartir PDF` presentes), muestra `No pudimos abrir WhatsApp. Usa «Compartir PDF». [42,2264][918,2319]`, y sigue ahí 3 s después. La captura lo muestra en rojo dentro de la hoja, bajo "Compartir PDF". Evidencia: `qa/07-R-F6-whatsapp-aviso-1.png`, `qa/07-R-F6-whatsapp-aviso-2.png`.
+- Compartir PDF sigue funcionando: hoja del sistema `Sharing 1 file` / `Cuenta_de_cobro_CC-0003.pdf` (Quick Share, Print, Drive, Messages, Bluetooth). No se envió nada; se cerró con Atrás. Evidencia: `qa/07-R-F6-share-sheet.png`.
+
+### F7 PASS (números de conversión)
+
+- CC-0003 detalle: `Viene de la cotización COT-0001` (árbol y captura `qa/07-R-F7-cc0003.png`).
+- El enlace navega a COT-0001: `COT-0001 / Convertida / Total 425.000 pesos / ... Convertida en CC-0003`, con botón `Ver CC-0003` (`qa/07-R-F7-cot0001.png`). `Ver CC-0003` navega de vuelta a `CC-0003 ... Viene de la cotización COT-0001`.
+- Lista de Cuentas de cobro: CC-0005, CC-0004, CC-0003, CC-0002 (Anulada) con números correctos (`qa/07-R-lista-cc.png`). Lista de Cotizaciones: `Cotización COT-0001, QA Dueno Lote 51, 425.000 pesos, Convertida, 16/11/2026` (`qa/07-R-F7-lista-cotizaciones.png`).
+
+### F6 extra PASS (línea C.C. en documento nuevo)
+
+- Cliente "QA Dueno Lote 51" (cédula 1.234.567.890). Nueva CC con "Otro" `Re-QA prueba` 1 × $ 1.000 (descripción tecleada sin tildes) > Emitir: **CC-0006**, total 1.000 pesos, snackbar `Cuenta de cobro CC-0006 emitida.`
+- Detalle: `Cliente / QA Dueno Lote 51 / C.C. 1.234.567.890` (`qa/07-R-F6x-cc0006-detalle.png`).
+- Compartir PDF: `Cuenta_de_cobro_CC-0006.pdf` (`qa/07-R-F6x-share-cc0006.png`). Texto del PDF (copiado de `cache/share` con `run-as`, leído con PyMuPDF): `Cliente / QA Dueno Lote 51 / C.C. 1.234.567.890`, `La suma de: mil pesos ($ 1.000)`, `Estado: Pendiente de pago`; render en `qa/07-R-F6x-pdf-cc0006.png`.
+
+### F11 sigue BLOCKED
+
+Sin sesión de colega ni clínica en solo lectura; pendiente del visto bueno del usuario.
+
+### Cambios al dispositivo (re-QA)
+
+- Sin `pm clear`, zona horaria, permisos ni modo avión. App reinstalada con `flutter run`; sesión conservada.
+- Dato nuevo en la clínica QA (falso, solo agregar): CC-0006 (pendiente, $ 1.000).
+
+QA: BLOCKED — solo F11 (sesión del colega) pendiente del visto bueno del usuario
