@@ -12,9 +12,8 @@ import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../domain/entities/cliente.dart';
 import '../providers/clientes_providers.dart';
 
-/// Primera pantalla real de Clientes (CLI-03, D-06): lista + búsqueda
-/// instantánea contra Supabase, reemplazando `ComingSoonScreen` en
-/// `/clientes`.
+/// Lista real de clientes (CLI-03, D-06) con búsqueda instantánea contra
+/// Supabase, en `/clientes`.
 class ClientesListScreen extends ConsumerStatefulWidget {
   const ClientesListScreen({super.key});
 
