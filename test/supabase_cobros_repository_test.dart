@@ -43,6 +43,7 @@ SupabaseCobrosRepository _repoQueGuarda(List<http.BaseRequest> peticiones) =>
             '[]',
             200,
             headers: {'content-type': 'application/json'},
+            request: r,
           );
         }),
         authOptions: const AuthClientOptions(autoRefreshToken: false),

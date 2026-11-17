@@ -75,14 +75,24 @@ class _EnviarCobroSheetState extends ConsumerState<_EnviarCobroSheet> {
     if (mounted) setState(() => _ocupado = null);
   }
 
+  /// Datos del PDF sin un error viejo en caché: si la carga anterior falló
+  /// (p. ej. sin red), el toque vuelve a pedirlos (WR-05).
+  Future<({Cobro cobro, ClinicaCobroPdf clinica})> _datos() {
+    final p = datosPdfCobroProvider(widget.cobro.id);
+    if (ref.read(p).hasError) ref.invalidate(p);
+    return ref.read(p.future);
+  }
+
+  /// Tras un fallo el error no se queda en caché: el próximo intento relee.
+  void _olvidarError() =>
+      ref.invalidate(datosPdfCobroProvider(widget.cobro.id));
+
   Future<void> _compartirPdf({required bool conMensaje}) async {
     if (!_empezar(conMensaje ? _Accion.pdfWhatsApp : _Accion.compartir)) {
       return;
     }
     try {
-      final datos = await ref.read(
-        datosPdfCobroProvider(widget.cobro.id).future,
-      );
+      final datos = await _datos();
       final bytes = await ref
           .read(cobroPdfServiceProvider)
           .generar(
@@ -96,7 +106,9 @@ class _EnviarCobroSheetState extends ConsumerState<_EnviarCobroSheet> {
         texto: conMensaje ? _mensaje(datos.cobro, datos.clinica) : null,
       );
     } on CobroFailure catch (e) {
-      if (mounted) _aviso(e.message);
+      if (!mounted) return;
+      if (e.tipo == ErrorCobro.sinConexion) _olvidarError();
+      _aviso(e.message);
     } finally {
       _terminar();
     }
@@ -105,9 +117,7 @@ class _EnviarCobroSheetState extends ConsumerState<_EnviarCobroSheet> {
   Future<void> _chat(String numero) async {
     if (!_empezar(_Accion.chat)) return;
     try {
-      final datos = await ref.read(
-        datosPdfCobroProvider(widget.cobro.id).future,
-      );
+      final datos = await _datos();
       final ok = await ref
           .read(lanzadorExternoProvider)
           .abrirEnApp(
@@ -116,8 +126,13 @@ class _EnviarCobroSheetState extends ConsumerState<_EnviarCobroSheet> {
       if (!ok && mounted) {
         _aviso('No pudimos abrir WhatsApp. Usa «Compartir PDF».');
       }
-    } on CobroFailure {
-      if (mounted) _aviso('No pudimos abrir WhatsApp. Usa «Compartir PDF».');
+    } on CobroFailure catch (e) {
+      if (!mounted) return;
+      final sinRed = e.tipo == ErrorCobro.sinConexion;
+      if (sinRed) _olvidarError();
+      _aviso(
+        sinRed ? e.message : 'No pudimos abrir WhatsApp. Usa «Compartir PDF».',
+      );
     } finally {
       _terminar();
     }

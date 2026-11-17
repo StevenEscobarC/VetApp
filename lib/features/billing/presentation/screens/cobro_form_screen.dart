@@ -35,6 +35,11 @@ import '../widgets/total_cobro_bar.dart';
 /// [borradorCobroProvider], incluida la clave de idempotencia que se crea al
 /// abrir y se reutiliza en cada reintento (D-21). Solo se llega aquí después
 /// de `asegurarEscritura`.
+///
+/// Tras un fallo sin conexión el servidor pudo haber confirmado: el borrador
+/// queda bloqueado (líneas, cliente, mascota y tipo) y solo se ofrece
+/// "Reintentar" o "Descartar" hasta que el servidor responda (CR-01). Así la
+/// misma clave nunca viaja con otro contenido.
 class CobroFormScreen extends ConsumerStatefulWidget {
   const CobroFormScreen({super.key, required this.prefill});
 
@@ -77,6 +82,24 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
   /// que no está abierta): CTA deshabilitado y "Volver".
   bool _noUsable = false;
   bool _errorOrigen = false;
+
+  /// El último envío falló sin red (CR-01): el contenido queda fijo hasta que
+  /// un reintento obtenga respuesta del servidor.
+  bool _pendienteReintento = false;
+
+  /// Nada se edita mientras se envía o mientras hay un reintento pendiente.
+  bool get _edicionBloqueada => _loading || _pendienteReintento;
+
+  @override
+  void initState() {
+    super.initState();
+    // El inventario puede llevar horas en caché si Inventario está montado en
+    // otra rama: se relee al abrir para que las notas y avisos de stock usen
+    // la cifra actual (WR-03). Fuera del build en curso.
+    Future.microtask(() {
+      if (mounted) ref.invalidate(productosProvider);
+    });
+  }
 
   PrefillCobro get _p => widget.prefill;
   BorradorCobroNotifier get _n => ref.read(borradorCobroProvider(_p).notifier);
@@ -140,7 +163,8 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
     var conInventario = true;
     if (origen.productoIds.isNotEmpty) {
       final p = ref.watch(productosProvider);
-      if (!p.hasValue && !p.hasError) return;
+      // También espera la relectura de initState (WR-03).
+      if (p.isLoading) return;
       productos = p.value ?? const [];
       // Sin inventario no se marca nada: el servidor decide al enviar.
       conInventario = p.hasValue;
@@ -187,9 +211,10 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
     return 'Solo $verbo ${formatearMiles(quedan)} $unidad de ${l.descripcion}.';
   }
 
-  /// Tope local de existencias, solo en una cuenta de cobro (D-12). Es una
-  /// cortesía: el servidor es la autoridad y responde IN001 si cambió.
-  String? _errorStockLocal(LineaBorrador l, TipoCobro tipo) {
+  /// Aviso local de existencias, solo en una cuenta de cobro (D-12). Las
+  /// existencias locales pueden estar viejas, así que NO bloquea el envío: el
+  /// servidor decide con IN001 y su respuesta marca la línea (WR-03).
+  String? _avisoStockLocal(LineaBorrador l, TipoCobro tipo) {
     final stock = l.stock;
     if (tipo != TipoCobro.cuentaCobro ||
         l.tipo != TipoLinea.producto ||
@@ -200,10 +225,8 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
     return _mensajeStock(l, stock);
   }
 
-  bool _lineaInvalida(LineaBorrador l, TipoCobro tipo) =>
-      _errorDescripcion(l) != null ||
-      _errorPrecio(l) != null ||
-      _errorStockLocal(l, tipo) != null;
+  bool _lineaInvalida(LineaBorrador l) =>
+      _errorDescripcion(l) != null || _errorPrecio(l) != null;
 
   void _mostrarLinea(String key) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -269,7 +292,7 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
       _avisarFaltante();
       return false;
     }
-    final mala = b.lineas.where((l) => _lineaInvalida(l, b.tipo)).firstOrNull;
+    final mala = b.lineas.where(_lineaInvalida).firstOrNull;
     if (mala != null) {
       _mostrarLinea(mala.key);
       return false;
@@ -369,13 +392,16 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
 
   /// Envía el borrador con SU clave: nunca se regenera tras un fallo, así un
   /// reintento después de una respuesta perdida no duplica (D-21, T-07-32).
+  /// Un reintento tras "sin conexión" no vuelve a validar ni a preguntar: el
+  /// contenido es el mismo que ya se confirmó (CR-01).
   Future<void> _emitir() async {
     if (_loading || _confirmando || _noUsable || _cargandoOrigen) return;
-    if (!_validarLocal()) return;
+    final reintento = _pendienteReintento;
+    if (!reintento && !_validarLocal()) return;
     if (_editar) return _guardarCambios();
     final b = _b;
     final esCc = b.tipo == TipoCobro.cuentaCobro;
-    if (esCc) {
+    if (esCc && !reintento) {
       _confirmando = true;
       final ok = await _confirmarEmision(b);
       _confirmando = false;
@@ -410,17 +436,23 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
               mascotaId: b.mascotaId,
             );
       final numero = formatearNumeroCobro(b.tipo, r.numero);
+      if (mounted) setState(() => _pendienteReintento = false);
       router.pushReplacement(rutaCobro(r.id));
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            esCc
+      // La clave ya existía: el servidor devolvió el documento que creó antes
+      // (respuesta perdida). No se anuncia como nuevo (CR-01).
+      final texto = r.yaExistia
+          ? (esCc
+                ? 'Ya estaba emitida: $numero.'
+                : 'Ya estaba guardada: $numero.')
+          : (esCc
                 ? 'Cuenta de cobro $numero emitida.'
-                : 'Cotización $numero guardada.',
-          ),
-        ),
-      );
+                : 'Cotización $numero guardada.');
+      messenger.showSnackBar(SnackBar(content: Text(texto)));
     } on CobroFailure catch (e) {
+      // Sin red el servidor pudo confirmar: se bloquea el borrador. Cualquier
+      // respuesta del servidor (rechazo incluido) resuelve el reintento.
+      final sinRed = e.tipo == ErrorCobro.sinConexion;
+      if (mounted) setState(() => _pendienteReintento = sinRed);
       // LP004: hoja del plan sobre el formulario; el borrador queda intacto.
       if (mounted && await manejarLimitePlan(context, ref, e)) return;
       if (!mounted) return;
@@ -483,11 +515,23 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
 
   Future<void> _alSalir(bool didPop, Object? _) async {
     if (didPop || _loading) return;
+    await _descartar();
+  }
+
+  /// Pregunta y sale. Con un reintento pendiente avisa que el cobro pudo
+  /// haberse creado (CR-01).
+  Future<void> _descartar() async {
+    if (_loading) return;
     final descartar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('¿Descartar este cobro?'),
-        content: const Text('Se perderán las líneas que agregaste.'),
+        content: Text(
+          _pendienteReintento
+              ? 'Se perderán las líneas que agregaste. Si alcanzó a crearse, '
+                    'lo verás en Cobros.'
+              : 'Se perderán las líneas que agregaste.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -742,7 +786,7 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
     return LineaCobroTile(
       key: ValueKey(l.key),
       linea: l,
-      habilitado: !_loading,
+      habilitado: !_edicionBloqueada,
       autofocusDescripcion: l.key == _focoOtro,
       autofocusPrecio: l.key == _focoPrecio,
       errorDescripcion: _errorDescripcion(l),
@@ -750,12 +794,13 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
       notaStock: esProducto && stock != null && unidad != null
           ? 'Quedan ${formatearMiles(stock)} ${unidad.etiqueta(stock)}'
           : null,
-      limiteStock: esProducto && tipo == TipoCobro.cuentaCobro ? stock : null,
       pasosBloqueados: _noDisponibles.contains(l.productoId),
       ayudaPrecio: esProducto
           ? 'Este producto no tiene precio de venta. Escribe el precio.'
           : null,
-      errorStock: _errorStockLocal(l, tipo) ?? l.errorStock,
+      // El rechazo del servidor (IN001) es un error; el tope local, un aviso.
+      errorStock: l.errorStock,
+      avisoStock: l.errorStock == null ? _avisoStockLocal(l, tipo) : null,
       onCantidad: (n) => _n.cambiarCantidad(l.key, n),
       onPrecio: (v) => _n.cambiarPrecio(l.key, v),
       onDescripcion: (s) => _n.cambiarDescripcion(l.key, s),
@@ -799,7 +844,7 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: AbsorbPointer(
-                  absorbing: _loading,
+                  absorbing: _edicionBloqueada,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -823,7 +868,7 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
                           onChanged: _n.cambiarTipo,
                           etiquetaCot: 'Cotización',
                           etiquetaCc: 'Cuenta de cobro',
-                          habilitado: !_loading,
+                          habilitado: !_edicionBloqueada,
                         ),
                         const SizedBox(height: AppSpacing.lg),
                       ],
@@ -844,10 +889,17 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
                 ),
               ),
             ),
-            if (banner != null) _BannerCobro(banner: banner, onVolver: _volver),
+            if (banner != null)
+              _BannerCobro(
+                banner: banner,
+                onVolver: _volver,
+                onDescartar: _pendienteReintento && !_loading
+                    ? _descartar
+                    : null,
+              ),
             TotalCobroBar(
               totalCop: b.totalCop,
-              etiquetaCta: _cta(b.tipo),
+              etiquetaCta: _pendienteReintento ? 'Reintentar' : _cta(b.tipo),
               ayuda:
                   b.tipo == TipoCobro.cuentaCobro &&
                       b.lineas.any((l) => l.tipo == TipoLinea.producto)
@@ -886,10 +938,17 @@ class _Banner {
 }
 
 class _BannerCobro extends StatelessWidget {
-  const _BannerCobro({required this.banner, required this.onVolver});
+  const _BannerCobro({
+    required this.banner,
+    required this.onVolver,
+    this.onDescartar,
+  });
 
   final _Banner banner;
   final VoidCallback onVolver;
+
+  /// "Descartar" junto a un reintento pendiente (CR-01).
+  final VoidCallback? onDescartar;
 
   @override
   Widget build(BuildContext context) {
@@ -943,6 +1002,11 @@ class _BannerCobro extends StatelessWidget {
                       TextButton(
                         onPressed: onVolver,
                         child: const Text('Volver'),
+                      ),
+                    if (onDescartar != null)
+                      TextButton(
+                        onPressed: onDescartar,
+                        child: const Text('Descartar'),
                       ),
                   ],
                 ),

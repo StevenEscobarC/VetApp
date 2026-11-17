@@ -93,6 +93,9 @@ class _AnularCobroSheetState extends ConsumerState<_AnularCobroSheet> {
             'Solo el administrador o quien la emitió puede anularla.',
           ErrorCobro.estadoInvalido =>
             'Ya estaba anulada. Actualiza para ver su estado.',
+          // IN-05: un colega la convirtió con la hoja abierta.
+          ErrorCobro.cotizacionNoDisponible =>
+            'Esta cotización ya se convirtió. Actualiza para ver su estado.',
           _ => 'No pudimos anular. Intenta de nuevo.',
         };
       });
