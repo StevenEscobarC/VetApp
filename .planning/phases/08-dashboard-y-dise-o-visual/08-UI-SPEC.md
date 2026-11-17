@@ -530,9 +530,9 @@ grep -rnE "\b(ElevatedButton|FilledButton|OutlinedButton|TextButton|AppBar|TextF
 # SW-05 shrunken targets
 grep -rnE "MaterialTapTargetSize\.shrinkWrap|VisualDensity\.compact|BoxConstraints\(\)" lib --include=*.dart
 # SW-08 inline formatting
-grep -rnE "DateFormat\(|toIso8601String\(\)|'[\][\$] ?' *[+]" lib/features --include=*.dart | grep -v "/data/\"
+grep -rnE "DateFormat\(|toIso8601String\(\)|'[\\][\$] ?' *[+]" lib/features --include=*.dart | grep -v "/data/"
 # SW-09 forbidden copy
-grep -rnE "Próximamente|ComingSoon|[Ff]actura" lib --include=*.dart | grep -v "kOrigenCobro = 'factura'\"
+grep -rnE "Próximamente|ComingSoon|[Ff]actura" lib --include=*.dart | grep -v "kOrigenCobro = 'factura'"
 ```
 
 Each hit is either fixed or listed in the plan's VALIDATION entry with its exemption reason. A plan passes when its own files produce zero un-justified hits.
