@@ -262,6 +262,57 @@ void main() {
     );
   });
 
+  group('WR-05: sin red el PDF se recupera sin cerrar la hoja', () {
+    const sinRed = CobroFailure(
+      'Sin conexión. Inténtalo de nuevo cuando tengas señal.',
+      tipo: ErrorCobro.sinConexion,
+    );
+
+    testWidgets('Compartir PDF: falla, vuelve la señal y el segundo toque '
+        'comparte', (tester) async {
+      final c = _cc();
+      final repo = FakeCobrosRepository(cobros: [c], errorPdf: sinRed);
+      final compartir = CompartirCobroFalso();
+      await _abrir(tester, repo: repo, compartir: compartir);
+
+      await tester.tap(find.text('Compartir PDF'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Sin conexión. Inténtalo de nuevo cuando tengas señal.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('No se guardaron'), findsNothing);
+      expect(compartir.llamadas, isEmpty);
+
+      repo.errorPdf = null;
+      await tester.tap(find.text('Compartir PDF'));
+      await tester.pumpAndSettle();
+      expect(compartir.llamadas, hasLength(1));
+    });
+
+    testWidgets('chat: falla sin red y el reintento abre WhatsApp', (
+      tester,
+    ) async {
+      final c = _cc();
+      final repo = FakeCobrosRepository(cobros: [c], errorPdf: sinRed);
+      final lanzador = FakeLanzadorExterno();
+      await _abrir(tester, repo: repo, lanzador: lanzador);
+
+      await tester.tap(find.text('Abrir chat de WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Sin conexión. Inténtalo de nuevo cuando tengas señal.'),
+        findsOneWidget,
+      );
+      expect(lanzador.abiertos, isEmpty);
+
+      repo.errorPdf = null;
+      await tester.tap(find.text('Abrir chat de WhatsApp'));
+      await tester.pumpAndSettle();
+      expect(lanzador.abiertos, hasLength(1));
+    });
+  });
+
   testWidgets('falla el menú de compartir -> aviso', (tester) async {
     await _abrir(
       tester,

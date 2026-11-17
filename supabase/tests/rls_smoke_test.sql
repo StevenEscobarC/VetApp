@@ -35,7 +35,7 @@
 -- Fase 5 (bloque Q, 48 checks): vacunación — aislamiento, solo-append, cálculo derivado, alertas, enlace público, logo de la clínica.
 -- Fase 5.1 (bloque R, 45 checks): planes y límites — plan efectivo, asignar_plan solo service_role, límite de 50, prueba Clínica y cupos, solo lectura, logo/protocolos.
 -- Fase 6 (bloque S, 23 checks): inventario — aislamiento, solo-append, mover_stock atómico sin negativos, deshacer (solo de ajustes), conteo con cantidad esperada (IN004), solo admin, resumen de stock bajo, solo lectura, autoría.
--- Fase 7 (bloque T, 30 checks): facturación — numeración por clínica sin huecos, idempotencia, descuento y devolución de stock, anular solo admin/autor, pagos, cotizaciones y conversión, visita ya cobrada, solo lectura, autoría; parte B: editar cotización, resumen de Cobros, datos del PDF, servicios guardados, NIT de la clínica, cédula. Total esperado: 291.
+-- Fase 7 (bloque T, 32 checks): facturación — numeración por clínica sin huecos, idempotencia, descuento y devolución de stock, anular solo admin/autor, pagos, cotizaciones y conversión, visita ya cobrada, solo lectura, autoría; parte B: editar cotización, resumen de Cobros, datos del PDF, servicios guardados, NIT de la clínica, cédula; 07-17: reintento con la misma clave antes de BC002/BC003 y NIT conservado con la firma de 5 argumentos. Total esperado: 293.
 
 do $$
 declare
@@ -6559,6 +6559,64 @@ begin
     perform public.asignar_plan(t_c, 'beta');
   exception when others then
     failures := failures || ('T30 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T31 (07-17, WR-01): un reintento con la misma clave devuelve la CC ya creada en vez de BC003, y
+  -- crear_cuenta_cobro repite la búsqueda por clave justo antes de lanzar BC002 y BC003 (la carrera con un
+  -- reintento concurrente no se puede reproducir en una sola sesión: se verifica en el cuerpo).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select clave_idempotencia into t_clave2 from public.cobros where id = t_cc_cons;
+    t_json := jsonb_build_array(jsonb_build_object('tipo', 'servicio', 'servicio_id', t_s1, 'cantidad', 1, 'precio_unitario_cop', 50000));
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into t_row from public.crear_cuenta_cobro(t_clave2, t_cli, t_json, null, null, t_cons);
+    if t_row.id is distinct from t_cc_cons or t_row.ya_existia is distinct from true then
+      failures := failures || 'T31 el reintento sobre una visita ya cobrada no devolvió la misma CC con ya_existia'::text;
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select p.prosrc into t_sql from pg_proc p where p.oid = to_regprocedure('public.crear_cuenta_cobro(uuid,uuid,jsonb,uuid,uuid,uuid,uuid)');
+    if t_sql is null
+       or t_sql !~ 'p_clave;\s*if found and v_prev\.tipo = ''cuenta_cobro'' then\s*return query select v_prev\.id, v_prev\.numero, true;\s*return;\s*end if;\s*raise exception ''La cotización ya no está abierta\.'''
+       or t_sql !~ 'p_clave;\s*if found and v_prev\.tipo = ''cuenta_cobro'' then\s*return query select v_prev\.id, v_prev\.numero, true;\s*return;\s*end if;\s*raise exception ''Esta visita ya tiene la cuenta de cobro %\.'''
+    then
+      failures := failures || 'T31 crear_cuenta_cobro no repite la búsqueda por clave antes de BC002 y BC003'::text;
+    end if;
+  exception when others then
+    failures := failures || ('T31 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T32 (07-17, WR-04): una llamada de 5 argumentos (build anterior a la Fase 7) conserva el NIT; p_nit tiene
+  -- el centinela '__sin_cambio__' por defecto y hay una sola firma (sin ambigüedad en PostgREST).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select nombre, ciudad, direccion, telefono into t_row from public.clinicas where id = t_c;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform public.actualizar_clinica(t_row.nombre, t_row.ciudad, t_row.direccion, t_row.telefono, null::text, '900123456-7');
+    t_json := public.actualizar_clinica(p_nombre => t_row.nombre, p_ciudad => t_row.ciudad, p_direccion => t_row.direccion,
+      p_telefono => '3001112233', p_logo_path => null::text);
+    if t_json ->> 'nit' is distinct from '900123456-7' or t_json ->> 'telefono' is distinct from '3001112233' then
+      failures := failures || format('T32 la llamada de 5 argumentos nombrados devolvió nit=%s telefono=%s',
+        coalesce(t_json ->> 'nit', 'null'), t_json ->> 'telefono');
+    end if;
+    perform public.actualizar_clinica(t_row.nombre, t_row.ciudad, t_row.direccion, t_row.telefono, null::text);
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if (select nit from public.clinicas where id = t_c) is distinct from '900123456-7' then
+      failures := failures || 'T32 la llamada de 5 argumentos posicionales borró el NIT'::text;
+    end if;
+    if (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'actualizar_clinica') <> 1
+       or pg_get_function_arguments(to_regprocedure('public.actualizar_clinica(text,text,text,text,text,text)')) not like '%__sin_cambio__%' then
+      failures := failures || 'T32 actualizar_clinica debe tener una sola firma con p_nit default ''__sin_cambio__'''::text;
+    end if;
+  exception when others then
+    failures := failures || ('T32 error inesperado: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------

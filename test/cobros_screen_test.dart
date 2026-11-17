@@ -314,6 +314,54 @@ void main() {
     });
   });
 
+  group('filtro en el servidor (WR-02)', () {
+    testWidgets('Pendientes y Pagadas piden el estado al repositorio', (
+      tester,
+    ) async {
+      final repo = _repo();
+      await _abrir(tester, repo);
+      await tester.tap(find.text('Pendientes (1)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pagadas'));
+      await tester.pumpAndSettle();
+      final estados = [
+        for (final l in repo.llamadas)
+          if (l.metodo == 'cobros') l.args['estado'],
+      ];
+      expect(
+        estados,
+        containsAll([null, EstadoCobro.pendiente, EstadoCobro.pagada]),
+      );
+    });
+
+    testWidgets('una pendiente más antigua que las últimas 50 aparece en '
+        'Pendientes', (tester) async {
+      final recientes = [
+        for (var i = 0; i < 50; i++)
+          cobroDePrueba(
+            id: 'x$i',
+            numero: 200 - i,
+            estado: EstadoCobro.pagada,
+            metodoPago: MetodoPago.efectivo,
+            clienteNombre: 'C$i',
+            mascotaNombre: null,
+          ),
+      ];
+      final vieja = cobroDePrueba(
+        id: 'vieja',
+        numero: 3,
+        clienteNombre: 'Olga Ruiz',
+        mascotaNombre: 'Max',
+      );
+      await _abrir(tester, _repo(cobros: [...recientes, vieja]));
+      expect(find.text('Olga Ruiz · Max'), findsNothing);
+      await tester.tap(find.text('Pendientes (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Olga Ruiz · Max'), findsOneWidget);
+      expect(find.text('Nada por cobrar'), findsNothing);
+    });
+  });
+
   group('CobroFila', () {
     testWidgets('nombre, meta, monto y chip; un solo nodo; abre el detalle', (
       tester,
