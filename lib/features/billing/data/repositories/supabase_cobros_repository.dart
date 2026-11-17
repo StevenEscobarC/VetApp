@@ -57,9 +57,26 @@ class SupabaseCobrosRepository {
   static const String kSelectCobro =
       '*, cobro_items(*), '
       'autor:perfiles!cobros_creado_por_perfil_fkey(nombre), '
-      'anulador:perfiles!cobros_anulada_por_perfil_fkey(nombre), '
-      'convertida:cobros!convertida_en_id(numero), '
-      'origen:cobros!cotizacion_origen_id(numero)';
+      'anulador:perfiles!cobros_anulada_por_perfil_fkey(nombre)';
+
+  /// Completa los números de la cotización de origen y de la CC convertida con
+  /// una consulta por id (QA F7). Un embed de `cobros` consigo misma lo resuelve
+  /// PostgREST en sentido inverso y el número llegaba vacío ("COT-0000").
+  Future<List<Map<String, dynamic>>> _conNumerosVinculados(
+    List<Map<String, dynamic>> filas,
+  ) async {
+    final ids = idsVinculados(filas);
+    if (ids.isEmpty) return filas;
+    final r = await _client
+        .from('cobros')
+        .select('id, numero')
+        .inFilter('id', ids);
+    final numeros = {
+      for (final f in _filas(r)) f['id'] as String: (f['numero'] as num).toInt(),
+    };
+    completarNumerosVinculados(filas, numeros);
+    return filas;
+  }
 
   Future<T> _run<T>(
     Future<T> Function() op,
@@ -102,7 +119,8 @@ class SupabaseCobrosRepository {
             .order('fecha', ascending: false)
             .order('numero', ascending: false)
             .limit(kCobrosLista);
-        return _filas(r).map(cobroDesdeFila).toList();
+        final filas = await _conNumerosVinculados(_filas(r));
+        return filas.map(cobroDesdeFila).toList();
       }, _kErrorLectura);
 
   /// `null` si no existe o no es visible.
@@ -112,7 +130,8 @@ class SupabaseCobrosRepository {
         .select(kSelectCobro)
         .eq('id', id)
         .maybeSingle();
-    return f == null ? null : cobroDesdeFila(f);
+    if (f == null) return null;
+    return cobroDesdeFila((await _conNumerosVinculados([f])).single);
   }, _kErrorLectura);
 
   Future<ResumenCobros> resumen() => _run(() async {
@@ -407,6 +426,30 @@ String? _nombreEmbed(Object? embed) =>
 
 int? _numeroEmbed(Object? embed) =>
     embed is Map ? (embed['numero'] as num?)?.toInt() : null;
+
+/// Ids de la cotización de origen y de la CC convertida de [filas], sin repetir.
+@visibleForTesting
+List<String> idsVinculados(List<Map<String, dynamic>> filas) => {
+  for (final f in filas) ...[
+    if (f['cotizacion_origen_id'] is String) f['cotizacion_origen_id'] as String,
+    if (f['convertida_en_id'] is String) f['convertida_en_id'] as String,
+  ],
+}.toList();
+
+/// Escribe en cada fila `cotizacion_origen_numero` / `convertida_en_numero`
+/// (la forma plana que ya lee [cobroDesdeFila]) a partir de [numeros] por id.
+@visibleForTesting
+void completarNumerosVinculados(
+  List<Map<String, dynamic>> filas,
+  Map<String, int> numeros,
+) {
+  for (final f in filas) {
+    final origen = numeros[f['cotizacion_origen_id']];
+    if (origen != null) f['cotizacion_origen_numero'] = origen;
+    final convertida = numeros[f['convertida_en_id']];
+    if (convertida != null) f['convertida_en_numero'] = convertida;
+  }
+}
 
 DateTime? _fecha(Object? v) => v == null ? null : fechaDeBd(v as String);
 

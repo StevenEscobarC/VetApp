@@ -15,7 +15,7 @@ void main() {
 
   test('completarNumerosVinculados pone los números de los documentos '
       'vinculados en la forma plana que ya lee cobroDesdeFila', () {
-    final filas = [
+    final filas = <Map<String, dynamic>>[
       {'id': 'cc3', 'cotizacion_origen_id': 'cot1', 'convertida_en_id': null},
       {'id': 'cot1', 'cotizacion_origen_id': null, 'convertida_en_id': 'cc3'},
       {'id': 'cc9', 'cotizacion_origen_id': null, 'convertida_en_id': null},

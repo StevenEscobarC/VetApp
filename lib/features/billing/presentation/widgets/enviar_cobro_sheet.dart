@@ -43,10 +43,12 @@ class _EnviarCobroSheet extends ConsumerStatefulWidget {
 class _EnviarCobroSheetState extends ConsumerState<_EnviarCobroSheet> {
   _Accion? _ocupado;
 
+  /// Aviso dentro de la propia hoja (QA F6): un SnackBar del Scaffold de debajo
+  /// quedaba tapado por la hoja abierta y el veterinario no lo veía.
+  String? _avisoTexto;
+
   void _aviso(String texto) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(texto)));
+    if (mounted) setState(() => _avisoTexto = texto);
   }
 
   String _mensaje(Cobro c, ClinicaCobroPdf clinica) {
@@ -67,7 +69,10 @@ class _EnviarCobroSheetState extends ConsumerState<_EnviarCobroSheet> {
   /// Marca la acción en curso; `false` si ya hay otra (toques repetidos).
   bool _empezar(_Accion a) {
     if (_ocupado != null) return false;
-    setState(() => _ocupado = a);
+    setState(() {
+      _ocupado = a;
+      _avisoTexto = null;
+    });
     return true;
   }
 
@@ -203,6 +208,16 @@ class _EnviarCobroSheetState extends ConsumerState<_EnviarCobroSheet> {
               cargando: _ocupado == _Accion.compartir,
               onTap: () => _compartirPdf(conMensaje: false),
             ),
+            if (_avisoTexto != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _avisoTexto!,
+                  style: t.bodyMedium?.copyWith(color: AppColors.destructive),
+                ),
+              ),
+            ],
           ],
         ),
       ),
