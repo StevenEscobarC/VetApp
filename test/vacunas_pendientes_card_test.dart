@@ -15,6 +15,7 @@ Widget _app(
   Future<ResumenVacunas> Function() resumen, {
   bool? mostrarSiVacia,
 }) => ProviderScope(
+  retry: (retryCount, error) => null,
   overrides: [resumenVacunasProvider.overrideWith((ref) => resumen())],
   child: MaterialApp(
     theme: AppTheme.light,

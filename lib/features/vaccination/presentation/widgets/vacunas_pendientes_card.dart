@@ -12,12 +12,22 @@ import '../providers/alertas_providers.dart';
 /// Tarjeta de Inicio con los conteos de vacunas de toda la clínica (D-10,
 /// D-14). Siempre visible; abre la pantalla de pendientes.
 class VacunasPendientesCard extends ConsumerWidget {
-  const VacunasPendientesCard({super.key});
+  const VacunasPendientesCard({super.key, this.mostrarSiVacia = true});
+
+  /// Con `false` la tarjeta no ocupa espacio en 0/0: Inicio solo muestra las
+  /// alertas que tienen algo (D-12). Carga y error se siguen mostrando.
+  final bool mostrarSiVacia;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
     final async = ref.watch(resumenVacunasProvider);
+    final resumen = async.hasError ? null : async.value;
+    if (!mostrarSiVacia &&
+        resumen != null &&
+        resumen.vencidas + resumen.proximas == 0) {
+      return const SizedBox.shrink();
+    }
 
     final Widget contenido = async.when(
       loading: () => Container(
