@@ -432,7 +432,25 @@ Plans:
   3. El veterinario tiene accesos rápidos para crear paciente, cita o factura desde el dashboard
   4. Todas las pantallas de la app usan el diseño visual definitivo (paleta terracota/crema, tipografía Caprasimo + Figtree) del mockup aprobado
 
-**Plans**: TBD
+**Plans**: 16 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — RPC inicio_resumen (mes de Bogotá, consultas por mascotas, ingresos = regla de cobros_resumen) + smoke T33..T40 (total 301) + sonda
+- [ ] 08-02-PLAN.md — Core: temas de componente (switch, checkbox, FAB, diálogo, snackbar, date picker, bottom sheet), botón de texto AA, AppButton cuadrado, tokens en core, borrar ComingSoonScreen, script de compuertas DASH-04
+- [ ] 08-03-PLAN.md — Datos de Inicio: formatearCopCorto, repositorio + fake, proximas() en el repositorio de citas y su fake, providers, contador inicioRevisionProvider
+- [ ] 08-04-PLAN.md — [BLOCKING] Aplicar el delta Fase 8 en vivo (MCP o portapapeles) y pegar el smoke (301 checks) + sonda
+- [ ] 08-05-PLAN.md — Refresco de Inicio tras citas, consultas, cobros y altas de mascota, y al volver a la pestaña
+- [ ] 08-06-PLAN.md — Inicio: encabezado, 3 métricas del mes, errores por bloque, pull-to-refresh y reanudación
+- [ ] 08-07-PLAN.md — Barrido de diseño: agenda (AppButton, DayStrip 48 dp, tokens)
+- [ ] 08-08-PLAN.md — Barrido de diseño: cobros (AppButton en formulario y hojas, tokens; VET-78)
+- [ ] 08-09-PLAN.md — Barrido de diseño: inventario y plan (AppButton, insignia, cabecera al cargar; VET-57)
+- [ ] 08-10-PLAN.md — Barrido de diseño: equipo y vacunación
+- [ ] 08-11-PLAN.md — Barrido de diseño: auth (login, CTAs muertos del cliente) y main
+- [ ] 08-12-PLAN.md — Inicio: accesos rápidos (Paciente, Cita, Cobro, Vacunar) y próximas citas
+- [ ] 08-13-PLAN.md — Cierre automático: gate, compuertas DASH-04 sobre lib, re-auditoría de marca, Linear, code review, docs
+- [ ] 08-14-PLAN.md — Harness de pruebas: override compartido del repositorio de Inicio en los tests del router real
+- [ ] 08-15-PLAN.md — VacunasPendientesCard(mostrarSiVacia) y avisoPlanVisibleProvider
+- [ ] 08-16-PLAN.md — QA vetapp-qa claro/oscuro, solo lectura en la clínica QA (checkpoint) y aprobación
 **UI hint**: yes
 
 ## Progress

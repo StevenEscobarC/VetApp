@@ -484,13 +484,11 @@ Nuevo bloque (siguiente a T30; usar el siguiente número libre y el mismo estilo
 | A5 | `clockProvider` existe y es la fuente de "ahora" para tests | Patrón 2 | Hay que leer `core/data/clock_provider.dart`; si es otro formato, adaptar |
 | A6 | "Ingresos" usa el mismo corte `pagada_el <= hoy` que `cobros_resumen` | Patrón 1 | Idéntico por copia; el smoke de paridad lo detecta |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **¿Tarjeta de métrica en `core/widgets` o en `home/`?**
-   - Sabemos: no hay `AppMetricCard`. Recomendación: `core/widgets/cards/app_metric_card.dart` si el UI-SPEC lo reutiliza; si no, `home/`. Lo decide el UI-SPEC.
-2. **¿"Consultas" no navega: ¿se ve como tarjeta táctil?**
-   - D-04 dice que no navega: renderizarla sin `InkWell`/sin flecha para no prometer navegación.
-3. **Alcance exacto del plan de `core/`**: depende de la auditoría; planificar el plan de `core/` condicionado a hallazgos.
+1. **¿Tarjeta de métrica en `core/widgets` o en `home/`?** RESOLVED: en `home/` (`lib/features/home/presentation/widgets/metricas_mes.dart`, `MetricasMes`/`MetricaTarjeta`). El UI-SPEC prohíbe widgets compartidos nuevos en `lib/core/widgets` en esta fase (08-06).
+2. **"Consultas" no navega: ¿se ve como tarjeta táctil?** RESOLVED: no. `AppCard(onTap: null)`, sin chevron, sin ripple y sin rol de botón (UI-SPEC §3.3; probado en 08-06).
+3. **Alcance exacto del plan de `core/`.** RESOLVED con la línea base de marca (08-BRAND-BASELINE): 7 temas de componente, el color AA de los botones de texto, los literales de espaciado de core, el modo cuadrado de `AppButton` para los dos steppers y el borrado de `ComingSoonScreen` (08-02). La re-auditoría del cierre (08-13) confirma que no queda nada más.
 
 ## Project Constraints (from CLAUDE.md)
 - Stack Flutter + Supabase; diseño del mockup aprobado (terracota/crema, Caprasimo + Figtree); backend real, sin mocks.
