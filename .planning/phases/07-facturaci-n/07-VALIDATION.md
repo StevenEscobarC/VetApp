@@ -20,7 +20,7 @@ created: 2026-11-13
 | **Framework** | `flutter_test` (SDK) + fakes a mano en `test/helpers/` + `supabase/tests/rls_smoke_test.sql` (bloque `do $$` que termina siempre en `RAISE EXCEPTION`) + `supabase/tests/verify_live_schema.sh` (sondas anon) |
 | **Config file** | `analysis_options.yaml` (flutter_lints); el smoke test se pega en el SQL Editor |
 | **Quick run command** | `flutter analyze && flutter test test/<archivos del plan>` |
-| **Full suite command** | `flutter analyze && flutter test`, más pegar `rls_smoke_test.sql` completo (esperado `RLS SMOKE: PASS (291 checks)`: 261 + bloque T de 30) y `bash supabase/tests/verify_live_schema.sh` (`LIVE_SCHEMA_OK`) |
+| **Full suite command** | `flutter analyze && flutter test`, más pegar `rls_smoke_test.sql` completo (esperado `RLS SMOKE: PASS (293 checks)`: 261 + bloque T de 32; 291 hasta 07-16, +T31/T32 en 07-17) y `bash supabase/tests/verify_live_schema.sh` (`LIVE_SCHEMA_OK`) |
 | **Estimated runtime** | ~40 segundos (`flutter test`) |
 
 ---
@@ -163,6 +163,7 @@ created: 2026-11-13
 | Ola 4 (master) | gate integrado | `No issues found!` · `00:41 +1413: All tests passed!` · solo `kOrigenCobro` contiene la palabra prohibida | suite completa | 2026-11-14 | `8b9aab2` |
 | 07-15 | TDD por tarea; `flutter analyze` + `flutter test` | `MODOS_FORM_OK` · `SLICE_COTIZACIONES_OK`; rutas `/editar` y `/convertir` antes de `/:id`; una aserción de 07-12 actualizada (la CC anulada ahora ofrece «Emitir una nueva») | formulario 79, detalle y rutas 97 | 2026-11-14 | `7d85c01` |
 | Ola 5 (master) | gate integrado | `No issues found!` · `00:41 +1441: All tests passed!` | suite completa | 2026-11-14 | `7d85c01` |
+| 07-17 | gap closure de la revisión (CR-01, WR-01..06, IN-05); TDD (rojo → verde); `flutter analyze` + `flutter test`; smoke en Postgres local desechable | `No issues found!` · `01:34 +1466: All tests passed!`; local: `RLS SMOKE: FAIL (4 de 293 checks)` con el schema anterior (T31, T32) → `RLS SMOKE: PASS (293 checks) - cambios revertidos`; solo `kOrigenCobro` contiene la palabra prohibida | formulario 62, cobros 25, compartir 15, anular 16, repositorio 41, invalidación 19; smoke 293 (en vivo pendiente) | 2026-11-16 | `68f4581` |
 
 ---
 

@@ -47,7 +47,10 @@ ProviderContainer _contenedor(
     ],
   );
   addTearDown(c.dispose);
-  c.listen(cobrosProvider(TipoCobro.cuentaCobro), (_, _) {});
+  c.listen(
+    cobrosProvider((tipo: TipoCobro.cuentaCobro, estado: null)),
+    (_, _) {},
+  );
   c.listen(resumenCobrosProvider, (_, _) {});
   c.listen(cobroProvider('c1'), (_, _) {});
   c.listen(productosProvider, (_, _) {});
@@ -56,7 +59,9 @@ ProviderContainer _contenedor(
 }
 
 Future<void> _leer(ProviderContainer c) async {
-  await c.read(cobrosProvider(TipoCobro.cuentaCobro).future);
+  await c.read(
+    cobrosProvider((tipo: TipoCobro.cuentaCobro, estado: null)).future,
+  );
   await c.read(resumenCobrosProvider.future);
   await c.read(cobroProvider('c1').future);
   await c.read(productosProvider.future);

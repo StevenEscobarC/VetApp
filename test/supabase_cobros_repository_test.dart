@@ -31,6 +31,25 @@ SupabaseCobrosRepository _repoQueLanza(Object error) =>
       ),
     );
 
+/// Repositorio que responde `[]` y guarda cada petición en [peticiones].
+SupabaseCobrosRepository _repoQueGuarda(List<http.BaseRequest> peticiones) =>
+    SupabaseCobrosRepository(
+      SupabaseClient(
+        'http://localhost:54321',
+        'clave-de-prueba',
+        httpClient: MockClient((r) async {
+          peticiones.add(r);
+          return http.Response(
+            '[]',
+            200,
+            headers: {'content-type': 'application/json'},
+            request: r,
+          );
+        }),
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+      ),
+    );
+
 const _lineas = [
   LineaCobroNueva(
     tipo: TipoLinea.producto,
@@ -101,9 +120,10 @@ void main() {
         'Esta cotización ya no se puede usar. Actualiza la lista.',
         ErrorCobro.cotizacionNoDisponible,
       ),
+      // WR-06: un 23505 sin la constraint de servicios no es "nombre repetido".
       '23505': (
-        'Ya tienes un servicio con ese nombre.',
-        ErrorCobro.nombreDuplicado,
+        'No pudimos completar la operación. Intenta de nuevo.',
+        ErrorCobro.otro,
       ),
       '42501': (
         'Solo el administrador o quien la emitió puede hacer esto.',
@@ -125,6 +145,30 @@ void main() {
         expect(f.limite, isNull);
         expect(f.message, isNot(contains('crudo')));
       });
+    });
+
+    test('23505 de clinica_servicios_nombre_activo_uq → nombre repetido', () {
+      final e = PostgrestException(
+        message:
+            'duplicate key value violates unique constraint '
+            '"clinica_servicios_nombre_activo_uq"',
+        code: '23505',
+      );
+      final f = cobroFailureDe(e);
+      expect(f.tipo, ErrorCobro.nombreDuplicado);
+      expect(f.message, 'Ya tienes un servicio con ese nombre.');
+    });
+
+    test('23505 de otra constraint (cobros_numero_uq) → genérico', () {
+      final e = PostgrestException(
+        message:
+            'duplicate key value violates unique constraint "cobros_numero_uq"',
+        code: '23505',
+        details: 'Key (clinica_id, tipo, numero)=(x, cuenta_cobro, 3) exists.',
+      );
+      final f = cobroFailureDe(e);
+      expect(f.tipo, ErrorCobro.otro);
+      expect(f.message, isNot(contains('servicio')));
     });
 
     const soloLectura =
@@ -197,6 +241,66 @@ void main() {
         'Sin conexión. No se guardaron los cambios. Inténtalo de nuevo cuando '
         'tengas señal.',
       );
+    });
+  });
+
+  group('lecturas sin conexión (WR-05)', () {
+    test('el texto de lectura no dice que se perdieron cambios', () {
+      expect(
+        kMensajeSinConexionLectura,
+        'Sin conexión. Inténtalo de nuevo cuando tengas señal.',
+      );
+    });
+
+    final lecturas =
+        <String, Future<Object?> Function(SupabaseCobrosRepository)>{
+          'cobros': (r) => r.cobros(TipoCobro.cuentaCobro),
+          'cobro': (r) => r.cobro('c1'),
+          'resumen': (r) => r.resumen(),
+          'servicios': (r) => r.servicios(),
+          'cobroVinculado': (r) => r.cobroVinculado(citaId: 'cita1'),
+          'datosPdf': (r) => r.datosPdf('c1'),
+        };
+    lecturas.forEach((nombre, leer) {
+      test('$nombre sin red → mensaje de lectura', () async {
+        try {
+          await leer(_repoQueLanza(http.ClientException('Connection failed')));
+          fail('debía lanzar CobroFailure');
+        } on CobroFailure catch (f) {
+          expect(f.tipo, ErrorCobro.sinConexion);
+          expect(f.message, kMensajeSinConexionLectura);
+          expect(f.message, isNot(contains('No se guardaron')));
+        }
+      });
+    });
+  });
+
+  group('cobros: filtro por estado en el servidor (WR-02)', () {
+    test('con estado filtra tipo y estado en la consulta', () async {
+      final peticiones = <http.BaseRequest>[];
+      await _repoQueGuarda(
+        peticiones,
+      ).cobros(TipoCobro.cuentaCobro, estado: EstadoCobro.pendiente);
+      final q = peticiones.single.url.queryParameters;
+      expect(q['tipo'], 'eq.cuenta_cobro');
+      expect(q['estado'], 'eq.pendiente');
+      expect(q['limit'], '50');
+    });
+
+    test('pagadas', () async {
+      final peticiones = <http.BaseRequest>[];
+      await _repoQueGuarda(
+        peticiones,
+      ).cobros(TipoCobro.cuentaCobro, estado: EstadoCobro.pagada);
+      expect(peticiones.single.url.queryParameters['estado'], 'eq.pagada');
+    });
+
+    test('sin estado no filtra por estado', () async {
+      final peticiones = <http.BaseRequest>[];
+      await _repoQueGuarda(peticiones).cobros(TipoCobro.cotizacion);
+      final q = peticiones.single.url.queryParameters;
+      expect(q['tipo'], 'eq.cotizacion');
+      expect(q.containsKey('estado'), isFalse);
     });
   });
 

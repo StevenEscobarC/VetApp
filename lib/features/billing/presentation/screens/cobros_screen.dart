@@ -43,15 +43,29 @@ class _CobrosScreenState extends ConsumerState<CobrosScreen> {
   late TipoCobro _tipo = widget.tipoInicial;
   _Filtro _filtro = _Filtro.todas;
 
+  /// Pendientes y Pagadas se piden al servidor, no se filtran sobre las
+  /// últimas [kCobrosLista] (WR-02).
+  FiltroCobros get _clave => (
+    tipo: _tipo,
+    estado: _tipo == TipoCobro.cotizacion
+        ? null
+        : switch (_filtro) {
+            _Filtro.todas => null,
+            _Filtro.pendientes => EstadoCobro.pendiente,
+            _Filtro.pagadas => EstadoCobro.pagada,
+          },
+  );
+
   Future<void> _refrescar() async {
-    ref.invalidate(cobrosProvider(_tipo));
+    final clave = _clave;
+    ref.invalidate(cobrosProvider(clave));
     ref.invalidate(resumenCobrosProvider);
-    await ref.read(cobrosProvider(_tipo).future).catchError((_) => <Cobro>[]);
+    await ref.read(cobrosProvider(clave).future).catchError((_) => <Cobro>[]);
   }
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(cobrosProvider(_tipo));
+    final async = ref.watch(cobrosProvider(_clave));
     final puedeEscribir = ref.watch(puedeEscribirProvider);
     final pendientes = ref.watch(resumenCobrosProvider).value?.pendientes ?? 0;
     final cargando = async.isLoading && !async.hasValue;
@@ -191,7 +205,7 @@ class _Cuerpo extends ConsumerWidget {
   final Future<void> Function() onRefresh;
 
   Widget _vacio() {
-    if (lista.isEmpty) {
+    if (tipo == TipoCobro.cotizacion || filtro == _Filtro.todas) {
       final esCot = tipo == TipoCobro.cotizacion;
       final icono = esCot
           ? Icons.request_quote_outlined
@@ -238,16 +252,8 @@ class _Cuerpo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hoy = diaBogota(ref.watch(clockProvider)());
-    final visibles = [
-      for (final c in lista)
-        if (tipo == TipoCobro.cotizacion ||
-            switch (filtro) {
-              _Filtro.todas => true,
-              _Filtro.pendientes => c.pendiente,
-              _Filtro.pagadas => c.pagada,
-            })
-          c,
-    ];
+    // El servidor ya filtró por estado.
+    final visibles = lista;
 
     // El vacío también se puede refrescar deslizando.
     if (visibles.isEmpty) {

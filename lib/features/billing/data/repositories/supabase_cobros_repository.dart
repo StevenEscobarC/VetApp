@@ -28,6 +28,14 @@ const String kMensajeSinConexionServicio =
     'Sin conexión. No se guardaron los cambios. Inténtalo de nuevo cuando '
     'tengas señal.';
 
+/// Lecturas (lista, detalle, resumen, servicios, datos del PDF): sin red no
+/// se perdió nada, así que no se habla de cambios (WR-05).
+const String kMensajeSinConexionLectura =
+    'Sin conexión. Inténtalo de nuevo cuando tengas señal.';
+
+/// Única constraint cuyo 23505 significa "nombre de servicio repetido".
+const String _kServicioNombreUq = 'clinica_servicios_nombre_activo_uq';
+
 const String _kErrorLectura = 'No pudimos cargar los cobros. Intenta de nuevo.';
 const String _kErrorCotizacion =
     'No pudimos guardar la cotización. Intenta de nuevo.';
@@ -56,7 +64,7 @@ class SupabaseCobrosRepository {
   Future<T> _run<T>(
     Future<T> Function() op,
     String generico, {
-    String sinConexion = kMensajeSinConexionServicio,
+    String sinConexion = kMensajeSinConexionLectura,
   }) async {
     try {
       return await op();
@@ -83,17 +91,19 @@ class SupabaseCobrosRepository {
     );
   }
 
-  /// Documentos del [tipo], del más reciente al más antiguo.
-  Future<List<Cobro>> cobros(TipoCobro tipo) => _run(() async {
-    final r = await _client
-        .from('cobros')
-        .select(kSelectCobro)
-        .eq('tipo', tipo.bd)
-        .order('fecha', ascending: false)
-        .order('numero', ascending: false)
-        .limit(kCobrosLista);
-    return _filas(r).map(cobroDesdeFila).toList();
-  }, _kErrorLectura);
+  /// Documentos del [tipo], del más reciente al más antiguo. Con [estado] el
+  /// servidor filtra ANTES de cortar a las últimas [kCobrosLista]: una cuenta
+  /// pendiente antigua sigue apareciendo en "Pendientes" (WR-02).
+  Future<List<Cobro>> cobros(TipoCobro tipo, {EstadoCobro? estado}) =>
+      _run(() async {
+        var q = _client.from('cobros').select(kSelectCobro).eq('tipo', tipo.bd);
+        if (estado != null) q = q.eq('estado', estado.bd);
+        final r = await q
+            .order('fecha', ascending: false)
+            .order('numero', ascending: false)
+            .limit(kCobrosLista);
+        return _filas(r).map(cobroDesdeFila).toList();
+      }, _kErrorLectura);
 
   /// `null` si no existe o no es visible.
   Future<Cobro?> cobro(String id) => _run(() async {
@@ -475,6 +485,10 @@ Map<String, dynamic>? _detalle(PostgrestException e) {
   }
 }
 
+bool _esNombreServicio(PostgrestException e) =>
+    e.message.contains(_kServicioNombreUq) ||
+    (e.details?.toString().contains(_kServicioNombreUq) ?? false);
+
 ErrorCobro _tipoDe(PostgrestException e, LimitePlan? limite) {
   if (limite == LimitePlan.soloLectura) return ErrorCobro.soloLectura;
   return switch (e.code) {
@@ -483,7 +497,9 @@ ErrorCobro _tipoDe(PostgrestException e, LimitePlan? limite) {
     'BC001' => ErrorCobro.estadoInvalido,
     'BC002' => ErrorCobro.cotizacionNoDisponible,
     'BC003' => ErrorCobro.visitaYaCobrada,
-    '23505' => ErrorCobro.nombreDuplicado,
+    // Solo el índice de nombres de servicio es "nombre repetido"; cualquier
+    // otra unicidad (p. ej. cobros_numero_uq) es un fallo genérico (WR-06).
+    '23505' when _esNombreServicio(e) => ErrorCobro.nombreDuplicado,
     '42501' => ErrorCobro.sinPermiso,
     '23514' => ErrorCobro.datosInvalidos,
     _ => ErrorCobro.otro,

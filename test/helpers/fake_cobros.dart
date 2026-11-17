@@ -5,6 +5,7 @@ import 'package:vetapp/features/billing/domain/cobro_failure.dart';
 import 'package:vetapp/features/billing/domain/entities/cobro.dart';
 import 'package:vetapp/features/billing/domain/entities/cobro_item.dart';
 import 'package:vetapp/features/billing/domain/entities/servicio.dart';
+import 'package:vetapp/features/billing/domain/numeracion.dart';
 
 Cobro cobroDePrueba({
   String id = 'c1',
@@ -130,7 +131,9 @@ class FakeCobrosRepository implements SupabaseCobrosRepository {
   final Object? errorCobros;
   final Object? errorCobro;
   final Object? errorResumen;
-  final Object? errorCrear;
+
+  /// Mutable: un test puede quitarlo para que el reintento llegue.
+  Object? errorCrear;
   final Object? errorCotizacion;
   final Object? errorEditar;
   final Object? errorPagar;
@@ -138,7 +141,13 @@ class FakeCobrosRepository implements SupabaseCobrosRepository {
   final Object? errorServicios;
   final Object? errorGuardarServicio;
   final Object? errorArchivarServicio;
-  final Object? errorPdf;
+
+  /// Mutable: un test puede quitarlo para que el reintento llegue.
+  Object? errorPdf;
+
+  /// Si se asigna, crear guarda el documento y DESPUÉS lanza este error una
+  /// sola vez: la respuesta se perdió pero el servidor confirmó (D-21).
+  Object? errorTrasCrear;
 
   final llamadas = <({String metodo, Map<String, Object?> args})>[];
 
@@ -236,14 +245,24 @@ class FakeCobrosRepository implements SupabaseCobrosRepository {
     );
     final r = (id: id, numero: numero, yaExistia: false);
     _porClave[clave] = r;
+    final perdida = errorTrasCrear;
+    if (perdida != null) {
+      errorTrasCrear = null;
+      throw perdida;
+    }
     return r;
   }
 
   @override
-  Future<List<Cobro>> cobros(TipoCobro tipo) async {
-    _log('cobros', {'tipo': tipo});
+  Future<List<Cobro>> cobros(TipoCobro tipo, {EstadoCobro? estado}) async {
+    _log('cobros', {'tipo': tipo, 'estado': estado});
     _falla(errorCobros);
-    return [..._cobros.where((c) => c.tipo == tipo)];
+    // Como el servidor: filtra por tipo y estado y DESPUÉS corta a las últimas.
+    return [
+      ..._cobros.where(
+        (c) => c.tipo == tipo && (estado == null || c.estado == estado),
+      ),
+    ].take(kCobrosLista).toList();
   }
 
   @override

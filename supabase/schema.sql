@@ -5025,6 +5025,12 @@ begin
        and ((v_cita is not null and c.cita_id = v_cita) or (p_consulta_id is not null and c.consulta_id = p_consulta_id))
      limit 1;
     if found then
+      -- WR-01 (07-17): un reintento concurrente con la misma clave pudo confirmar desde la primera búsqueda.
+      select * into v_prev from public.cobros c where c.clinica_id = v_clinica and c.clave_idempotencia = p_clave;
+      if found and v_prev.tipo = 'cuenta_cobro' then
+        return query select v_prev.id, v_prev.numero, true;
+        return;
+      end if;
       raise exception 'Esta visita ya tiene la cuenta de cobro %.', public._numero_cobro('cuenta_cobro', v_otro)
         using errcode = 'BC003', detail = json_build_object('numero', public._numero_cobro('cuenta_cobro', v_otro))::text;
     end if;
@@ -5038,6 +5044,12 @@ begin
       raise exception 'La cotización no existe.' using errcode = 'BC001';
     end if;
     if v_cot.estado <> 'abierta' then
+      -- WR-01 (07-17): tras esperar el bloqueo, la conversión que ganó pudo ser este mismo cobro (misma clave).
+      select * into v_prev from public.cobros c where c.clinica_id = v_clinica and c.clave_idempotencia = p_clave;
+      if found and v_prev.tipo = 'cuenta_cobro' then
+        return query select v_prev.id, v_prev.numero, true;
+        return;
+      end if;
       raise exception 'La cotización ya no está abierta.' using errcode = 'BC002';
     end if;
   end if;
@@ -5494,8 +5506,12 @@ $$;
 -- actualizar_clinica con NIT (6 argumentos). Reemplaza la firma de 5 argumentos de la Fase 5: en una
 -- re-ejecución completa del archivo la Fase 5 la recrea y este bloque, que va después, la vuelve a quitar.
 -- Mismo cuerpo que la Fase 5 (incluida la validación del logo) más el NIT normalizado (sin puntos ni espacios).
+-- WR-04 (07-17): p_nit tiene un centinela por defecto, no null. Un build anterior a la Fase 7 llama con 5
+-- argumentos nombrados y conserva el NIT guardado; el cliente actual siempre envía p_nit y un null explícito
+-- lo borra. Se descarta una envoltura de 5 argumentos: con dos firmas, una llamada de 5 argumentos nombrados
+-- casaría con ambas (p_nit tiene default) y PostgREST no podría elegir (PGRST203). Una sola firma, sin ambigüedad.
 drop function if exists public.actualizar_clinica(text, text, text, text, text);
-create or replace function public.actualizar_clinica(p_nombre text, p_ciudad text, p_direccion text, p_telefono text, p_logo_path text, p_nit text default null)
+create or replace function public.actualizar_clinica(p_nombre text, p_ciudad text, p_direccion text, p_telefono text, p_logo_path text, p_nit text default '__sin_cambio__')
 returns jsonb
 language plpgsql
 volatile
@@ -5508,7 +5524,9 @@ declare
   v_ciudad text := trim(coalesce(p_ciudad, ''));
   v_direccion text := trim(coalesce(p_direccion, ''));
   v_telefono text := trim(coalesce(p_telefono, ''));
-  v_nit text := nullif(regexp_replace(btrim(coalesce(p_nit, '')), '[.[:space:]]', '', 'g'), '');
+  v_nit_sin_cambio boolean := coalesce(p_nit = '__sin_cambio__', false);
+  v_nit text := case when coalesce(p_nit = '__sin_cambio__', false) then null
+                     else nullif(regexp_replace(btrim(coalesce(p_nit, '')), '[.[:space:]]', '', 'g'), '') end;
   v_row public.clinicas;
 begin
   if not public.es_admin_clinica() or v_clinica is null then
@@ -5543,7 +5561,7 @@ begin
          direccion = v_direccion,
          telefono = v_telefono,
          logo_path = p_logo_path,
-         nit = v_nit
+         nit = case when v_nit_sin_cambio then clinicas.nit else v_nit end
    where id = v_clinica
    returning * into v_row;
 

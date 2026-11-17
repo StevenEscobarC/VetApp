@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +25,8 @@ import 'package:vetapp/features/clients/presentation/providers/clientes_provider
 import 'package:vetapp/features/patients/domain/entities/mascota.dart';
 import 'package:vetapp/features/patients/presentation/providers/mascotas_providers.dart';
 import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
+import 'package:vetapp/core/widgets/buttons/app_button.dart';
+import 'package:vetapp/features/inventory/domain/entities/movimiento_stock.dart';
 import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 
@@ -534,9 +537,8 @@ void main() {
       expect(find.text('Cuenta de cobro CC-0001 emitida.'), findsOneWidget);
     });
 
-    testWidgets('CC repetida (yaExistia) también avisa emitida', (
-      tester,
-    ) async {
+    testWidgets('CC repetida (yaExistia): "Ya estaba emitida", nunca '
+        '"emitida"', (tester) async {
       final repo = FakeCobrosRepository(servicios: _servicios);
       await repo.crearCuentaCobro(
         clave: 'clave-1',
@@ -553,7 +555,31 @@ void main() {
       await _agregarConsulta(tester);
       await emitirCc(tester);
       expect(find.text('Detalle cobro-1'), findsOneWidget);
-      expect(find.text('Cuenta de cobro CC-0001 emitida.'), findsOneWidget);
+      expect(find.text('Ya estaba emitida: CC-0001.'), findsOneWidget);
+      expect(find.text('Cuenta de cobro CC-0001 emitida.'), findsNothing);
+    });
+
+    testWidgets('cotización repetida (yaExistia): "Ya estaba guardada"', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(servicios: _servicios);
+      await repo.crearCotizacion(
+        clave: 'clave-1',
+        clienteId: 'cli1',
+        lineas: const [],
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1', tipo: TipoCobro.cotizacion),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await tester.tap(find.text('Guardar cotización'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ya estaba guardada: COT-0001.'), findsOneWidget);
+      expect(find.text('Cotización COT-0001 guardada.'), findsNothing);
     });
 
     testWidgets('cotización: se guarda sin diálogo', (tester) async {
@@ -607,13 +633,185 @@ void main() {
       );
       expect(find.byIcon(Icons.wifi_off), findsOneWidget);
       expect(find.byType(LineaCobroTile), findsNWidgets(2));
-      expect(find.text('Emitir cuenta de cobro'), findsOneWidget);
+      // CR-01: solo Reintentar o Descartar.
+      expect(_enBarra(find.text('Reintentar')), findsOneWidget);
+      expect(find.text('Emitir cuenta de cobro'), findsNothing);
+      expect(find.widgetWithText(TextButton, 'Descartar'), findsOneWidget);
 
-      await emitirCc(tester);
+      // Reintentar no vuelve a preguntar: el contenido ya se confirmó y no
+      // cambió.
+      await tester.tap(_enBarra(find.text('Reintentar')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
       final llamadas = crear(repo);
       expect(llamadas, hasLength(2));
       expect(llamadas[0].args['clave'], 'clave-1');
       expect(llamadas[1].args['clave'], llamadas[0].args['clave']);
+      final l0 = llamadas[0].args['lineas']! as List<LineaCobroNueva>;
+      final l1 = llamadas[1].args['lineas']! as List<LineaCobroNueva>;
+      expect(
+        [for (final l in l1) (l.descripcion, l.cantidad, l.precioUnitarioCop)],
+        [for (final l in l0) (l.descripcion, l.cantidad, l.precioUnitarioCop)],
+      );
+      expect(find.byType(LineaCobroTile), findsNWidgets(2));
+    });
+
+    testWidgets('CR-01: tras sin conexión no se edita ni líneas, ni cliente, '
+        'ni tipo, ni servicios', (tester) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure(
+          'Sin conexión',
+          tipo: ErrorCobro.sinConexion,
+        ),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await emitirCc(tester);
+      expect(_enBarra(find.text('Reintentar')), findsOneWidget);
+
+      expect(
+        tester.widget<LineaCobroTile>(find.byType(LineaCobroTile)).habilitado,
+        isFalse,
+      );
+      // Un servicio más no entra.
+      await tester.tap(find.text('Vacuna · \$ 40.000'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.byType(LineaCobroTile), findsOneWidget);
+      // El tipo no cambia.
+      await tester.tap(find.text('Cotización'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('Nueva cuenta de cobro'), findsOneWidget);
+      // El cliente no se cambia.
+      await tester.tap(find.text('Cambiar'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      // Quitar la línea tampoco.
+      await tester.tap(find.byIcon(Icons.close), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.byType(LineaCobroTile), findsOneWidget);
+      expect(_enBarra(find.text('\$ 50.000')), findsOneWidget);
+    });
+
+    testWidgets('CR-01: respuesta perdida; el reintento encuentra la CC y '
+        'avisa "Ya estaba emitida"', (tester) async {
+      final repo = FakeCobrosRepository(servicios: _servicios)
+        ..errorTrasCrear = const CobroFailure(
+          'Sin conexión',
+          tipo: ErrorCobro.sinConexion,
+        );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await emitirCc(tester);
+      expect(find.text('Sin conexión, el cobro no se creó.'), findsOneWidget);
+
+      await tester.tap(_enBarra(find.text('Reintentar')));
+      await tester.pumpAndSettle();
+      expect(crear(repo), hasLength(2));
+      expect(repo.guardados.where((c) => c.esCuentaCobro), hasLength(1));
+      expect(find.text('Detalle cobro-1'), findsOneWidget);
+      expect(find.text('Ya estaba emitida: CC-0001.'), findsOneWidget);
+    });
+
+    testWidgets('CR-01: cotización sin conexión también queda bloqueada', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCotizacion: const CobroFailure(
+          'Sin conexión',
+          tipo: ErrorCobro.sinConexion,
+        ),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1', tipo: TipoCobro.cotizacion),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await tester.tap(find.text('Guardar cotización'));
+      await tester.pumpAndSettle();
+      expect(_enBarra(find.text('Reintentar')), findsOneWidget);
+      await tester.tap(find.text('Cuenta de cobro'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('Nueva cotización'), findsOneWidget);
+    });
+
+    testWidgets('CR-01: Descartar pregunta, avisa que puede existir y sale', (
+      tester,
+    ) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure(
+          'Sin conexión',
+          tipo: ErrorCobro.sinConexion,
+        ),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await emitirCc(tester);
+      await tester.tap(find.widgetWithText(TextButton, 'Descartar'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Descartar este cobro?'), findsOneWidget);
+      expect(
+        find.textContaining('Si alcanzó a crearse, lo verás en Cobros.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.widgetWithText(AppButton, 'Descartar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Abrir'), findsOneWidget);
+      expect(crear(repo), hasLength(1));
+    });
+
+    testWidgets('CR-01: un rechazo del servidor en el reintento resuelve y '
+        'vuelve a dejar editar', (tester) async {
+      final repo = FakeCobrosRepository(
+        servicios: _servicios,
+        errorCrear: const CobroFailure(
+          'Sin conexión',
+          tipo: ErrorCobro.sinConexion,
+        ),
+      );
+      await _abrir(
+        tester,
+        _app(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+        ),
+      );
+      await _agregarConsulta(tester);
+      await emitirCc(tester);
+      repo.errorCrear = const CobroFailure('crudo');
+      await tester.tap(_enBarra(find.text('Reintentar')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No pudimos crear el cobro. Intenta de nuevo.'),
+        findsOneWidget,
+      );
+      expect(_enBarra(find.text('Emitir cuenta de cobro')), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Descartar'), findsNothing);
+      await tester.tap(find.text('Vacuna · \$ 40.000'));
+      await tester.pumpAndSettle();
       expect(find.byType(LineaCobroTile), findsNWidgets(2));
     });
 
@@ -944,8 +1142,9 @@ void main() {
       expect(find.text('Quedan 0 frascos'), findsOneWidget);
     });
 
-    testWidgets('CC: "+" se detiene en el stock; escribir más muestra el '
-        'error en línea', (tester) async {
+    testWidgets('CC: pasar el stock local es un aviso, no un tope (WR-03)', (
+      tester,
+    ) async {
       await _abrir(
         tester,
         _appInv(
@@ -960,24 +1159,85 @@ void main() {
       await tester.tap(mas);
       await tester.pumpAndSettle();
       expect(find.text('Subtotal \$ 255.000'), findsOneWidget);
+      expect(find.text('Solo quedan 3 frascos de Amoxicilina.'), findsNothing);
+      // "+" sigue: las existencias locales pueden estar viejas.
       await tester.tap(mas);
       await tester.pumpAndSettle();
-      expect(find.text('Subtotal \$ 255.000'), findsOneWidget);
-      expect(find.text('Solo quedan 3 frascos de Amoxicilina.'), findsNothing);
+      expect(find.text('Subtotal \$ 340.000'), findsOneWidget);
+      expect(
+        find.text('Solo quedan 3 frascos de Amoxicilina.'),
+        findsOneWidget,
+      );
+      // Aviso, no error: sin el ícono de error.
+      expect(
+        find.descendant(
+          of: find.byType(LineaCobroTile),
+          matching: find.byIcon(Icons.error_outline),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(LineaCobroTile),
+          matching: find.byIcon(Icons.info_outline),
+        ),
+        findsOneWidget,
+      );
+    });
 
+    testWidgets('CC: con el aviso de stock local se emite y el servidor '
+        'decide (WR-03)', (tester) async {
+      final repo = FakeCobrosRepository(servicios: _servicios);
+      await _abrir(
+        tester,
+        _appInv(
+          repo: repo,
+          prefill: _prefill(clienteId: 'cli1'),
+          productos: [_amox],
+        ),
+      );
+      await agregarProducto(tester, 'Amoxicilina');
       await tester.enterText(_campo('cantidad-l1'), '5');
       await tester.pumpAndSettle();
       expect(
         find.text('Solo quedan 3 frascos de Amoxicilina.'),
         findsOneWidget,
       );
-      expect(
-        find.descendant(
-          of: find.byType(LineaCobroTile),
-          matching: find.byIcon(Icons.error_outline),
+      await emitirCc(tester);
+      expect(crear(repo), hasLength(1));
+      final lineas =
+          crear(repo).single.args['lineas']! as List<LineaCobroNueva>;
+      expect(lineas.single.cantidad, 5);
+      expect(find.text('Detalle cobro-1'), findsOneWidget);
+    });
+
+    testWidgets('abrir el formulario refresca el inventario en caché '
+        '(WR-03)', (tester) async {
+      final inv = FakeInventarioRepository(productos: [_amox]);
+      await _abrir(
+        tester,
+        _appInv(
+          prefill: _prefill(clienteId: 'cli1'),
+          inv: inv,
+          vigilarInventario: true,
         ),
-        findsOneWidget,
       );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('inventario 1'), findsOneWidget);
+      // Un colega repone mientras Inventario sigue montado con la cifra vieja.
+      await inv.moverStock(
+        productoId: 'p1',
+        delta: 7,
+        motivo: MotivoMovimiento.compra,
+      );
+      await tester.tap(find.text('Abrir'));
+      await tester.pumpAndSettle();
+      await agregarProducto(tester, 'Amoxicilina');
+      expect(find.text('Quedan 10 frascos'), findsOneWidget);
+      await tester.enterText(_campo('cantidad-l1'), '5');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Solo quedan'), findsNothing);
     });
 
     testWidgets('CC con stock 0: "{Producto} está agotado."', (tester) async {
@@ -1018,9 +1278,12 @@ void main() {
       await tester.ensureVisible(find.text('Vacuna · \$ 40.000'));
       await tester.tap(find.text('Vacuna · \$ 40.000'));
       await tester.pumpAndSettle();
-      await agregarProducto(tester, 'Amoxicilina');
-      await tester.ensureVisible(_campo('cantidad-l3'));
-      await tester.enterText(_campo('cantidad-l3'), '5');
+      // Una línea "Otro" sin descripción ni precio es inválida (el stock
+      // local ya no bloquea, WR-03).
+      await tester.ensureVisible(find.text('Otro'));
+      await tester.tap(find.text('Otro'));
+      await tester.pumpAndSettle();
+      FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
 
       // Volver arriba para que la línea quede fuera de la vista.
@@ -1562,6 +1825,8 @@ Widget _appInv({
   PrefillCobro? prefill,
   FakeCobrosRepository? repo,
   List<Producto> productos = const [],
+  FakeInventarioRepository? inv,
+  bool vigilarInventario = false,
 }) {
   final p = prefill ?? _prefill();
   return routerHarness(
@@ -1571,9 +1836,15 @@ Widget _appInv({
         path: '/',
         builder: (context, _) => Scaffold(
           body: Center(
-            child: TextButton(
-              onPressed: () => context.push('/form'),
-              child: const Text('Abrir'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton(
+                  onPressed: () => context.push('/form'),
+                  child: const Text('Abrir'),
+                ),
+                if (vigilarInventario) const _VigilaInventario(),
+              ],
             ),
           ),
         ),
@@ -1591,8 +1862,19 @@ Widget _appInv({
     overrides: [
       ..._overrides(repo: repo),
       inventarioRepositoryProvider.overrideWithValue(
-        FakeInventarioRepository(productos: productos),
+        inv ?? FakeInventarioRepository(productos: productos),
       ),
     ],
   );
+}
+
+/// Inventario montado en otra rama: mantiene [productosProvider] en caché.
+class _VigilaInventario extends ConsumerWidget {
+  const _VigilaInventario();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final n = ref.watch(productosProvider).value?.length ?? 0;
+    return Text('inventario $n');
+  }
 }

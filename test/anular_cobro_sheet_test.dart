@@ -266,6 +266,34 @@ void main() {
     );
   });
 
+  testWidgets('BC002: la cotización ya se convirtió (IN-05)', (tester) async {
+    final c = _cot();
+    await _abrir(
+      tester,
+      c,
+      repo: FakeCobrosRepository(
+        cobros: [c],
+        errorAnular: const CobroFailure(
+          'x',
+          tipo: ErrorCobro.cotizacionNoDisponible,
+        ),
+      ),
+    );
+    await tester.enterText(find.byType(TextField), 'Cliente desistió');
+    await tester.pump();
+    await tester.tap(_anular);
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Esta cotización ya se convirtió. Actualiza para ver su estado.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('No pudimos anular. Intenta de nuevo.'), findsNothing);
+    expect(find.text('Anular COT-0004'), findsOneWidget);
+    _sinPalabrasProhibidas();
+  });
+
   testWidgets('otro error: mensaje genérico', (tester) async {
     await fallo(
       tester,

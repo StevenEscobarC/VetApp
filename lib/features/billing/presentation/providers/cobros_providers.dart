@@ -12,10 +12,16 @@ final cobrosRepositoryProvider = Provider<SupabaseCobrosRepository>((ref) {
   return SupabaseCobrosRepository(ref.watch(supabaseClientProvider));
 });
 
-/// Documentos de un tipo (cotizaciones o cuentas de cobro).
+/// Tipo de documento y, opcionalmente, estado ("Pendientes", "Pagadas").
+typedef FiltroCobros = ({TipoCobro tipo, EstadoCobro? estado});
+
+/// Documentos de un tipo (cotizaciones o cuentas de cobro); con estado, el
+/// filtro lo aplica el servidor (WR-02).
 final cobrosProvider = FutureProvider.autoDispose
-    .family<List<Cobro>, TipoCobro>((ref, tipo) {
-      return ref.watch(cobrosRepositoryProvider).cobros(tipo);
+    .family<List<Cobro>, FiltroCobros>((ref, f) {
+      return ref
+          .watch(cobrosRepositoryProvider)
+          .cobros(f.tipo, estado: f.estado);
     });
 
 /// Un documento por id; `null` si no existe o no es visible.

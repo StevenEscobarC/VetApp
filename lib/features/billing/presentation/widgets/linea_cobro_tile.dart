@@ -29,6 +29,7 @@ class LineaCobroTile extends StatefulWidget {
     this.errorPrecio,
     this.notaStock,
     this.errorStock,
+    this.avisoStock,
     this.limiteStock,
     this.pasosBloqueados = false,
     this.ayudaPrecio,
@@ -47,6 +48,10 @@ class LineaCobroTile extends StatefulWidget {
   final String? errorPrecio;
   final String? notaStock;
   final String? errorStock;
+
+  /// Aviso (no error) de existencias locales posiblemente viejas: no bloquea
+  /// nada, el servidor decide (WR-03). Se ignora si hay [errorStock].
+  final String? avisoStock;
 
   /// Existencias en una cuenta de cobro: "+" se detiene aquí. Escribir más
   /// sí se permite y el formulario muestra [errorStock] (D-12).
@@ -308,6 +313,27 @@ class _LineaCobroTileState extends State<LineaCobroTile> {
                 ),
               ],
             ),
+            if (widget.errorStock == null && widget.avisoStock != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: AppColors.primaryText,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      widget.avisoStock!,
+                      style: t.labelLarge?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (widget.errorStock != null) ...[
               const SizedBox(height: AppSpacing.xs),
               Row(

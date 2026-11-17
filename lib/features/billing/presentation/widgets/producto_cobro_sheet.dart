@@ -54,6 +54,16 @@ class _ProductoCobroSheetState extends ConsumerState<ProductoCobroSheet> {
   final _busquedaCtrl = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    // Existencias frescas al abrir: el "agotado" no se decide con una cifra
+    // vieja en caché (WR-03).
+    Future.microtask(() {
+      if (mounted) ref.invalidate(productosProvider);
+    });
+  }
+
+  @override
   void dispose() {
     _busquedaCtrl.dispose();
     super.dispose();
