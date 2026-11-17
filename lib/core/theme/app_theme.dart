@@ -25,9 +25,10 @@ class AppTheme {
       outline: AppColors.border,
     );
 
-    return _base(colorScheme, AppTypography.light).copyWith(
-      scaffoldBackgroundColor: AppColors.background,
-    );
+    return _base(
+      colorScheme,
+      AppTypography.light,
+    ).copyWith(scaffoldBackgroundColor: AppColors.background);
   }
 
   static ThemeData get dark {
@@ -45,12 +46,17 @@ class AppTheme {
       outline: AppColors.borderDark,
     );
 
-    return _base(colorScheme, AppTypography.dark).copyWith(
-      scaffoldBackgroundColor: AppColors.backgroundDark,
-    );
+    return _base(
+      colorScheme,
+      AppTypography.dark,
+    ).copyWith(scaffoldBackgroundColor: AppColors.backgroundDark);
   }
 
   static ThemeData _base(ColorScheme colorScheme, TextTheme textTheme) {
+    final isLight = colorScheme.brightness == Brightness.light;
+    final cornerLg = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    );
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
@@ -82,12 +88,16 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
           ),
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          textStyle: textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: colorScheme.primary,
+          disabledBackgroundColor: colorScheme.surfaceContainerHighest,
+          disabledForegroundColor: colorScheme.onSurfaceVariant,
           minimumSize: const Size.fromHeight(AppSpacing.touchTarget),
           side: BorderSide(color: colorScheme.outline),
           shape: RoundedRectangleBorder(
@@ -97,8 +107,14 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: colorScheme.primary,
-          minimumSize: const Size(AppSpacing.touchTarget, AppSpacing.touchTarget),
+          // AA: primary sobre crema es 3:1; primaryText en claro, primaryHover en oscuro (08-UI-SPEC)
+          foregroundColor: isLight
+              ? AppColors.primaryText
+              : AppColors.primaryHover,
+          minimumSize: const Size(
+            AppSpacing.touchTarget,
+            AppSpacing.touchTarget,
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -141,16 +157,94 @@ class AppTheme {
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            color: selected
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
           );
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w600,
-            color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            color: selected
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
           );
         }),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return selected
+              ? colorScheme.onPrimary
+              : colorScheme.onSurfaceVariant;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return selected
+              ? colorScheme.primary
+              : colorScheme.surfaceContainerHighest;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return selected ? colorScheme.primary : colorScheme.outline;
+        }),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return selected ? colorScheme.primary : colorScheme.surface;
+        }),
+        checkColor: WidgetStatePropertyAll(colorScheme.onPrimary),
+        side: BorderSide(color: colorScheme.outline),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
+        shape: cornerLg,
+        extendedTextStyle: textTheme.labelLarge,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: colorScheme.surface,
+        shape: cornerLg,
+        titleTextStyle: textTheme.titleLarge,
+        contentTextStyle: textTheme.bodyLarge,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: colorScheme.onSurface,
+        contentTextStyle: textTheme.bodyLarge?.copyWith(
+          color: colorScheme.surface,
+        ),
+        actionTextColor: isLight
+            ? AppColors.primaryHover
+            : AppColors.primaryText,
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: colorScheme.surface,
+        headerBackgroundColor: colorScheme.primary,
+        headerForegroundColor: colorScheme.onPrimary,
+        shape: cornerLg,
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return selected ? colorScheme.primary : null;
+        }),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return selected ? colorScheme.onPrimary : colorScheme.onSurface;
+        }),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: colorScheme.surface,
+        modalBackgroundColor: colorScheme.surface,
+        dragHandleColor: colorScheme.outline,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppSpacing.radiusLg),
+          ),
+        ),
       ),
       visualDensity: VisualDensity.standard,
     );
