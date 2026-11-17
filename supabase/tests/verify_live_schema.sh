@@ -107,7 +107,7 @@ else
   any_fail=1
 fi
 
-for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario generar_invitacion_clinica revocar_invitacion retirar_miembro cambiar_rol_miembro crear_mi_clinica unirse_a_clinica es_admin_clinica es_miembro_activo es_autor_en_mi_clinica consumir_invitacion protocolos_efectivos guardar_protocolo restablecer_protocolo desactivar_protocolo registrar_dosis anular_dosis previsualizar_dosis carne_de_mascota vacunas_pendientes vacunas_resumen vacunas_resumen_mascotas gestionar_alerta_vacuna obtener_o_crear_enlace_carne regenerar_enlace_carne carne_publico actualizar_clinica mi_plan puede_escribir plan_permite_logo asignar_plan _plan_efectivo mover_stock crear_producto actualizar_producto archivar_producto inventario_resumen crear_cuenta_cobro crear_cotizacion editar_cotizacion marcar_cobro_pagado anular_cobro cobros_resumen cobro_para_pdf guardar_servicio archivar_servicio _aplicar_movimiento_stock _total_items_cobro _insertar_items_cobro _numero_cobro; do
+for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vinculacion registrar_consulta crear_cita actualizar_cita mi_perfil es_veterinario mi_clinica_id crear_perfil_nuevo_usuario generar_invitacion_clinica revocar_invitacion retirar_miembro cambiar_rol_miembro crear_mi_clinica unirse_a_clinica es_admin_clinica es_miembro_activo es_autor_en_mi_clinica consumir_invitacion protocolos_efectivos guardar_protocolo restablecer_protocolo desactivar_protocolo registrar_dosis anular_dosis previsualizar_dosis carne_de_mascota vacunas_pendientes vacunas_resumen vacunas_resumen_mascotas gestionar_alerta_vacuna obtener_o_crear_enlace_carne regenerar_enlace_carne carne_publico actualizar_clinica mi_plan puede_escribir plan_permite_logo asignar_plan _plan_efectivo mover_stock crear_producto actualizar_producto archivar_producto inventario_resumen crear_cuenta_cobro crear_cotizacion editar_cotizacion marcar_cobro_pagado anular_cobro cobros_resumen inicio_resumen cobro_para_pdf guardar_servicio archivar_servicio _aplicar_movimiento_stock _total_items_cobro _insertar_items_cobro _numero_cobro; do
   payload="{}"
   case "$rpc" in
     mover_stock)
@@ -206,7 +206,7 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
     anular_cobro)
       payload='{"p_id":"00000000-0000-0000-0000-000000000000","p_motivo":"Sonda"}'
       ;;
-    cobros_resumen)
+    cobros_resumen|inicio_resumen)
       payload='{}'
       ;;
     cobro_para_pdf|archivar_servicio)
@@ -235,8 +235,8 @@ for rpc in registrar_cliente_con_mascota registrar_mascota generar_codigo_vincul
     echo "OK rpc $rpc no expuesta a anon 404 (solo service_role / interna)"
   elif [ "$rpc_code" = "404" ] && { [ "$rpc" = "_aplicar_movimiento_stock" ] || [ "$rpc" = "_total_items_cobro" ] || [ "$rpc" = "_insertar_items_cobro" ] || [ "$rpc" = "_numero_cobro" ]; }; then
     echo "OK rpc $rpc no expuesta a anon 404 (helper privado de facturación)"
-  elif [ "$rpc_code" = "404" ] && case "$rpc" in crear_cuenta_cobro|crear_cotizacion|editar_cotizacion|marcar_cobro_pagado|anular_cobro|cobros_resumen|cobro_para_pdf|guardar_servicio|archivar_servicio) true ;; *) false ;; esac; then
-    # Fase 7: anon sin execute; 401/403/404 es protegido, 200 es FAIL. La existencia la prueba el smoke (T2/T30).
+  elif [ "$rpc_code" = "404" ] && case "$rpc" in crear_cuenta_cobro|crear_cotizacion|editar_cotizacion|marcar_cobro_pagado|anular_cobro|cobros_resumen|inicio_resumen|cobro_para_pdf|guardar_servicio|archivar_servicio) true ;; *) false ;; esac; then
+    # Fase 7 e inicio_resumen (Fase 8): anon sin execute; 401/403/404 es protegido, 200 es FAIL. La existencia la prueba el smoke (T2/T30/T33).
     echo "OK rpc $rpc protegida 404 (facturación, anon sin execute)"
   elif [ "$rpc_code" = "404" ]; then
     echo "FAIL rpc $rpc 404 (no aplicada)"
