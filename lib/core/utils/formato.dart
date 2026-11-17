@@ -138,6 +138,22 @@ String formatearMiles(int n) {
 /// `85000` -> `'\$ 85.000'`.
 String formatearCop(int pesos) => '\$ ${formatearMiles(pesos)}';
 
+/// COP corto para las tarjetas de Inicio (UI-SPEC §3.2): bajo un millón es
+/// [formatearCop] (`850000` -> `'\$ 850.000'`); desde un millón, millones
+/// con un decimal truncado y sin `,0` (`3849999` -> `'\$ 3,8 M'`,
+/// `1000000` -> `'\$ 1 M'`); desde mil millones, millones enteros agrupados
+/// (`1250000000` -> `'\$ 1.250 M'`). Truncado: nunca muestra más ingreso
+/// del real. Sin formateador con locale (mismo motivo que [formatearMiles]).
+String formatearCopCorto(int pesos) {
+  assert(pesos >= 0, 'formatearCopCorto recibe pesos no negativos');
+  if (pesos < 1000000) return formatearCop(pesos);
+  if (pesos >= 1000000000) return '\$ ${formatearMiles(pesos ~/ 1000000)} M';
+  final decimas = pesos ~/ 100000;
+  final entero = decimas ~/ 10;
+  final dec = decimas % 10;
+  return dec == 0 ? '\$ $entero M' : '\$ $entero,$dec M';
+}
+
 const String _errorCopEntero = 'Usa pesos enteros, sin coma.';
 
 /// Interpreta [texto] como pesos enteros (D-16). Acepta `85000`, `85.000`,
