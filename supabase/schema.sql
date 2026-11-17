@@ -5646,4 +5646,46 @@ grant execute on function public.archivar_servicio(uuid) to authenticated;
 revoke all on function public.actualizar_clinica(text, text, text, text, text, text) from public, anon;
 grant execute on function public.actualizar_clinica(text, text, text, text, text, text) to authenticated;
 
+-- ===== Fase 8: Inicio (delta idempotente) =====
+-- Los 3 números de Inicio salen de una sola RPC, así hay una sola regla de mes (D-03): el mes calendario de
+-- Bogotá, con límites timestamptz sargables (las columnas nunca se castean). consultas no tiene clinica_id y
+-- security definer salta RLS, así que se acota por mascotas.clinica_id. Los ingresos copian a propósito el
+-- predicado de cobros_resumen (paridad verificada por el smoke T37); cobros_resumen no se toca. Leer nunca se
+-- bloquea (D-06): no hay chequeo de puede_escribir().
+drop function if exists public.inicio_resumen();
+create or replace function public.inicio_resumen()
+returns table (consultas_mes int, ingresos_mes bigint, pacientes_nuevos_mes int)
+language plpgsql
+stable
+security definer set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_clinica uuid := public.mi_clinica_id();
+  v_hoy date := public._hoy_bogota();
+  v_ini date := date_trunc('month', v_hoy)::date;
+  v_ini_ts timestamptz := (v_ini::timestamp) at time zone 'America/Bogota';
+  v_fin_ts timestamptz := ((v_ini + interval '1 month')::timestamp) at time zone 'America/Bogota';
+begin
+  if not public.es_veterinario() or v_clinica is null then
+    raise exception 'Solo un veterinario de una clínica puede ver el resumen de Inicio.' using errcode = 'insufficient_privilege';
+  end if;
+
+  return query
+    select
+      (select count(*)::int
+         from public.consultas c
+         join public.mascotas m on m.id = c.mascota_id
+        where m.clinica_id = v_clinica and c.fecha >= v_ini_ts and c.fecha < v_fin_ts),
+      (select coalesce(sum(total_cop), 0)::bigint
+         from public.cobros
+        where clinica_id = v_clinica and tipo = 'cuenta_cobro' and estado = 'pagada' and pagada_el >= date_trunc('month', v_hoy)::date and pagada_el <= v_hoy),
+      (select count(*)::int
+         from public.mascotas
+        where clinica_id = v_clinica and created_at >= v_ini_ts and created_at < v_fin_ts);
+end;
+$$;
+revoke all on function public.inicio_resumen() from public, anon;
+grant execute on function public.inicio_resumen() to authenticated;
+
 notify pgrst, 'reload schema';

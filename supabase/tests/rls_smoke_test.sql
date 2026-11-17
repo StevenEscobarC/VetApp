@@ -35,7 +35,8 @@
 -- Fase 5 (bloque Q, 48 checks): vacunación — aislamiento, solo-append, cálculo derivado, alertas, enlace público, logo de la clínica.
 -- Fase 5.1 (bloque R, 45 checks): planes y límites — plan efectivo, asignar_plan solo service_role, límite de 50, prueba Clínica y cupos, solo lectura, logo/protocolos.
 -- Fase 6 (bloque S, 23 checks): inventario — aislamiento, solo-append, mover_stock atómico sin negativos, deshacer (solo de ajustes), conteo con cantidad esperada (IN004), solo admin, resumen de stock bajo, solo lectura, autoría.
--- Fase 7 (bloque T, 32 checks): facturación — numeración por clínica sin huecos, idempotencia, descuento y devolución de stock, anular solo admin/autor, pagos, cotizaciones y conversión, visita ya cobrada, solo lectura, autoría; parte B: editar cotización, resumen de Cobros, datos del PDF, servicios guardados, NIT de la clínica, cédula; 07-17: reintento con la misma clave antes de BC002/BC003 y NIT conservado con la firma de 5 argumentos. Total esperado: 293.
+-- Fase 7 (bloque T, 32 checks): facturación — numeración por clínica sin huecos, idempotencia, descuento y devolución de stock, anular solo admin/autor, pagos, cotizaciones y conversión, visita ya cobrada, solo lectura, autoría; parte B: editar cotización, resumen de Cobros, datos del PDF, servicios guardados, NIT de la clínica, cédula; 07-17: reintento con la misma clave antes de BC002/BC003 y NIT conservado con la firma de 5 argumentos.
+-- Fase 8 (bloque T33..T40, 8 checks): Inicio — inicio_resumen con mes de Bogotá (borde 00:00), consultas por mascotas.clinica_id, ingresos con la regla de cobros_resumen (paridad), pacientes nuevos, clínica vacía en ceros, aislamiento, privilegios y colega en solo lectura. Total esperado: 301.
 
 do $$
 declare
@@ -225,6 +226,21 @@ declare
   t_srv uuid;
   t_logo text;
   t_row2 record;
+  -- Fase 8 (bloque T33..T40)
+  i_vet uuid := gen_random_uuid();
+  i_vet_vacio uuid := gen_random_uuid();
+  i_c uuid;
+  i_c_vacio uuid;
+  i_cli uuid;
+  i_m uuid;
+  i_m_borde uuid;
+  i_m_viejo uuid;
+  i_ini_ts timestamptz;
+  i_fin_ts timestamptz;
+  i_row record;
+  i_cc uuid;
+  i_n int;
+  i_n2 int;
 begin
   -------------------------------------------------------------------------
   -- Setup (como postgres, sin RLS): 3 cuentas via insert directo en
@@ -6617,6 +6633,301 @@ begin
     end if;
   exception when others then
     failures := failures || ('T32 error inesperado: ' || sqlerrm);
+  end;
+
+  -------------------------------------------------------------------------
+  -- ===== Fase 8: Inicio (T33..T40) =====
+  -- Fixtures propios (i_*); cada regreso a postgres también limpia request.jwt.claims.
+  -- Todo se revierte con el raise final.
+  -------------------------------------------------------------------------
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', '', true);
+
+  -- Setup I (no cuenta en checks): dos clínicas nuevas (una vacía), mascotas y consultas en el borde del mes
+  -- de Bogotá, y cobros de todos los estados (solo la CC pagada del mes cuenta como ingreso).
+  begin
+    insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
+    values
+      (i_vet, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-i-vet@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke I Vet', 'clinica_nombre', 'Smoke Clinica I'),
+       now(), now()),
+      (i_vet_vacio, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+       'smoke-i-vacio@vetapp.invalid',
+       jsonb_build_object('rol', 'VETERINARIO', 'nombre', 'Smoke I Vacio', 'clinica_nombre', 'Smoke Clinica I Vacia'),
+       now(), now());
+    select clinica_id into i_c from public.perfiles where id = i_vet;
+    select clinica_id into i_c_vacio from public.perfiles where id = i_vet_vacio;
+    perform public.asignar_plan(i_c, 'beta');
+
+    i_ini_ts := (date_trunc('month', public._hoy_bogota())::timestamp) at time zone 'America/Bogota';
+    i_fin_ts := ((date_trunc('month', public._hoy_bogota()) + interval '1 month')::timestamp) at time zone 'America/Bogota';
+
+    insert into public.clientes (clinica_id, nombre)
+      values (i_c, 'Smoke I Cliente') returning id into i_cli;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie)
+      values (i_cli, i_c, 'Smoke I Nueva', 'perro') returning id into i_m;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie, created_at)
+      values (i_cli, i_c, 'Smoke I Borde', 'gato', i_ini_ts) returning id into i_m_borde;
+    insert into public.mascotas (dueno_id, clinica_id, nombre, especie, created_at)
+      values (i_cli, i_c, 'Smoke I Vieja', 'perro', i_ini_ts - interval '1 second') returning id into i_m_viejo;
+    -- Por si un trigger reescribe created_at al insertar.
+    update public.mascotas set created_at = i_ini_ts where id = i_m_borde;
+    update public.mascotas set created_at = i_ini_ts - interval '1 second' where id = i_m_viejo;
+
+    insert into public.consultas (mascota_id, veterinario_id, fecha, diagnostico, tratamiento)
+      values (i_m_viejo, i_vet, i_ini_ts, 'I', 'I');
+    insert into public.consultas (mascota_id, veterinario_id, fecha, diagnostico, tratamiento)
+      values (i_m_viejo, i_vet, i_ini_ts - interval '1 second', 'I', 'I');
+    insert into public.consultas (mascota_id, veterinario_id, fecha, diagnostico, tratamiento)
+      values (i_m_viejo, i_vet, now(), 'I', 'I');
+
+    perform set_config('request.jwt.claims', json_build_object('sub', i_vet, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into i_row from public.crear_cuenta_cobro(gen_random_uuid(), i_cli,
+      jsonb_build_array(jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke I A', 'cantidad', 1, 'precio_unitario_cop', 100000)));
+    perform public.marcar_cobro_pagado(i_row.id, 'efectivo');
+    perform * from public.crear_cuenta_cobro(gen_random_uuid(), i_cli,
+      jsonb_build_array(jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke I B', 'cantidad', 1, 'precio_unitario_cop', 50000)));
+    select * into i_row from public.crear_cuenta_cobro(gen_random_uuid(), i_cli,
+      jsonb_build_array(jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke I C', 'cantidad', 1, 'precio_unitario_cop', 70000)));
+    i_cc := i_row.id;
+    perform public.marcar_cobro_pagado(i_cc, 'nequi');
+    perform public.anular_cobro(i_cc, 'Smoke I anulada');
+    perform * from public.crear_cotizacion(gen_random_uuid(), i_cli,
+      jsonb_build_array(jsonb_build_object('tipo', 'otro', 'descripcion', 'Smoke I Q', 'cantidad', 1, 'precio_unitario_cop', 999)));
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    insert into public.cobros
+      (clinica_id, tipo, numero, estado, clave_idempotencia, fecha, cliente_id, cliente_nombre, total_cop, metodo_pago, pagada_el, creado_por)
+    values
+      (i_c, 'cuenta_cobro', 999, 'pagada', gen_random_uuid(), date_trunc('month', public._hoy_bogota())::date - 1, i_cli,
+       'Smoke I Cliente', 30000, 'efectivo', date_trunc('month', public._hoy_bogota())::date - 1, i_vet);
+  exception when others then
+    failures := failures || ('SETUPI error inesperado: ' || sqlerrm);
+  end;
+
+  -- T33: estructura y privilegios de inicio_resumen (anon no, authenticated sí; definer, stable, search_path, forma).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    if to_regprocedure('public.inicio_resumen()') is null then
+      failures := failures || 'T33 falta la RPC public.inicio_resumen()'::text;
+    else
+      if has_function_privilege('anon', 'public.inicio_resumen()', 'execute') then
+        failures := failures || 'T33 anon puede ejecutar inicio_resumen()'::text;
+      end if;
+      if not has_function_privilege('authenticated', 'public.inicio_resumen()', 'execute') then
+        failures := failures || 'T33 authenticated no puede ejecutar inicio_resumen()'::text;
+      end if;
+      if not exists (
+        select 1 from pg_proc p
+         where p.oid = to_regprocedure('public.inicio_resumen()') and p.prosecdef and p.provolatile = 's'
+           and p.proconfig is not null and 'search_path=public' = any (p.proconfig)
+      ) then
+        failures := failures || 'T33 inicio_resumen() no es security definer stable con search_path=public'::text;
+      end if;
+      if pg_get_function_result(to_regprocedure('public.inicio_resumen()'))
+         is distinct from 'TABLE(consultas_mes integer, ingresos_mes bigint, pacientes_nuevos_mes integer)' then
+        failures := failures || ('T33 forma inesperada: ' || coalesce(pg_get_function_result(to_regprocedure('public.inicio_resumen()')), 'null'));
+      end if;
+    end if;
+  exception when others then
+    failures := failures || ('T33 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T34: una clínica vacía devuelve una sola fila en ceros.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', i_vet_vacio, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select count(*) into i_n from public.inicio_resumen();
+    select * into i_row from public.inicio_resumen();
+    if i_n <> 1 or i_row.consultas_mes is distinct from 0 or i_row.ingresos_mes is distinct from 0::bigint
+       or i_row.pacientes_nuevos_mes is distinct from 0 then
+      failures := failures || format('T34 clínica vacía esperaba 1 fila 0/0/0, llegó %s filas %s/%s/%s',
+        i_n, i_row.consultas_mes, i_row.ingresos_mes, i_row.pacientes_nuevos_mes);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T34 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T35: consultas del mes con el borde de Bogotá (00:00 del día 1 cuenta; un segundo antes no).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', i_vet, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into i_row from public.inicio_resumen();
+    if i_row.consultas_mes is distinct from 2 then
+      failures := failures || format('T35 consultas_mes esperaba 2 (borde 00:00 incluido), llegó %s', i_row.consultas_mes);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T35 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T36: pacientes nuevos del mes (la mascota del borde cuenta; la del mes anterior no).
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', i_vet, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into i_row from public.inicio_resumen();
+    if i_row.pacientes_nuevos_mes is distinct from 2 then
+      failures := failures || format('T36 pacientes_nuevos_mes esperaba 2, llegó %s', i_row.pacientes_nuevos_mes);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T36 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T37: ingresos = solo la CC pagada del mes (pendiente, anulada, cotización y mes anterior no cuentan) y
+  -- paridad con cobros_resumen().cobrado_mes en dos clínicas.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', i_vet, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into i_row from public.inicio_resumen();
+    if i_row.ingresos_mes is distinct from 100000::bigint then
+      failures := failures || format('T37 ingresos_mes esperaba 100000, llegó %s', i_row.ingresos_mes);
+    end if;
+    if i_row.ingresos_mes is distinct from (select cobrado_mes from public.cobros_resumen()) then
+      failures := failures || 'T37 ingresos_mes difiere de cobros_resumen().cobrado_mes en la clínica I'::text;
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_otro, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into i_row from public.inicio_resumen();
+    if i_row.ingresos_mes is distinct from (select cobrado_mes from public.cobros_resumen())
+       or i_row.ingresos_mes is distinct from 100000::bigint then
+      failures := failures || format('T37 ingresos_mes de la otra clínica esperaba 100000 = cobros_resumen, llegó %s', i_row.ingresos_mes);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T37 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T38: aislamiento: cada clínica ve solo sus consultas (vía mascotas.clinica_id) y sus pacientes nuevos.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into i_n from public.consultas c join public.mascotas m on m.id = c.mascota_id
+     where m.clinica_id = t_c and c.fecha >= i_ini_ts and c.fecha < i_fin_ts;
+    select count(*) into i_n2 from public.mascotas
+     where clinica_id = t_c and created_at >= i_ini_ts and created_at < i_fin_ts;
+    if i_n < 1 then
+      failures := failures || 'T38 control positivo: la clínica T debía tener al menos una consulta este mes'::text;
+    end if;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into i_row from public.inicio_resumen();
+    if i_row.consultas_mes is distinct from i_n or i_row.pacientes_nuevos_mes is distinct from i_n2 then
+      failures := failures || format('T38 clínica T esperaba %s/%s, llegó %s/%s',
+        i_n, i_n2, i_row.consultas_mes, i_row.pacientes_nuevos_mes);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    select count(*) into i_n from public.consultas c join public.mascotas m on m.id = c.mascota_id
+     where m.clinica_id = t_c_otro and c.fecha >= i_ini_ts and c.fecha < i_fin_ts;
+    select count(*) into i_n2 from public.mascotas
+     where clinica_id = t_c_otro and created_at >= i_ini_ts and created_at < i_fin_ts;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_otro, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    select * into i_row from public.inicio_resumen();
+    if i_row.consultas_mes is distinct from i_n or i_row.pacientes_nuevos_mes is distinct from i_n2 then
+      failures := failures || format('T38 clínica T otro esperaba %s/%s, llegó %s/%s',
+        i_n, i_n2, i_row.consultas_mes, i_row.pacientes_nuevos_mes);
+    end if;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T38 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T39: guard de privilegios: un CLIENTE, un veterinario retirado (T23) y un JWT sin perfil -> 42501.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', cliente_c_id, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform * from public.inicio_resumen();
+      failures := failures || 'T39 un CLIENTE pudo leer el resumen de Inicio'::text;
+    exception
+      when sqlstate '42501' then null;
+      when others then failures := failures || ('T39 CLIENTE esperaba 42501 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_q, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform * from public.inicio_resumen();
+      failures := failures || 'T39 un veterinario retirado pudo leer el resumen de Inicio'::text;
+    exception
+      when sqlstate '42501' then null;
+      when others then failures := failures || ('T39 retirado esperaba 42501 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid(), 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    begin
+      perform * from public.inicio_resumen();
+      failures := failures || 'T39 un JWT sin perfil pudo leer el resumen de Inicio'::text;
+    exception
+      when sqlstate '42501' then null;
+      when others then failures := failures || ('T39 sin perfil esperaba 42501 y llegó ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+  exception when others then
+    failures := failures || ('T39 error inesperado: ' || sqlerrm);
+  end;
+
+  -- T40 (D-06): el colega en solo lectura (estado R30) sigue leyendo Inicio, con la misma regla de ingresos.
+  checks := checks + 1;
+  begin
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    update public.clinica_planes
+       set plan = 'gratis', miembros_max = 1, fundador = false, pagado_hasta = null,
+           prueba_pro_hasta = t_hoy - 17, prueba_clinica_hasta = t_hoy - 16, prueba_clinica_usada = true, beta_hasta = null
+     where clinica_id = t_c;
+    perform set_config('request.jwt.claims', json_build_object('sub', t_vet_col, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    if public.puede_escribir() then
+      failures := failures || 'T40 el colega debía estar en solo lectura (puede_escribir() true)'::text;
+    end if;
+    begin
+      select * into i_row from public.inicio_resumen();
+      if i_row.ingresos_mes is distinct from (select cobrado_mes from public.cobros_resumen()) then
+        failures := failures || 'T40 ingresos_mes del colega en solo lectura difiere de cobros_resumen().cobrado_mes'::text;
+      end if;
+    exception when others then
+      failures := failures || ('T40 el colega en solo lectura no pudo leer el resumen: ' || sqlstate || ': ' || sqlerrm);
+    end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    perform public.asignar_plan(t_c, 'beta');
+  exception when others then
+    failures := failures || ('T40 error inesperado: ' || sqlerrm);
   end;
 
   -------------------------------------------------------------------------
