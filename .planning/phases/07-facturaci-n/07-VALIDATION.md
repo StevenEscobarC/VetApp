@@ -1,9 +1,9 @@
 ---
 phase: 7
 slug: facturaci-n
-status: planned
+status: approved
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-11-13
 ---
 
@@ -174,9 +174,9 @@ created: 2026-11-13
 
 - [x] All tasks have `<automated>` verify or Wave 0 dependencies
 - [x] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (se marca al ejecutar)
+- [x] Wave 0 covers all MISSING references
 - [x] No watch-mode flags
 - [x] Feedback latency < 60s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending (07-16)
+**Approval:** aprobado por el usuario el 2026-11-16 (respuesta literal: "Aprobado"). F11 en vivo (sesión del colega) se acepta cubierto por el smoke (293) y los tests de widget. Pendiente abierto del usuario: validar con un contador el texto de la cuenta de cobro antes de cobrar a clínicas por esta función. Deuda: los INFO de `07-REVIEW.md` (IN-01..IN-08) y los INFO de `07-BRAND-AUDIT.md`.
