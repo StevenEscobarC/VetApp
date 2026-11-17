@@ -280,4 +280,33 @@ void main() {
       expect(formatearNit('1020304050'), '1.020.304.050');
     });
   });
+
+  group('formatearCopCorto', () {
+    test('bajo un millón usa el COP completo', () {
+      expect(formatearCopCorto(0), '\$ 0');
+      expect(formatearCopCorto(85000), '\$ 85.000');
+      expect(formatearCopCorto(950000), '\$ 950.000');
+      expect(formatearCopCorto(999999), '\$ 999.999');
+    });
+
+    test('millones truncados a un decimal, sin ",0"', () {
+      expect(formatearCopCorto(1000000), '\$ 1 M');
+      expect(formatearCopCorto(3000000), '\$ 3 M');
+      expect(formatearCopCorto(3800000), '\$ 3,8 M');
+      expect(formatearCopCorto(3849999), '\$ 3,8 M');
+      expect(formatearCopCorto(3960000), '\$ 3,9 M');
+      expect(formatearCopCorto(12340000), '\$ 12,3 M');
+      expect(formatearCopCorto(12500000), '\$ 12,5 M');
+      expect(formatearCopCorto(999950000), '\$ 999,9 M');
+    });
+
+    test('desde mil millones, millones enteros agrupados', () {
+      expect(formatearCopCorto(1000000000), '\$ 1.000 M');
+      expect(formatearCopCorto(1250000000), '\$ 1.250 M');
+    });
+
+    test('un valor negativo falla el assert', () {
+      expect(() => formatearCopCorto(-1), throwsA(isA<AssertionError>()));
+    });
+  });
 }
