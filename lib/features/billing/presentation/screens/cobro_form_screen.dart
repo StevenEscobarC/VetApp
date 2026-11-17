@@ -325,19 +325,16 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
           'hay un error, la anulas y emites otra.',
         ),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Revisar',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Revisar'),
           ),
-          ElevatedButton(
+          AppButton(
+            label: 'Emitir',
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(
-                AppSpacing.touchTarget,
-                AppSpacing.touchTarget,
-              ),
-            ),
-            child: const Text('Emitir'),
           ),
         ],
       ),
