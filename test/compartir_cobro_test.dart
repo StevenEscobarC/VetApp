@@ -194,6 +194,22 @@ void main() {
     );
   });
 
+  testWidgets('WhatsApp no abre -> el aviso se ve dentro de la hoja abierta '
+      '(no detrás de ella, QA F6)', (tester) async {
+    final l = FakeLanzadorExterno()..resultadoApp = false;
+    await _abrir(tester, lanzador: l);
+    await tester.tap(find.text('Abrir chat de WhatsApp'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('No pudimos abrir WhatsApp. Usa «Compartir PDF».'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
   testWidgets('teléfono fijo: fila deshabilitada con el motivo', (
     tester,
   ) async {
