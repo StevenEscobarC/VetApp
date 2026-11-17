@@ -198,6 +198,30 @@ class FakeCitaRepository implements SupabaseCitaRepository {
         .toList();
   }
 
+  final List<({DateTime desde, int limite})> consultasProximas = [];
+
+  /// Misma semántica que la consulta real: solo pendiente/confirmada, no
+  /// antes de [desdeUtc], por hora ascendente y como mucho [limite].
+  @override
+  Future<List<Cita>> proximas({
+    required DateTime desdeUtc,
+    int limite = 5,
+  }) async {
+    consultasProximas.add((desde: desdeUtc, limite: limite));
+    if (error != null) throw error!;
+    final vivas =
+        citas
+            .where(
+              (c) =>
+                  (c.estado == EstadoCita.pendiente ||
+                      c.estado == EstadoCita.confirmada) &&
+                  !c.fechaHora.isBefore(desdeUtc),
+            )
+            .toList()
+          ..sort((a, b) => a.fechaHora.compareTo(b.fechaHora));
+    return vivas.take(limite).toList();
+  }
+
   @override
   Future<Cita> obtener(String id) async {
     if (error != null) throw error!;

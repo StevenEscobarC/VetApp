@@ -1,7 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/misc.dart';
+import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/home/data/supabase_inicio_repository.dart';
 import 'package:vetapp/features/home/domain/resumen_inicio.dart';
+import 'package:vetapp/features/home/presentation/providers/inicio_providers.dart';
+
+import 'fake_citas.dart';
 
 /// Reemplazo en memoria de [SupabaseInicioRepository]: devuelve
 /// [resumenData], lanza [error] si está asignado y registra cada lectura en
@@ -29,3 +34,13 @@ class FakeInicioRepository implements SupabaseInicioRepository {
     return resumenData;
   }
 }
+
+/// Overrides listos para cualquier test que lea los providers de Inicio:
+/// ambos repositorios quedan en memoria (sin red real).
+List<Override> inicioOverrides({
+  FakeInicioRepository? inicio,
+  FakeCitaRepository? citas,
+}) => [
+  inicioRepositoryProvider.overrideWithValue(inicio ?? FakeInicioRepository()),
+  citaRepositoryProvider.overrideWithValue(citas ?? FakeCitaRepository()),
+];

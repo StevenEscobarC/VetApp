@@ -63,8 +63,11 @@ ProviderContainer _contenedor({
   List<Override>? reemplazo,
 }) {
   final c = ProviderContainer(
+    // Sin el reintento exponencial de Riverpod 3: un error lanzado a
+    // propósito debe quedar como AsyncError.
+    retry: (retryCount, error) => null,
     overrides: [
-      ...?reemplazo ?? inicioOverrides(inicio: inicio, citas: citas),
+      ...(reemplazo ?? inicioOverrides(inicio: inicio, citas: citas)),
       clockProvider.overrideWithValue(() => _ahora),
     ],
   );

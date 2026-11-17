@@ -52,7 +52,11 @@ void main() {
       expect(req.method, 'GET');
       expect(req.url.path, endsWith('/rest/v1/citas'));
       final q = req.url.queryParameters;
-      expect(q['estado'], 'in.(pendiente,confirmada)');
+      // postgrest-dart cita cada valor; PostgREST lo lee igual que sin comillas.
+      expect(
+        q['estado'],
+        anyOf('in.(pendiente,confirmada)', 'in.("pendiente","confirmada")'),
+      );
       expect(q['fecha_hora'], 'gte.2026-11-16T14:00:00.000Z');
       expect(q['order'], anyOf('fecha_hora.asc', 'fecha_hora.asc.nullslast'));
       expect(q['limit'], '5');
