@@ -212,10 +212,14 @@ void main() {
     });
 
     test('errores de formato iguales en ambos modos', () {
-      expect(parsearFecha('2021-03-05', permitirFuturo: true).error,
-          'Usa el formato dd/mm/aaaa');
-      expect(parsearFecha('31/02/2099', permitirFuturo: true).error,
-          'Usa el formato dd/mm/aaaa');
+      expect(
+        parsearFecha('2021-03-05', permitirFuturo: true).error,
+        'Usa el formato dd/mm/aaaa',
+      );
+      expect(
+        parsearFecha('31/02/2099', permitirFuturo: true).error,
+        'Usa el formato dd/mm/aaaa',
+      );
     });
   });
 

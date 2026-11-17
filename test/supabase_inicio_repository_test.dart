@@ -22,9 +22,7 @@ SupabaseClient _cliente(http.Client httpClient) => SupabaseClient(
 /// Repositorio sobre un cliente HTTP que siempre lanza [error]: así se
 /// prueba la clasificación de fallos de red sin red real.
 SupabaseInicioRepository _repoQueLanza(Object error) =>
-    SupabaseInicioRepository(
-      _cliente(MockClient((_) async => throw error)),
-    );
+    SupabaseInicioRepository(_cliente(MockClient((_) async => throw error)));
 
 /// Repositorio que responde [body] con [status] y guarda cada petición.
 SupabaseInicioRepository _repoQueGuarda(
@@ -70,7 +68,10 @@ void main() {
       expect(r.pacientesNuevos, 7);
       expect(peticiones, hasLength(1));
       expect(peticiones.single.method, 'POST');
-      expect(peticiones.single.url.path, endsWith('/rest/v1/rpc/inicio_resumen'));
+      expect(
+        peticiones.single.url.path,
+        endsWith('/rest/v1/rpc/inicio_resumen'),
+      );
     });
 
     test('lista vacía da todo en cero', () async {
