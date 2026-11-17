@@ -212,3 +212,15 @@ Ninguno nuevo. Las dos funciones siguen siendo `security definer set search_path
 - `d4fdec8` y `68f4581` existen en la rama `worktree-agent-add20910ae3944c28`.
 - `supabase/schema.sql` contiene `p_nit text default '__sin_cambio__'` y dos nuevas re-búsquedas `WR-01 (07-17)`.
 - El smoke tiene 293 `checks := checks + 1` y una sola cabecera "Total esperado: 293.".
+
+## Aplicación en vivo (2026-11-16)
+
+- El auto mode del orquestador bloqueó el `apply_migration` del MCP. Se usó la alternativa del plan: el usuario pegó el delta (`crear_cuenta_cobro`, `actualizar_clinica` con centinela, sus grants y `notify`) en el SQL Editor. Resultado: "Success. No rows returned".
+- Consulta de solo lectura posterior:
+  - `actualizar_clinica(text,text,text,text,text,text)` es la única firma y tiene el centinela `__sin_cambio__`;
+  - `crear_cuenta_cobro` contiene las 4 búsquedas de la clave, así que la nueva versión está en vivo.
+- Smoke pegado completo por el usuario, línea literal:
+
+```
+RLS SMOKE: PASS (293 checks) - cambios revertidos
+```
