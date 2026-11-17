@@ -1,13 +1,86 @@
+import 'dart:io' as io;
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vetapp/core/data/limite_plan_postgrest.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/features/appointments/data/repositories/supabase_cita_repository.dart';
+import 'package:vetapp/features/appointments/domain/cita_failure.dart';
 
 PostgrestException _check(String mensaje) =>
     PostgrestException(message: mensaje, code: '23514');
 
+SupabaseCitaRepository _repoHttp(MockClient httpClient) =>
+    SupabaseCitaRepository(
+      SupabaseClient(
+        'http://localhost:54321',
+        'clave-de-prueba',
+        httpClient: httpClient,
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+      ),
+    );
+
+/// Repositorio que responde [body]/[status] y guarda cada petición.
+SupabaseCitaRepository _repoQueGuarda(
+  List<http.BaseRequest> peticiones, {
+  String body = '[]',
+  int status = 200,
+}) => _repoHttp(
+  MockClient((r) async {
+    peticiones.add(r);
+    return http.Response(
+      body,
+      status,
+      headers: {'content-type': 'application/json'},
+      request: r,
+    );
+  }),
+);
+
 void main() {
+  group('proximas', () {
+    test('filtra estado en SQL, desde, orden y límite', () async {
+      final peticiones = <http.BaseRequest>[];
+      final r = await _repoQueGuarda(
+        peticiones,
+      ).proximas(desdeUtc: DateTime.utc(2026, 11, 16, 14), limite: 5);
+      expect(r, isEmpty);
+      expect(peticiones, hasLength(1));
+      final req = peticiones.single;
+      expect(req.method, 'GET');
+      expect(req.url.path, endsWith('/rest/v1/citas'));
+      final q = req.url.queryParameters;
+      expect(q['estado'], 'in.(pendiente,confirmada)');
+      expect(q['fecha_hora'], 'gte.2026-11-16T14:00:00.000Z');
+      expect(q['order'], anyOf('fecha_hora.asc', 'fecha_hora.asc.nullslast'));
+      expect(q['limit'], '5');
+    });
+
+    test('un SocketException se relanza tal cual (no CitaFailure)', () async {
+      final repo = _repoHttp(
+        MockClient((_) async => throw const io.SocketException('sin red')),
+      );
+      await expectLater(
+        repo.proximas(desdeUtc: DateTime.utc(2026, 11, 16)),
+        throwsA(isA<io.SocketException>()),
+      );
+    });
+
+    test('un 400 JSON se vuelve CitaFailure', () async {
+      final repo = _repoQueGuarda(
+        [],
+        body: '{"code":"42501","message":"texto crudo"}',
+        status: 400,
+      );
+      await expectLater(
+        repo.proximas(desdeUtc: DateTime.utc(2026, 11, 16)),
+        throwsA(isA<CitaFailure>()),
+      );
+    });
+  });
+
   group('mensajeErrorCita - límites del plan', () {
     const soloLectura =
         'Tu cuenta está en solo lectura. Pide al administrador que active el '
