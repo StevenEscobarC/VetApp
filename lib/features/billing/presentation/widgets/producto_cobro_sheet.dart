@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../../inventory/domain/entities/producto.dart';
 import '../../../inventory/presentation/providers/inventario_providers.dart';
@@ -105,9 +106,10 @@ class _ProductoCobroSheetState extends ConsumerState<ProductoCobroSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _mensaje('No pudimos cargar el inventario.'),
-          TextButton(
+          AppButton(
+            label: 'Reintentar',
+            variant: AppButtonVariant.text,
             onPressed: () => ref.invalidate(productosProvider),
-            child: const Text('Reintentar'),
           ),
         ],
       );

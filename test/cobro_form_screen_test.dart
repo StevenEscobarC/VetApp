@@ -777,7 +777,12 @@ void main() {
         find.textContaining('Si alcanzó a crearse, lo verás en Cobros.'),
         findsOneWidget,
       );
-      await tester.tap(find.widgetWithText(AppButton, 'Descartar'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(AppButton, 'Descartar'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Abrir'), findsOneWidget);
       expect(crear(repo), hasLength(1));

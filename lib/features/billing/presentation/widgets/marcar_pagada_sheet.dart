@@ -161,9 +161,11 @@ class _MarcarPagadaSheetState extends ConsumerState<_MarcarPagadaSheet> {
                   Text('Fecha de pago', style: t.labelLarge),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(child: Text(fechaTexto, style: t.bodyLarge)),
-                  TextButton(
+                  AppButton(
+                    label: 'Cambiar',
+                    variant: AppButtonVariant.text,
+                    expand: false,
                     onPressed: _guardando ? null : _cambiarFecha,
-                    child: const Text('Cambiar'),
                   ),
                 ],
               ),
@@ -186,9 +188,10 @@ class _MarcarPagadaSheetState extends ConsumerState<_MarcarPagadaSheet> {
               Text('Elige cómo pagó.', style: muted),
             ],
             const SizedBox(height: AppSpacing.sm),
-            TextButton(
+            AppButton(
+              label: 'Cancelar',
+              variant: AppButtonVariant.text,
               onPressed: _guardando ? null : () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'),
             ),
           ],
         ),

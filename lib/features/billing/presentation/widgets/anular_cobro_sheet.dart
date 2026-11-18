@@ -164,9 +164,11 @@ class _AnularCobroSheetState extends ConsumerState<_AnularCobroSheet> {
               onPressed: _anular,
             ),
             const SizedBox(height: AppSpacing.sm),
-            TextButton(
+            AppButton(
+              label: 'Cancelar',
+              variant: AppButtonVariant.text,
+              expand: false,
               onPressed: _guardando ? null : () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'),
             ),
           ],
         ),
