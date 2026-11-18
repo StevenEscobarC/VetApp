@@ -192,9 +192,11 @@ Future<bool> confirmarAjusteGrande(
         'Quedarán ${formatearMiles(cantidadNueva)}.',
       ),
       actions: [
-        TextButton(
+        AppButton(
+          label: 'Revisar',
+          variant: AppButtonVariant.text,
+          expand: false,
           onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Revisar'),
         ),
         AppButton(
           label: 'Confirmar ajuste',

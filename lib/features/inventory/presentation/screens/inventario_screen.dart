@@ -82,9 +82,15 @@ class _InventarioScreenState extends ConsumerState<InventarioScreen> {
               onChanged: (_) => setState(() {}),
             ),
           ),
-          if (productosAsync.hasValue)
+          // Mientras carga sin valor la cabecera queda visible pero inerte
+          // (sin opacidad), para que no aparezca de golpe con los datos.
+          if (productosAsync.hasValue ||
+              (productosAsync.isLoading && !productosAsync.hasError))
             _Cabecera(
-              productos: productosAsync.requireValue,
+              productos: productosAsync.hasValue
+                  ? productosAsync.requireValue
+                  : const [],
+              habilitado: productosAsync.hasValue,
               hoy: hoy,
               filtro: _filtro,
               hayBusqueda: consulta.isNotEmpty,
@@ -151,9 +157,13 @@ class _Cabecera extends ConsumerWidget {
     required this.filtro,
     required this.hayBusqueda,
     required this.onFiltro,
+    this.habilitado = true,
   });
 
   final List<Producto> productos;
+
+  /// `false` mientras carga: los chips se ven pero ignoran los toques.
+  final bool habilitado;
   final DateTime hoy;
   final _Filtro filtro;
   final bool hayBusqueda;
@@ -193,26 +203,29 @@ class _Cabecera extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              AppFilterChip(
-                label: 'Todos',
-                selected: filtro == _Filtro.todos,
-                onTap: () => onFiltro(_Filtro.todos),
-              ),
-              AppFilterChip(
-                label: _etiqueta('Bajos', bajos),
-                selected: filtro == _Filtro.bajos,
-                onTap: () => onFiltro(_Filtro.bajos),
-              ),
-              AppFilterChip(
-                label: _etiqueta('Vence pronto', porVencer),
-                selected: filtro == _Filtro.vencePronto,
-                onTap: () => onFiltro(_Filtro.vencePronto),
-              ),
-            ],
+          IgnorePointer(
+            ignoring: !habilitado,
+            child: Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                AppFilterChip(
+                  label: 'Todos',
+                  selected: filtro == _Filtro.todos,
+                  onTap: () => onFiltro(_Filtro.todos),
+                ),
+                AppFilterChip(
+                  label: _etiqueta('Bajos', bajos),
+                  selected: filtro == _Filtro.bajos,
+                  onTap: () => onFiltro(_Filtro.bajos),
+                ),
+                AppFilterChip(
+                  label: _etiqueta('Vence pronto', porVencer),
+                  selected: filtro == _Filtro.vencePronto,
+                  onTap: () => onFiltro(_Filtro.vencePronto),
+                ),
+              ],
+            ),
           ),
           if (muestraTira) ...[
             const SizedBox(height: AppSpacing.md),

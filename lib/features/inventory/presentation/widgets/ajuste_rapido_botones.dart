@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../../plan/presentation/widgets/control_escritura.dart';
@@ -140,35 +140,20 @@ class _Boton extends StatelessWidget {
     final activo = !bloqueado && !enVuelo;
     final boton = _AbsorbeToqueSiInactivo(
       activo: activo,
-      child: SizedBox.square(
-        dimension: AppSpacing.touchTarget,
-        child: OutlinedButton(
-          key: botonKey,
-          onPressed: activo ? onTap : null,
-          style: OutlinedButton.styleFrom(
-            padding: EdgeInsets.zero,
-            minimumSize: const Size.square(AppSpacing.touchTarget),
-            fixedSize: const Size.square(AppSpacing.touchTarget),
-            disabledBackgroundColor: bloqueado ? AppColors.surfaceMuted : null,
-            disabledForegroundColor: bloqueado ? AppColors.placeholder : null,
-          ),
-          child: cargando
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(iconoEscritura(puedeEscribir, icono), size: 20),
-                    if (etiqueta != null && puedeEscribir)
-                      Text(
-                        etiqueta!,
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                  ],
-                ),
+      child: AppButton(
+        label: semantica,
+        variant: AppButtonVariant.outline,
+        cuadrado: true,
+        botonKey: botonKey,
+        isLoading: cargando,
+        onPressed: activo ? onTap : null,
+        contenido: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(iconoEscritura(puedeEscribir, icono), size: 20),
+            if (etiqueta != null && puedeEscribir)
+              Text(etiqueta!, style: Theme.of(context).textTheme.labelLarge),
+          ],
         ),
       ),
     );
