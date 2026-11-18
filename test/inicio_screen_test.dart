@@ -1,8 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+
+import 'package:vetapp/core/data/clock_provider.dart';
+import 'package:vetapp/core/theme/app_colors.dart';
+import 'package:vetapp/core/theme/app_theme.dart';
+import 'package:vetapp/core/utils/zona_bogota.dart';
+import 'package:vetapp/features/appointments/domain/entities/cita.dart';
+import 'package:vetapp/features/home/presentation/widgets/accesos_rapidos.dart';
+import 'package:vetapp/features/home/presentation/widgets/proximas_citas.dart';
+import 'package:vetapp/features/team/domain/miembro.dart';
+import 'package:vetapp/features/team/presentation/providers/team_providers.dart';
 
 import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
@@ -26,6 +37,7 @@ import 'package:vetapp/features/vaccination/presentation/providers/vacuna_provid
 
 import 'helpers/fake_inventario.dart';
 import 'helpers/fake_auth.dart';
+import 'helpers/fake_citas.dart';
 import 'helpers/fake_fotos.dart';
 import 'helpers/fake_inicio.dart';
 import 'helpers/fake_mascotas.dart';
@@ -39,48 +51,98 @@ Widget _appUnderTest({
   FakeVacunaRepository? vacunas,
   FakeInicioRepository? inicio,
   FakeInventarioRepository? inventario,
+  FakeCitaRepository? citas,
   MiPlan? plan,
+  ThemeData? tema,
 }) {
-  return routerHarness(
-    initialLocation: '/',
-    routes: [
-      GoRoute(path: '/', builder: (_, _) => const InicioScreen()),
-      GoRoute(
-        path: '/vacunas',
-        builder: (_, _) => const Text('PANTALLA VACUNAS'),
-      ),
-      GoRoute(
-        path: '/cobros',
-        builder: (_, _) => const Text('PANTALLA COBROS'),
-      ),
-      GoRoute(
-        path: '/pacientes',
-        builder: (_, _) => const Text('PANTALLA PACIENTES'),
-      ),
-      GoRoute(
-        path: '/dosis/nueva',
-        builder: (_, state) =>
-            Text('DOSIS ${state.uri.queryParameters['mascotaId']}'),
-      ),
-    ],
-    overrides: [
-      ...planOverrides(plan: plan),
-      authProfileProvider.overrideWith(
-        () => FakeAuthProfileNotifier(profile: profile, error: error),
-      ),
-      vacunaRepositoryProvider.overrideWithValue(
-        vacunas ?? FakeVacunaRepository(),
-      ),
-      inventarioRepositoryProvider.overrideWithValue(
-        inventario ?? FakeInventarioRepository(),
-      ),
-      mascotaRepositoryProvider.overrideWithValue(FakeMascotaRepository()),
-      mascotaFotoDatasourceProvider.overrideWithValue(
-        FakeMascotaFotoDatasource(),
-      ),
-      ...inicioOverrides(inicio: inicio),
-    ],
+  final routes = <RouteBase>[
+    GoRoute(path: '/', builder: (_, _) => const InicioScreen()),
+    GoRoute(
+      path: '/vacunas',
+      builder: (_, _) => const Text('PANTALLA VACUNAS'),
+    ),
+    GoRoute(path: '/cobros', builder: (_, _) => const Text('PANTALLA COBROS')),
+    GoRoute(
+      path: '/pacientes',
+      builder: (_, _) => const Text('PANTALLA PACIENTES'),
+    ),
+    GoRoute(
+      path: '/dosis/nueva',
+      builder: (_, state) =>
+          Text('DOSIS ${state.uri.queryParameters['mascotaId']}'),
+    ),
+    GoRoute(path: '/agenda', builder: (_, _) => const Text('PANTALLA AGENDA')),
+    GoRoute(
+      path: '/agenda/:id',
+      builder: (_, state) => Text('DETALLE ${state.pathParameters['id']}'),
+    ),
+  ];
+  final overrides = [
+    ...planOverrides(plan: plan),
+    authProfileProvider.overrideWith(
+      () => FakeAuthProfileNotifier(profile: profile, error: error),
+    ),
+    vacunaRepositoryProvider.overrideWithValue(
+      vacunas ?? FakeVacunaRepository(),
+    ),
+    inventarioRepositoryProvider.overrideWithValue(
+      inventario ?? FakeInventarioRepository(),
+    ),
+    mascotaRepositoryProvider.overrideWithValue(FakeMascotaRepository()),
+    mascotaFotoDatasourceProvider.overrideWithValue(
+      FakeMascotaFotoDatasource(),
+    ),
+    ...inicioOverrides(inicio: inicio, citas: citas),
+    clockProvider.overrideWithValue(() => _ahora),
+    esClinicaMultiVetProvider.overrideWithValue(false),
+    miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
+    indicesColorVetProvider.overrideWithValue(const <String, int>{}),
+  ];
+  if (tema == null) {
+    return routerHarness(
+      initialLocation: '/',
+      routes: routes,
+      overrides: overrides,
+    );
+  }
+  return ProviderScope(
+    retry: (retryCount, error) => null,
+    overrides: overrides,
+    child: MaterialApp.router(
+      theme: tema,
+      routerConfig: GoRouter(initialLocation: '/', routes: routes),
+    ),
   );
+}
+
+/// Lunes 16/11/2026 9:00 a. m. Bogotá.
+final _ahora = DateTime.utc(2026, 11, 16, 14);
+
+FakeCitaRepository _unaProxima({Object? error}) => FakeCitaRepository(
+  error: error,
+  citas: [
+    Cita(
+      id: 'cita-prox',
+      clinicaId: 'cli-1',
+      clienteId: 'c-maria',
+      veterinarioId: 'vet-1',
+      fechaHora: deBogota(2026, 11, 16, 10),
+      duracionMin: 30,
+      modalidad: ModalidadCita.consultorio,
+      motivo: 'Control',
+      estado: EstadoCita.confirmada,
+      clienteNombre: 'María Pérez',
+      mascotas: const [
+        MascotaDeCita(id: 'm-luna', nombre: 'Luna', especie: 'perro'),
+      ],
+    ),
+  ],
+);
+
+void _alto(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
 }
 
 const _conVacunas = ResumenVacunas(
@@ -168,6 +230,7 @@ void main() {
         ocultasAntiguas: 0,
       ),
     );
+    _alto(tester);
     await tester.pumpWidget(
       _appUnderTest(profile: vetProfile, vacunas: vacunas),
     );
@@ -185,6 +248,7 @@ void main() {
   testWidgets('en Inicio la tarjeta de vacunas se oculta con 0/0', (
     tester,
   ) async {
+    _alto(tester);
     await tester.pumpWidget(_appUnderTest(profile: vetProfile));
     await tester.pumpAndSettle();
 
@@ -195,6 +259,7 @@ void main() {
   testWidgets('error de la tarjeta muestra mensaje y Reintentar', (
     tester,
   ) async {
+    _alto(tester);
     await tester.pumpWidget(
       _appUnderTest(
         profile: vetProfile,
@@ -242,35 +307,39 @@ void main() {
   });
 
   group('solo lectura (colega sin plan vigente)', () {
-    testWidgets('"Vacunar" muestra candado y abre la hoja de solo lectura en '
-        'vez del buscador', (tester) async {
+    testWidgets('el acceso "Vacunar" muestra candado y abre la hoja de solo '
+        'lectura en vez del buscador', (tester) async {
       final semantics = tester.ensureSemantics();
+      _alto(tester);
       await tester.pumpWidget(
         _appUnderTest(profile: vetProfile, plan: planSoloLectura),
       );
       await tester.pumpAndSettle();
 
-      final boton = find.widgetWithText(AppButton, 'Vacunar');
+      final acceso = find.widgetWithText(AccesoRapido, 'Vacunar');
       expect(
-        find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
+        find.descendant(of: acceso, matching: find.byIcon(Icons.lock_outline)),
         findsOneWidget,
       );
       expect(
         find.descendant(
-          of: boton,
+          of: acceso,
           matching: find.byIcon(Icons.vaccines_outlined),
         ),
         findsNothing,
       );
       expect(
-        tester.getSemantics(boton).label,
-        contains('bloqueado, solo lectura'),
+        find.bySemanticsLabel('Vacunar, bloqueado, solo lectura'),
+        findsOneWidget,
       );
-      // Conserva el acento primario.
-      expect(tester.widget<AppButton>(boton).variant, AppButtonVariant.primary);
+      // Conserva su relleno.
+      expect(
+        tester.widget<AccesoRapido>(acceso).relleno,
+        AppColors.primaryStrong,
+      );
 
-      await tester.ensureVisible(boton);
-      await tester.tap(boton);
+      await tester.ensureVisible(acceso);
+      await tester.tap(acceso);
       await tester.pumpAndSettle();
 
       expect(find.text('¿A quién vacuna?'), findsNothing);
@@ -291,36 +360,35 @@ void main() {
       expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
     });
 
-    testWidgets('con plan Beta "Vacunar" conserva el ícono y abre el '
-        'buscador', (tester) async {
+    testWidgets('con plan Beta el acceso "Vacunar" conserva el ícono y abre '
+        'el buscador', (tester) async {
       await tester.pumpWidget(
         _appUnderTest(profile: vetProfile, plan: planBeta),
       );
       await tester.pumpAndSettle();
 
-      final boton = find.widgetWithText(AppButton, 'Vacunar');
+      final acceso = find.widgetWithText(AccesoRapido, 'Vacunar');
       expect(
-        find.descendant(of: boton, matching: find.byIcon(Icons.lock_outline)),
+        find.descendant(of: acceso, matching: find.byIcon(Icons.lock_outline)),
         findsNothing,
       );
       expect(
         find.descendant(
-          of: boton,
+          of: acceso,
           matching: find.byIcon(Icons.vaccines_outlined),
         ),
         findsOneWidget,
       );
-      await tester.tap(find.text('Vacunar'));
+      await tester.tap(acceso);
       await tester.pumpAndSettle();
       expect(find.text('¿A quién vacuna?'), findsOneWidget);
     });
   });
 
   group('Inicio fase 8 (slice 1)', () {
-    testWidgets('orden: saludo, cifras, Vacunar, vacunas y stock', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(400, 2000);
+    testWidgets('orden D-12: saludo, aviso, cifras, accesos, próximas, '
+        'vacunas y stock', (tester) async {
+      tester.view.physicalSize = const Size(400, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
@@ -331,14 +399,19 @@ void main() {
           inventario: FakeInventarioRepository(
             resumenData: const ResumenInventario(bajos: 2),
           ),
+          citas: _unaProxima(),
+          plan: planGratisAlTope,
         ),
       );
       await tester.pumpAndSettle();
 
       final orden = [
         find.byType(InicioEncabezado),
+        find.text('Llegaste a los 50 pacientes'),
         find.byType(MetricasMes),
-        find.widgetWithText(AppButton, 'Vacunar'),
+        find.byType(AccesosRapidos),
+        find.byType(ProximasCitas),
+        find.byType(ProximaCitaFila),
         find.text('Vacunas pendientes'),
         find.text('2 productos con stock bajo'),
       ];
@@ -437,8 +510,10 @@ void main() {
             error: const InicioFailure('No pudimos cargar el resumen del mes.'),
           ),
           vacunas: FakeVacunaRepository(resumenData: _conVacunas),
+          citas: _unaProxima(),
         ),
       );
+      _alto(tester);
       await tester.pumpAndSettle();
 
       expect(find.byType(BloqueError), findsOneWidget);
@@ -447,11 +522,14 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Ana Ramírez'), findsOneWidget);
-      expect(find.widgetWithText(AppButton, 'Vacunar'), findsOneWidget);
+      expect(find.byType(AccesosRapidos), findsOneWidget);
+      // Las próximas citas siguen a la vista (aislamiento de bloques).
+      expect(find.byType(ProximaCitaFila), findsOneWidget);
       expect(find.text('Vacunas pendientes'), findsOneWidget);
     });
 
     testWidgets('error de vacunas no oculta las cifras', (tester) async {
+      _alto(tester);
       await tester.pumpWidget(
         _appUnderTest(
           profile: vetProfile,
@@ -476,6 +554,104 @@ void main() {
       expect(find.text('No pudimos cargar tu perfil.'), findsOneWidget);
     });
 
+    testWidgets('error de próximas citas: solo su bloque falla y las cifras '
+        'siguen', (tester) async {
+      _alto(tester);
+      await tester.pumpWidget(
+        _appUnderTest(
+          profile: vetProfile,
+          inicio: _inicio42(),
+          citas: _unaProxima(error: Exception('boom')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BloqueError), findsOneWidget);
+      expect(
+        find.text('No pudimos cargar las próximas citas.'),
+        findsOneWidget,
+      );
+      expect(find.text('42'), findsOneWidget);
+      expect(find.byType(AccesosRapidos), findsOneWidget);
+      expect(find.text('Ver agenda'), findsOneWidget);
+    });
+
+    testWidgets('no queda un botón Vacunar suelto (D-10)', (tester) async {
+      _alto(tester);
+      await tester.pumpWidget(_appUnderTest(profile: vetProfile));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppButton, 'Vacunar'), findsNothing);
+      expect(find.widgetWithText(AccesoRapido, 'Vacunar'), findsOneWidget);
+    });
+
+    testWidgets('huecos lg antes de los accesos y de las próximas citas', (
+      tester,
+    ) async {
+      _alto(tester);
+      await tester.pumpWidget(
+        _appUnderTest(profile: vetProfile, inicio: _inicio42()),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        _top(tester, find.byType(AccesosRapidos)) -
+            tester.getBottomLeft(find.byType(MetricasMes)).dy,
+        AppSpacing.lg,
+      );
+      expect(
+        _top(tester, find.byType(ProximasCitas)) -
+            tester.getBottomLeft(find.byType(AccesosRapidos)).dy,
+        AppSpacing.lg,
+      );
+    });
+
+    testWidgets('deslizar hacia abajo también recarga las próximas citas', (
+      tester,
+    ) async {
+      final citas = _unaProxima();
+      await tester.pumpWidget(
+        _appUnderTest(profile: vetProfile, inicio: _inicio42(), citas: citas),
+      );
+      await tester.pumpAndSettle();
+      final antes = citas.consultasProximas.length;
+
+      await tester.fling(find.byType(ListView), const Offset(0, 400), 1000);
+      await tester.pumpAndSettle();
+      expect(citas.consultasProximas.length, greaterThan(antes));
+      expect(find.byType(ProximaCitaFila), findsOneWidget);
+    });
+
+    testWidgets('tocar una próxima cita abre su detalle', (tester) async {
+      _alto(tester);
+      await tester.pumpWidget(
+        _appUnderTest(profile: vetProfile, citas: _unaProxima()),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(ProximaCitaFila));
+      await tester.pumpAndSettle();
+      expect(find.text('DETALLE cita-prox'), findsOneWidget);
+    });
+
+    testWidgets('modo oscuro: sin excepción y cifras en primaryHover', (
+      tester,
+    ) async {
+      _alto(tester);
+      await tester.pumpWidget(
+        _appUnderTest(
+          profile: vetProfile,
+          inicio: _inicio42(),
+          citas: _unaProxima(),
+          tema: AppTheme.dark,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.widget<Text>(find.text('42')).style?.color,
+        AppColors.primaryHover,
+      );
+      expect(find.byType(ProximaCitaFila), findsOneWidget);
+    });
+
     testWidgets('Inicio nunca dice Factura', (tester) async {
       await tester.pumpWidget(
         _appUnderTest(profile: vetProfile, inicio: _inicio42()),
@@ -486,6 +662,7 @@ void main() {
   });
 
   testWidgets('tarjeta de stock bajo en Inicio navega a Bajos', (tester) async {
+    _alto(tester);
     await tester.pumpWidget(
       _appInicioConInventario(
         FakeInventarioRepository(
@@ -507,6 +684,7 @@ void main() {
   testWidgets('sin bajos Inicio no muestra la tarjeta de stock', (
     tester,
   ) async {
+    _alto(tester);
     await tester.pumpWidget(
       _appInicioConInventario(FakeInventarioRepository()),
     );
@@ -538,6 +716,9 @@ Widget _appInicioConInventario(FakeInventarioRepository inventario) {
         FakeMascotaFotoDatasource(),
       ),
       ...inicioOverrides(),
+      esClinicaMultiVetProvider.overrideWithValue(false),
+      miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
+      indicesColorVetProvider.overrideWithValue(const <String, int>{}),
     ],
   );
 }

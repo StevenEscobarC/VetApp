@@ -5,9 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
 import '../aviso_plan.dart';
-import '../providers/plan_providers.dart';
+import '../providers/aviso_plan_visible_provider.dart';
 
 /// Aviso suave de plan al inicio de Inicio (D-16.2): uno solo a la vez, por
 /// prioridad. No ocupa espacio mientras carga, ante error o sin aviso. "Ver mi
@@ -18,17 +17,9 @@ class PlanBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final plan = ref.watch(miPlanProvider).value;
-    if (plan == null) return const SizedBox.shrink();
-    final esAdmin =
-        ref.watch(authProfileProvider).asData?.value?.esAdmin ?? false;
-    final descartados = ref.watch(avisosDescartadosProvider);
-
-    final aviso = avisoPlanPara(plan, esAdmin: esAdmin);
-    if (aviso == null ||
-        (aviso.descartable && descartados.contains(aviso.tipo))) {
-      return const SizedBox.shrink();
-    }
+    // Una sola regla de visibilidad, compartida con Inicio.
+    final aviso = ref.watch(avisoPlanVisibleProvider);
+    if (aviso == null) return const SizedBox.shrink();
 
     final textTheme = Theme.of(context).textTheme;
     return Padding(

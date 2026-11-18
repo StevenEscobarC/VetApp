@@ -13,23 +13,22 @@ import '../../../inventory/data/repositories/supabase_inventario_repository.dart
     show esErrorDeRed;
 import '../../../inventory/presentation/providers/inventario_providers.dart';
 import '../../../inventory/presentation/widgets/stock_bajo_card.dart';
-import '../../../plan/presentation/limite_plan_gate.dart';
 import '../../../plan/presentation/providers/aviso_plan_visible_provider.dart';
 import '../../../plan/presentation/providers/plan_providers.dart';
-import '../../../plan/presentation/widgets/control_escritura.dart';
 import '../../../plan/presentation/widgets/plan_banner.dart';
 import '../../../vaccination/presentation/providers/alertas_providers.dart';
-import '../../../vaccination/presentation/widgets/mascota_search_sheet.dart';
 import '../../../vaccination/presentation/widgets/vacunas_pendientes_card.dart';
 import '../../data/supabase_inicio_repository.dart'
     show kMensajeSinConexionLectura;
 import '../providers/inicio_providers.dart';
+import '../widgets/accesos_rapidos.dart';
 import '../widgets/inicio_colores.dart';
 import '../widgets/inicio_encabezado.dart';
 import '../widgets/metricas_mes.dart';
+import '../widgets/proximas_citas.dart';
 
 /// Inicio de la Fase 8 (D-12): saludo, aviso de plan, cifras reales del mes,
-/// Vacunar y alertas. Cada bloque falla solo (D-14) y todo se recarga al
+/// accesos rápidos, próximas citas y alertas. Cada bloque falla solo (D-14) y todo se recarga al
 /// deslizar hacia abajo o al volver la app a primer plano (D-13).
 class InicioScreen extends ConsumerStatefulWidget {
   const InicioScreen({super.key});
@@ -76,18 +75,6 @@ class _InicioScreenState extends ConsumerState<InicioScreen> {
     } catch (_) {}
   }
 
-  Future<void> _vacunar() async {
-    if (!await asegurarEscritura(
-      context,
-      ref,
-      plan: ref.read(miPlanProvider).value,
-    )) {
-      return;
-    }
-    if (!mounted) return;
-    unawaited(showMascotaSearchSheet(context));
-  }
-
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(authProfileProvider);
@@ -127,7 +114,6 @@ class _InicioScreenState extends ConsumerState<InicioScreen> {
 
   Widget _contenido(AuthProfile? profile) {
     final colorScheme = Theme.of(context).colorScheme;
-    final puedeEscribir = ref.watch(puedeEscribirProvider);
     final hayAviso = ref.watch(avisoPlanVisibleProvider) != null;
 
     // Mismas condiciones de visibilidad que las tarjetas, para no dejar
@@ -164,20 +150,11 @@ class _InicioScreenState extends ConsumerState<InicioScreen> {
           ] else
             const SizedBox(height: AppSpacing.lg),
           const MetricasMes(),
+          // Vacunar vive en los accesos rápidos (D-10), con su candado.
           const SizedBox(height: AppSpacing.lg),
-          // Solo lectura: conserva lugar, acento y tamaño; el ícono pasa a
-          // candado y el toque abre la hoja explicativa en vez del
-          // buscador (D-12). Registrar una dosis es una escritura.
-          ControlEscritura(
-            puedeEscribir: puedeEscribir,
-            label: 'Vacunar',
-            onTap: _vacunar,
-            child: AppButton(
-              label: 'Vacunar',
-              icon: iconoEscritura(puedeEscribir, Icons.vaccines_outlined),
-              onPressed: _vacunar,
-            ),
-          ),
+          const AccesosRapidos(),
+          const SizedBox(height: AppSpacing.lg),
+          const ProximasCitas(),
           if (verVacunas) ...[
             const SizedBox(height: AppSpacing.lg),
             const VacunasPendientesCard(mostrarSiVacia: false),

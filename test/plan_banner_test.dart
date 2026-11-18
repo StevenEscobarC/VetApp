@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vetapp/features/auth/data/repositories/supabase_auth_repository.dart';
@@ -6,6 +7,7 @@ import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart'
 import 'package:vetapp/features/plan/domain/mi_plan.dart';
 import 'package:vetapp/features/plan/domain/plan_failure.dart';
 import 'package:vetapp/features/plan/presentation/aviso_plan.dart';
+import 'package:vetapp/features/plan/presentation/providers/aviso_plan_visible_provider.dart';
 import 'package:vetapp/features/plan/presentation/widgets/plan_banner.dart';
 
 import 'helpers/fake_auth.dart';
@@ -279,6 +281,7 @@ void main() {
       MiPlan? plan,
       Object? error,
       AuthProfile perfil = vetAdminProfile,
+      List<Override> extra = const [],
     }) {
       ruta = null;
       return routerHarness(
@@ -301,9 +304,40 @@ void main() {
           authProfileProvider.overrideWith(
             () => FakeAuthProfileNotifier(profile: perfil),
           ),
+          ...extra,
         ],
       );
     }
+
+    testWidgets('visibility comes from avisoPlanVisibleProvider (one rule '
+        'shared with Inicio)', (tester) async {
+      // The plan is Beta (no notice), but the shared provider says there is
+      // one: the banner must follow the provider, not recompute.
+      await tester.pumpWidget(
+        banner(
+          plan: planBeta,
+          extra: [
+            avisoPlanVisibleProvider.overrideWithValue(
+              avisoPlanPara(planSoloLectura, esAdmin: true),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Tu cuenta está en solo lectura'), findsOneWidget);
+    });
+
+    testWidgets('a null avisoPlanVisibleProvider hides a notice the plan '
+        'would show', (tester) async {
+      await tester.pumpWidget(
+        banner(
+          plan: planGratisAlTope,
+          extra: [avisoPlanVisibleProvider.overrideWithValue(null)],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Ver mi plan'), findsNothing);
+    });
 
     testWidgets('renders nothing without a notice', (tester) async {
       await tester.pumpWidget(banner(plan: planBeta));
