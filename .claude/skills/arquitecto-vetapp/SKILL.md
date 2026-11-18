@@ -7,7 +7,7 @@ description: Arquitecto senior Flutter + Supabase de VetApp, la app móvil para 
 
 ## 1. Propósito
 
-Esta skill describe VetApp **como es hoy** (Fases 1-4 completas), para que cada cambio encaje sin fricción: misma estructura, mismas convenciones, mismas reglas de negocio. **El código manda**: si esta skill y el repo discrepan, sigue el repo y reporta la diferencia. Ante una duda, verifica con `ls`/`grep` antes de afirmar. Antes de diseñar lee también `CLAUDE.md` y el `*-CONTEXT.md` de la fase en `.planning/phases/`.
+Esta skill describe VetApp **como es hoy** (Fases 1-7 completas; Fase 8 en cierre), para que cada cambio encaje sin fricción: misma estructura, mismas convenciones, mismas reglas de negocio. **El código manda**: si esta skill y el repo discrepan, sigue el repo y reporta la diferencia. Ante una duda, verifica con `ls`/`grep` antes de afirmar. Antes de diseñar lee también `CLAUDE.md` y el `*-CONTEXT.md` de la fase en `.planning/phases/`.
 
 Nota: `.planning/codebase/*.md` y la sección "Architecture" de `CLAUDE.md` están parcialmente desactualizadas (dicen que Riverpod y go_router no se usan y que `lib/core/router/` está vacío; ya no es cierto).
 
@@ -27,12 +27,13 @@ Fuente: `pubspec.yaml`.
 
 ## 3. Estructura de `lib/`
 
-- `core/data/`: `supabase_client_provider.dart`, `clock_provider.dart`, `busqueda.dart`.
+- `core/data/`: `supabase_client_provider.dart`, `clock_provider.dart`, `busqueda.dart`, `limite_plan_postgrest.dart`, `inicio_revision.dart` (contador `inicioRevisionProvider` de Inicio, Fase 8; vive en `core/` para que ninguna feature importe `home/`).
 - `core/router/app_router.dart`: el único router.
 - `core/theme/`: `app_colors`, `app_spacing`, `app_typography`, `app_theme`.
 - `core/utils/`: `formato.dart`, `formato_hora.dart`, `telefono_co.dart`, `zona_bogota.dart`, `lanzador_externo.dart`, `captura_foto.dart`.
 - `core/widgets/`: `app_bar/app_top_bar`, `buttons/app_button`, `cards/app_card`, `chips/app_filter_chip`, `inputs/app_text_field`, `media/app_photo_picker`, `status/app_status_chip`.
 - `features/{appointments,auth,billing,clients,clinical_history,home,inventory,patients,vaccination}/`, cada una con subcarpetas `data/{repositories,services,datasources}`, `domain/{entities,*_failure.dart}` y `presentation/{providers,screens,widgets}` según haga falta.
+- `home` (Fase 8): `data/supabase_inicio_repository.dart` (solo RPC `inicio_resumen`), `domain/{resumen_inicio,inicio_failure}.dart`, `presentation/{providers/inicio_providers.dart, screens/{inicio_screen,mas_screen}.dart, widgets/}` (`InicioEncabezado`, `MetricasMes`, `AccesosRapidos`, `ProximasCitas`, `BloqueError`, `InicioColores`). Ninguna otra feature importa `home/` (compuerta de ciclo de imports).
 - `inventory` (Fase 6) y `billing` (Fase 7: `SupabaseCobrosRepository`, borrador con clave de idempotencia, PDF de cobro, pantallas en `/cobros` y `/servicios`) están completos.
 - No hay capa de use cases en las features activas: las pantallas llaman a providers/acciones y estos al repositorio. `domain/` también aloja lógica pura (p. ej. `appointments/domain/cita_solapes.dart`, `recordatorios_plan.dart`, `whatsapp_recordatorio.dart`; `clinical_history/domain/formato_consulta.dart`).
 - Los repositorios son clases concretas `Supabase*Repository` en `data/repositories/` (sin interfaz abstracta). Las entidades son clases a mano con `copyWith`; el mapeo fila-a-entidad es `_fromRow` dentro del repositorio.
@@ -44,6 +45,7 @@ Fuente: `pubspec.yaml`.
 - Lecturas: `FutureProvider.autoDispose(.family)` (`agendaSemanaProvider`, `citaProvider`; `mascotas_providers.dart`, `consultas_providers.dart`).
 - Estado de lista con ciclo propio: `AsyncNotifier` (`ClientesNotifier` en `clientes_providers.dart`, `MascotasNotifier`, `AuthProfileNotifier` en `auth_providers.dart`).
 - Escrituras: clase de acciones que guarda un `Ref`, llama al repositorio e invalida providers; su provider **no** es `autoDispose` (`CitaActions`/`citaActionsProvider`, `RegistrarConsulta`/`registrarConsultaProvider`). `citasRevisionProvider` (un `Notifier<int>`) se incrementa para avisar de cambios a quien reprograma recordatorios.
+- Inicio (Fase 8): `inicioResumenProvider` y `proximasCitasProvider` (`FutureProvider.autoDispose`) observan `inicioRevisionProvider` (`Notifier<int>` en `core/data/inicio_revision.dart`) y se releen al volver la app a primer plano (`AppLifecycleListener`); sin polling. Cada feature que cambia las cifras (citas, consultas, cobros, alta de mascota y de cliente+mascota) llama `ref.read(inicioRevisionProvider.notifier).incrementar()` en un `finally` (éxito y fallo, lección WR-03) y **nunca** importa `home/`. Inicio no agrega cifras en el cliente: muestra lo que devuelve la RPC.
 - La UI usa `AsyncValue.when` (carga, error con reintento, vacío); `ref.watch` en `build`, `ref.read` en callbacks.
 
 ## 5. Routing
@@ -62,6 +64,7 @@ Fuente: `pubspec.yaml`.
 - Todo cambio de schema/RLS pasa por el agente `vetapp-supabase` y se acompaña de checks en `supabase/tests/rls_smoke_test.sql` (un bloque `do $$` con contador `checks`; termina siempre en un error `RLS SMOKE: PASS|FAIL (n checks)` a propósito, para revertir lo creado). Se pega y ejecuta en el SQL Editor tras aplicar el schema.
 - `supabase/tests/verify_live_schema.sh` verifica contra el proyecto en la nube que las tablas se exponen y que `anon` no puede escribir; usa solo la anon key y nunca la imprime.
 - Multi-tenencia por `clinica_id`. Políticas `to authenticated` basadas en `es_veterinario()` y `mi_clinica_id()` (funciones `security definer` con `execute` revocado a `anon`/`public`). RPCs de negocio (`registrar_cliente_con_mascota`, `registrar_mascota`, `generar_codigo_vinculacion`, `crear_cita`, `actualizar_cita`, `registrar_consulta`) son `security invoker`, para que la RLS siga aplicando dentro. **Excepción documentada (Fase 6):** las 5 RPCs de inventario (`crear_producto`, `actualizar_producto`, `archivar_producto`, `mover_stock`, `inventario_resumen`) son `security definer set search_path = public`, porque las tablas no tienen políticas de escritura (append-only y cantidad inmutable fuera de la RPC). Cada una empieza validando `es_veterinario()` y `mi_clinica_id()` y filtra por `clinica_id`. Si copias este patrón, replica esa validación y revoca `execute` a `anon`/`public`. La Fase 7 (cobros) sigue el mismo patrón: helpers privados (`_aplicar_movimiento_stock`, `_total_items_cobro`, `_insertar_items_cobro`, `_numero_cobro`) revocados a `authenticated`, y las RPC públicas con validación de clínica. Nunca uses la palabra "factura" en la UI ni en el PDF.
+- **Excepción definer de la Fase 8:** `inicio_resumen()` es `security definer` de solo lectura (guarda `es_veterinario()` + `mi_clinica_id()`, `consultas` acotadas vía `mascotas.clinica_id`, `execute` revocado a `anon`/`public`).
 - Integridad entre tenants con FKs compuestas `(x_id, clinica_id)` apoyadas en `unique (id, clinica_id)`.
 - La app usa solo la anon key + sesión; credenciales por `--dart-define` (`SUPABASE_URL`, `SUPABASE_ANON_KEY`). **Nunca** escribas URLs, refs de proyecto ni claves en código, docs ni skills.
 - Modelo de datos detallado: `references/modelo-dominio.md`.
@@ -69,6 +72,8 @@ Fuente: `pubspec.yaml`.
 ## 8. Sistema de diseño
 
 Identidad aprobada: paleta terracota/crema, Caprasimo (títulos) + Figtree (cuerpo) vía `google_fonts`. Todo color, espaciado y tipografía sale de `AppColors`, `AppSpacing`, `AppTypography` y `AppTheme` (`lib/core/theme/`); no uses valores sueltos ni los defaults de Material 3. Reutiliza `AppButton`, `AppCard`, `AppTextField`, `AppStatusChip`, `AppTopBar`, `AppFilterChip` y `AppPhotoPicker` antes de crear widgets nuevos. La revisión visual se delega al agente `vetapp-brand-ui`.
+
+Fase 8 (DASH-04): `AppButton` tiene variantes `primary`, `outline`, `text` y `destructive`, más `expand`, `contenido`, `botonKey` y el **modo cuadrado** (`cuadrado: true`, `lado` = 48 por defecto) para steppers y ajustes rápidos; no uses `TextButton`/`OutlinedButton` crudos. `app_theme.dart` (08-02) tematiza `switchTheme`, `checkboxTheme`, `floatingActionButtonTheme`, `dialogTheme`, `snackBarTheme`, `datePickerTheme` y `bottomSheetTheme`, así que `Switch`, `SwitchListTile`, `Checkbox`, `FloatingActionButton.extended`, diálogos y selectores de fecha ya salen con la marca. Las compuertas `bash tool/dash04_gates.sh <rutas>` (SW-01..SW-09) deben terminar en `DASH04_GATES: PASS`.
 
 ## 9. Colombia
 

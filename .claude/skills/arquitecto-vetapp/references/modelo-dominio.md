@@ -14,6 +14,7 @@ Derivado de `supabase/schema.sql` (la fuente de verdad). Si algo aquí difiere d
 8. Planeado (sin columnas definidas)
 9. productos y movimientos_inventario (Fase 6)
 10. cobros, cobro_items, clinica_servicios, cobro_contadores (Fase 7)
+11. Inicio: inicio_resumen y próximas citas (Fase 8)
 
 ## 1. Convenciones generales
 
@@ -157,3 +158,20 @@ Las 4 tablas no reciben escrituras directas, y `cobro_contadores` ni siquiera se
 
 **PostgREST:** un embed de `cobros` hacia sí mismo usa la columna como hint (`cobros!convertida_en_id`). El hint por nombre de constraint da 400 PGRST200 en vivo. [App]
 
+## 11. Inicio: inicio_resumen y próximas citas (Fase 8)
+
+No hay tablas nuevas. Inicio lee dos cosas:
+
+**`inicio_resumen()`** devuelve una fila `(consultas_mes int, ingresos_mes bigint, pacientes_nuevos_mes int)`:
+- `security definer set search_path = public`, `stable`, `execute` revocado a `anon`/`public` y concedido a `authenticated`. [DB]
+- Guarda de clínica: si `es_veterinario()` es falso o `mi_clinica_id()` es nulo, falla con `insufficient_privilege`. [DB]
+- `consultas` no tiene `clinica_id` y el definer salta la RLS, así que se cuentan con `join mascotas m on m.id = c.mascota_id where m.clinica_id = mi clínica`. [DB]
+- Mes calendario de Bogotá: `_hoy_bogota()` da el día; los límites son `timestamptz` de inicio de mes a inicio del mes siguiente (`at time zone 'America/Bogota'`), sargables (la columna nunca se castea). El smoke T33..T40 prueba el borde de las 00:00. [DB]
+- `ingresos_mes` copia a propósito el predicado de `cobros_resumen` ("Cobrado este mes": cuentas de cobro `pagada` con `pagada_el` entre el primer día del mes y hoy); el smoke verifica la paridad. `cobros_resumen` no cambia. [DB]
+- `pacientes_nuevos_mes`: mascotas de la clínica con `created_at` dentro del mes. [DB]
+- Leer nunca se bloquea: no llama `puede_escribir()`, así que un colega en solo lectura ve las cifras. [DB]
+- El cliente nunca agrega cifras: `SupabaseInicioRepository.resumen()` muestra la fila tal cual; una respuesta vacía son tres ceros. [App]
+
+**Próximas citas** (`SupabaseCitaRepository.proximas`): `citas` con `estado in (pendiente, confirmada)`, `fecha_hora >= ahora` (reloj de `clockProvider`), orden ascendente explícito, `limit 5`. La RLS de `citas` acota la clínica; el cliente no filtra por tenant. Los errores de red se relanzan y el provider los traduce a `InicioFailure(sinConexion: true)`. [App + RLS]
+
+**Refresco:** `inicioRevisionProvider` (`core/data/inicio_revision.dart`) es un contador que las features incrementan después de escribir citas, consultas, cobros o altas de mascota (en un `finally`, así sube también si la escritura falla). Inicio lo observa junto con el regreso a primer plano y el pull-to-refresh; no hay polling. [App]
