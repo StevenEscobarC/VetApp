@@ -239,7 +239,7 @@ class _LineaCobroTileState extends State<LineaCobroTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Cantidad', style: t.labelLarge),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: AppSpacing.xs),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

@@ -530,9 +530,11 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
               : 'Se perderán las líneas que agregaste.',
         ),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Seguir editando',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Seguir editando'),
           ),
           AppButton(
             label: 'Descartar',
@@ -649,7 +651,12 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
       valor: nombre,
       accion: b.vinculado
           ? null
-          : TextButton(onPressed: _elegirCliente, child: const Text('Cambiar')),
+          : AppButton(
+              label: 'Cambiar',
+              variant: AppButtonVariant.text,
+              expand: false,
+              onPressed: _elegirCliente,
+            ),
     );
   }
 
@@ -723,12 +730,14 @@ class _CobroFormScreenState extends ConsumerState<CobroFormScreen> {
           if (admin)
             Align(
               alignment: Alignment.centerLeft,
-              child: TextButton(
+              child: AppButton(
+                label: 'Agregar servicios',
+                variant: AppButtonVariant.text,
+                expand: false,
                 onPressed: () async {
                   await context.push(kRutaServicios);
                   if (mounted) ref.invalidate(serviciosProvider);
                 },
-                child: const Text('Agregar servicios'),
               ),
             ),
           const SizedBox(height: AppSpacing.sm),
@@ -930,7 +939,7 @@ class _Banner {
   final String? detalle;
   final bool sinConexion;
 
-  /// Agrega el `TextButton` "Volver" (cotización ya no usable).
+  /// Agrega el botón "Volver" (cotización ya no usable).
   final bool volver;
 }
 
@@ -996,14 +1005,18 @@ class _BannerCobro extends StatelessWidget {
                       ),
                     ],
                     if (banner.volver)
-                      TextButton(
+                      AppButton(
+                        label: 'Volver',
+                        variant: AppButtonVariant.text,
+                        expand: false,
                         onPressed: onVolver,
-                        child: const Text('Volver'),
                       ),
                     if (onDescartar != null)
-                      TextButton(
+                      AppButton(
+                        label: 'Descartar',
+                        variant: AppButtonVariant.text,
+                        expand: false,
                         onPressed: onDescartar,
-                        child: const Text('Descartar'),
                       ),
                   ],
                 ),
