@@ -21,7 +21,8 @@ void main() {
     await tester.pumpWidget(appUnderTest(profile: vetProfile));
     await tester.pumpAndSettle();
 
-    expect(find.text('Hola, Ana Ramírez'), findsOneWidget);
+    expect(find.text('Hola,'), findsOneWidget);
+    expect(find.text('Ana Ramírez'), findsOneWidget);
     expect(find.text('Clínica Patitas'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
     final navigationBar = find.byType(NavigationBar);
@@ -53,7 +54,8 @@ void main() {
       find.descendant(of: navigationBar, matching: find.text('Inicio')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Hola, Ana Ramírez'), findsOneWidget);
+    expect(find.text('Hola,'), findsOneWidget);
+    expect(find.text('Ana Ramírez'), findsOneWidget);
   });
 
   testWidgets('cerrar sesión desde Más', (WidgetTester tester) async {
