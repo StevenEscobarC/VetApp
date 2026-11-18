@@ -160,10 +160,7 @@ void main() {
     expect(_y(tester, manana), lessThan(_y(tester, filas.at(2))));
     expect(_y(tester, filas.at(2)), lessThan(_y(tester, jueves)));
     expect(_y(tester, jueves), lessThan(_y(tester, filas.at(3))));
-    expect(
-      _y(tester, find.text('Próximas citas')),
-      lessThan(_y(tester, hoy)),
-    );
+    expect(_y(tester, find.text('Próximas citas')), lessThan(_y(tester, hoy)));
     expect(
       tester.getSemantics(find.text('Próximas citas')),
       isSemantics(isHeader: true),
@@ -207,8 +204,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('DETALLE mar-1'), findsOneWidget);
     // go reemplaza la pila: no hay a dónde volver.
-    expect(GoRouter.of(tester.element(find.text('DETALLE mar-1'))).canPop(),
-        isFalse);
+    expect(
+      GoRouter.of(tester.element(find.text('DETALLE mar-1'))).canPop(),
+      isFalse,
+    );
   });
 
   testWidgets('Ver agenda va a /agenda con go', (tester) async {
@@ -223,8 +222,10 @@ void main() {
     await tester.tap(ver);
     await tester.pumpAndSettle();
     expect(find.text('PANTALLA AGENDA'), findsOneWidget);
-    expect(GoRouter.of(tester.element(find.text('PANTALLA AGENDA'))).canPop(),
-        isFalse);
+    expect(
+      GoRouter.of(tester.element(find.text('PANTALLA AGENDA'))).canPop(),
+      isFalse,
+    );
   });
 
   group('marca de veterinario (D-07)', () {
@@ -335,10 +336,7 @@ void main() {
       final citas = _CitasRetenidas();
       await tester.pumpWidget(_app(citas: citas));
       await tester.pump();
-      expect(
-        find.byKey(const ValueKey('proxima-esqueleto')),
-        findsNWidgets(3),
-      );
+      expect(find.byKey(const ValueKey('proxima-esqueleto')), findsNWidgets(3));
       expect(find.widgetWithText(AppButton, 'Ver agenda'), findsOneWidget);
       citas.suelta.complete();
       await tester.pumpAndSettle();
@@ -369,9 +367,7 @@ void main() {
     testWidgets('sin conexión: texto de offline', (tester) async {
       await tester.pumpWidget(
         _app(
-          citas: FakeCitaRepository(
-            error: const SocketException('sin red'),
-          ),
+          citas: FakeCitaRepository(error: const SocketException('sin red')),
         ),
       );
       await tester.pumpAndSettle();

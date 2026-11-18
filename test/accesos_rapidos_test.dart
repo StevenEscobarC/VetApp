@@ -140,10 +140,9 @@ void main() {
       expect(tam.height, greaterThanOrEqualTo(48));
     }
     // Solo Paciente usa el acento.
-    expect(
-      _labels.where((l) => _relleno(tester, l) == AppColors.primary),
-      ['Paciente'],
-    );
+    expect(_labels.where((l) => _relleno(tester, l) == AppColors.primary), [
+      'Paciente',
+    ]);
   });
 
   testWidgets('semántica de botones con escritura', (tester) async {

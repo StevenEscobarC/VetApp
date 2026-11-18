@@ -117,9 +117,9 @@ class _Filas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final estilo = Theme.of(context).textTheme.labelLarge?.copyWith(
-      color: InicioColores.tenue(context),
-    );
+    final estilo = Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(color: InicioColores.tenue(context));
     final hijos = <Widget>[];
     DateTime? diaActual;
     for (final cita in citas) {

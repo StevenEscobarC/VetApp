@@ -56,53 +56,47 @@ Widget _appUnderTest({
   ThemeData? tema,
 }) {
   final routes = <RouteBase>[
-      GoRoute(path: '/', builder: (_, _) => const InicioScreen()),
-      GoRoute(
-        path: '/vacunas',
-        builder: (_, _) => const Text('PANTALLA VACUNAS'),
-      ),
-      GoRoute(
-        path: '/cobros',
-        builder: (_, _) => const Text('PANTALLA COBROS'),
-      ),
-      GoRoute(
-        path: '/pacientes',
-        builder: (_, _) => const Text('PANTALLA PACIENTES'),
-      ),
-      GoRoute(
-        path: '/dosis/nueva',
-        builder: (_, state) =>
-            Text('DOSIS ${state.uri.queryParameters['mascotaId']}'),
-      ),
-      GoRoute(
-        path: '/agenda',
-        builder: (_, _) => const Text('PANTALLA AGENDA'),
-      ),
-      GoRoute(
-        path: '/agenda/:id',
-        builder: (_, state) => Text('DETALLE ${state.pathParameters['id']}'),
-      ),
+    GoRoute(path: '/', builder: (_, _) => const InicioScreen()),
+    GoRoute(
+      path: '/vacunas',
+      builder: (_, _) => const Text('PANTALLA VACUNAS'),
+    ),
+    GoRoute(path: '/cobros', builder: (_, _) => const Text('PANTALLA COBROS')),
+    GoRoute(
+      path: '/pacientes',
+      builder: (_, _) => const Text('PANTALLA PACIENTES'),
+    ),
+    GoRoute(
+      path: '/dosis/nueva',
+      builder: (_, state) =>
+          Text('DOSIS ${state.uri.queryParameters['mascotaId']}'),
+    ),
+    GoRoute(path: '/agenda', builder: (_, _) => const Text('PANTALLA AGENDA')),
+    GoRoute(
+      path: '/agenda/:id',
+      builder: (_, state) => Text('DETALLE ${state.pathParameters['id']}'),
+    ),
   ];
   final overrides = [
-      ...planOverrides(plan: plan),
-      authProfileProvider.overrideWith(
-        () => FakeAuthProfileNotifier(profile: profile, error: error),
-      ),
-      vacunaRepositoryProvider.overrideWithValue(
-        vacunas ?? FakeVacunaRepository(),
-      ),
-      inventarioRepositoryProvider.overrideWithValue(
-        inventario ?? FakeInventarioRepository(),
-      ),
-      mascotaRepositoryProvider.overrideWithValue(FakeMascotaRepository()),
-      mascotaFotoDatasourceProvider.overrideWithValue(
-        FakeMascotaFotoDatasource(),
-      ),
-      ...inicioOverrides(inicio: inicio, citas: citas),
-      clockProvider.overrideWithValue(() => _ahora),
-      esClinicaMultiVetProvider.overrideWithValue(false),
-      miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
-      indicesColorVetProvider.overrideWithValue(const <String, int>{}),
+    ...planOverrides(plan: plan),
+    authProfileProvider.overrideWith(
+      () => FakeAuthProfileNotifier(profile: profile, error: error),
+    ),
+    vacunaRepositoryProvider.overrideWithValue(
+      vacunas ?? FakeVacunaRepository(),
+    ),
+    inventarioRepositoryProvider.overrideWithValue(
+      inventario ?? FakeInventarioRepository(),
+    ),
+    mascotaRepositoryProvider.overrideWithValue(FakeMascotaRepository()),
+    mascotaFotoDatasourceProvider.overrideWithValue(
+      FakeMascotaFotoDatasource(),
+    ),
+    ...inicioOverrides(inicio: inicio, citas: citas),
+    clockProvider.overrideWithValue(() => _ahora),
+    esClinicaMultiVetProvider.overrideWithValue(false),
+    miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
+    indicesColorVetProvider.overrideWithValue(const <String, int>{}),
   ];
   if (tema == null) {
     return routerHarness(
@@ -236,6 +230,7 @@ void main() {
         ocultasAntiguas: 0,
       ),
     );
+    _alto(tester);
     await tester.pumpWidget(
       _appUnderTest(profile: vetProfile, vacunas: vacunas),
     );
@@ -253,6 +248,7 @@ void main() {
   testWidgets('en Inicio la tarjeta de vacunas se oculta con 0/0', (
     tester,
   ) async {
+    _alto(tester);
     await tester.pumpWidget(_appUnderTest(profile: vetProfile));
     await tester.pumpAndSettle();
 
@@ -263,6 +259,7 @@ void main() {
   testWidgets('error de la tarjeta muestra mensaje y Reintentar', (
     tester,
   ) async {
+    _alto(tester);
     await tester.pumpWidget(
       _appUnderTest(
         profile: vetProfile,
@@ -313,6 +310,7 @@ void main() {
     testWidgets('el acceso "Vacunar" muestra candado y abre la hoja de solo '
         'lectura en vez del buscador', (tester) async {
       final semantics = tester.ensureSemantics();
+      _alto(tester);
       await tester.pumpWidget(
         _appUnderTest(profile: vetProfile, plan: planSoloLectura),
       );
@@ -531,6 +529,7 @@ void main() {
     });
 
     testWidgets('error de vacunas no oculta las cifras', (tester) async {
+      _alto(tester);
       await tester.pumpWidget(
         _appUnderTest(
           profile: vetProfile,
@@ -663,6 +662,7 @@ void main() {
   });
 
   testWidgets('tarjeta de stock bajo en Inicio navega a Bajos', (tester) async {
+    _alto(tester);
     await tester.pumpWidget(
       _appInicioConInventario(
         FakeInventarioRepository(
@@ -684,6 +684,7 @@ void main() {
   testWidgets('sin bajos Inicio no muestra la tarjeta de stock', (
     tester,
   ) async {
+    _alto(tester);
     await tester.pumpWidget(
       _appInicioConInventario(FakeInventarioRepository()),
     );
@@ -715,6 +716,9 @@ Widget _appInicioConInventario(FakeInventarioRepository inventario) {
         FakeMascotaFotoDatasource(),
       ),
       ...inicioOverrides(),
+      esClinicaMultiVetProvider.overrideWithValue(false),
+      miembrosActivosProvider.overrideWithValue(const <Miembro>[]),
+      indicesColorVetProvider.overrideWithValue(const <String, int>{}),
     ],
   );
 }
