@@ -29,7 +29,7 @@ class DayStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
       child: Row(
         children: [
           for (var i = 0; i < 7; i++)
@@ -92,56 +92,56 @@ class _DayCell extends StatelessWidget {
           '${nombreDiaLargo(dia)} ${dia.day}, '
           '${n == 1 ? '1 cita' : '$n citas'}${esSel ? ', seleccionado' : ''}',
       onTap: () => onTap(dia),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: InkWell(
-          key: ValueKey('dia-${dia.year}-${dia.month}-${dia.day}'),
-          onTap: () => onTap(dia),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 64),
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: fondo,
-              border: borde,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  diaAbrev(dia),
-                  style: textTheme.labelMedium?.copyWith(color: texto),
-                ),
-                Text(
-                  '${dia.day}',
-                  style: textTheme.headlineSmall?.copyWith(color: texto),
-                ),
-                const SizedBox(height: 2),
-                if (conteo != null && n > 0)
-                  Container(
-                    constraints: const BoxConstraints(minHeight: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: esSel
-                          ? AppColors.primaryStrong
-                          : AppColors.surfaceMuted,
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      child: InkWell(
+        key: ValueKey('dia-${dia.year}-${dia.month}-${dia.day}'),
+        onTap: () => onTap(dia),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        child: Container(
+          constraints: const BoxConstraints(
+            minWidth: AppSpacing.touchTarget,
+            minHeight: 64,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: fondo,
+            border: borde,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                diaAbrev(dia),
+                style: textTheme.labelMedium?.copyWith(color: texto),
+              ),
+              Text(
+                '${dia.day}',
+                style: textTheme.headlineSmall?.copyWith(color: texto),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              if (conteo != null && n > 0)
+                Container(
+                  constraints: const BoxConstraints(minHeight: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs,
+                  ),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: esSel
+                        ? AppColors.primaryStrong
+                        : AppColors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  child: Text(
+                    '$n',
+                    style: textTheme.labelMedium?.copyWith(
+                      color: esSel ? AppColors.onPrimary : AppColors.foreground,
                     ),
-                    child: Text(
-                      '$n',
-                      style: textTheme.labelMedium?.copyWith(
-                        color: esSel
-                            ? AppColors.onPrimary
-                            : AppColors.foreground,
-                      ),
-                    ),
-                  )
-                else
-                  const SizedBox(height: 16),
-              ],
-            ),
+                  ),
+                )
+              else
+                const SizedBox(height: AppSpacing.md),
+            ],
           ),
         ),
       ),

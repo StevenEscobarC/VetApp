@@ -198,7 +198,7 @@ void main() {
 
 /// Disparador mínimo para abrir el diálogo desde un contexto con Navigator.
 class _Disparador extends StatelessWidget {
-  const _Disparador({super.key, required this.onTap});
+  const _Disparador({required this.onTap});
 
   final VoidCallback onTap;
 
