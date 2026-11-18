@@ -17,6 +17,7 @@ import '../../../plan/presentation/plan_textos.dart';
 import '../../../plan/presentation/providers/plan_providers.dart';
 import '../../../plan/presentation/widgets/plan_insignia.dart';
 import '../../../team/presentation/providers/team_providers.dart';
+import '../widgets/inicio_colores.dart';
 
 String _textoBajos(int n) => n == 1 ? '1 bajo' : '$n bajos';
 
@@ -107,7 +108,7 @@ class MasScreen extends ConsumerWidget {
                       Text(
                         'Mat. $matricula',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: InicioColores.secundario(context),
                         ),
                       ),
                     const Icon(Icons.chevron_right),
@@ -134,7 +135,7 @@ class MasScreen extends ConsumerWidget {
                       Text(
                         miembros == 1 ? '1 miembro' : '$miembros miembros',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: InicioColores.secundario(context),
                         ),
                       ),
                     const Icon(Icons.chevron_right),
@@ -275,7 +276,7 @@ class MasScreen extends ConsumerWidget {
                     Text(
                       etiquetaAnticipacion(anticipacion),
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: InicioColores.secundario(context),
                       ),
                     ),
                   ],

@@ -33,7 +33,7 @@ raw_hits() {
       grep -rnE "fontSize:|fontFamily:|GoogleFonts\.|FontWeight\.(bold|w[1235789]00)" "$@" --include=*.dart | grep -v "lib/core/theme/app_typography.dart"
       ;;
     SW-04)
-      grep -rnE "EdgeInsets\.(all|symmetric|only|fromLTRB)\([^)]*[^a-zA-Z_.0-9][0-9]+\b|SizedBox\((height|width): *[0-9]+(\.[0-9]+)?\)|BorderRadius\.circular\([0-9]+(\.[0-9]+)?\)" "$@" --include=*.dart | grep -v "lib/core/theme/" | grep -v "_pdf_service\.dart"
+      grep -rnE "EdgeInsets\.(all|symmetric|only|fromLTRB)\(([^)]*[^a-zA-Z_.0-9])?[0-9]+\b|SizedBox\((height|width): *[0-9]+(\.[0-9]+)?\)|BorderRadius\.circular\([0-9]+(\.[0-9]+)?\)" "$@" --include=*.dart | grep -v "lib/core/theme/" | grep -v "_pdf_service\.dart"
       ;;
     SW-05)
       grep -rnE "MaterialTapTargetSize\.shrinkWrap|VisualDensity\.compact|BoxConstraints\(\)" "$@" --include=*.dart
@@ -116,6 +116,8 @@ selftest() {
   expect_hit SW-02 lib/features/x/a.dart "  color: Colors.red,"
   expect_hit SW-03 lib/features/x/a.dart "  style: TextStyle(fontSize: 13),"
   expect_hit SW-04 lib/features/x/a.dart "  const SizedBox(height: 12),"
+  expect_hit SW-04 lib/features/x/b.dart "  padding: const EdgeInsets.all(12),"
+  expect_hit SW-04 lib/features/x/c.dart "  padding: EdgeInsets.only(left: 6),"
   expect_hit SW-05 lib/features/x/a.dart "  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,"
   expect_hit SW-08 lib/features/x/presentation/a.dart "  final s = DateFormat('d/M').format(f);"
   expect_hit SW-09 lib/features/x/a.dart "  const titulo = 'Próximamente';"
