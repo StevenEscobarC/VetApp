@@ -25,6 +25,7 @@ import 'package:vetapp/main.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_citas.dart';
+import 'helpers/fake_inicio.dart';
 import 'helpers/fake_clientes.dart';
 import 'helpers/fake_cobros.dart';
 import 'helpers/fake_inventario.dart';
@@ -44,6 +45,7 @@ Widget _app() {
     retry: (retryCount, error) => null,
     overrides: [
       ...planOverrides(),
+      ...inicioShellOverrides(),
       authProfileProvider.overrideWith(
         () => FakeAuthProfileNotifier(profile: vetProfile),
       ),
