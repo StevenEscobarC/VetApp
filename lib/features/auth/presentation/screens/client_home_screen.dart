@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
-import '../../../../core/widgets/buttons/app_button.dart';
 import '../providers/auth_providers.dart';
 
 /// Minimal landing for self-registered CLIENTE accounts (D-05) until the
@@ -23,22 +23,16 @@ class ClientHomeScreen extends ConsumerWidget {
       ],
     ),
     body: ListView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
         Text(
           'Aún no tienes mascotas registradas.',
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 8),
-        const Text('Agrégalas para consultar su historial y agendar citas.'),
-        const SizedBox(height: 24),
-        AppButton(label: 'Agregar mascota', icon: Icons.add, onPressed: () {}),
-        const SizedBox(height: 12),
-        AppButton(
-          label: 'Agendar cita',
-          icon: Icons.calendar_month,
-          variant: AppButtonVariant.outline,
-          onPressed: () {},
+        const SizedBox(height: AppSpacing.sm),
+        const Text(
+          'Tu veterinario registra tus mascotas; aquí podrás consultar su '
+          'historial.',
         ),
       ],
     ),

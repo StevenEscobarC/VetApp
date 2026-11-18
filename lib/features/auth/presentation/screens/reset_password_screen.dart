@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../domain/auth_failure.dart';
@@ -61,7 +62,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         controller: _email,
         keyboardType: TextInputType.emailAddress,
       ),
-      const SizedBox(height: 20),
+      const SizedBox(height: AppSpacing.md),
       AppButton(
         label: 'Enviar enlace',
         onPressed: _submit,

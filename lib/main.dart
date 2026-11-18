@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/router/app_router.dart';
+import 'core/theme/app_spacing.dart';
 import 'core/theme/app_theme.dart';
 import 'features/appointments/presentation/providers/recordatorios_providers.dart';
 
@@ -60,12 +61,12 @@ class _MissingConfigApp extends StatelessWidget {
     builder: (context, child) => Scaffold(
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text('Falta la configuración de Supabase.'),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               const Text(
                 'Ejecuta: flutter run --dart-define-from-file=dart_define.json',
               ),
