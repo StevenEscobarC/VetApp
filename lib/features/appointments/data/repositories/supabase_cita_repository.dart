@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/data/limite_plan_postgrest.dart';
 import '../../../../core/errors/limite_plan.dart';
+import '../../../inventory/data/repositories/supabase_inventario_repository.dart'
+    show esErrorDeRed;
 import '../../domain/cita_failure.dart';
 import '../../domain/entities/cita.dart';
 
@@ -38,6 +40,36 @@ class SupabaseCitaRepository {
       throw CitaFailure(_messageFor(e), limite: limitePlanDe(e));
     } catch (_) {
       throw const CitaFailure('No pudimos cargar la agenda. Intenta de nuevo.');
+    }
+  }
+
+  /// Las [limite] próximas citas vivas (pendiente o confirmada) desde
+  /// [desdeUtc], por hora ascendente (Inicio, D-09). El estado se filtra en
+  /// SQL y no en Dart: `solicitada` se lee como pendiente en [citaDesdeFila]
+  /// y no debe aparecer como cita agendada. Los errores de red se relanzan
+  /// tal cual para que Inicio muestre su texto de "sin conexión".
+  Future<List<Cita>> proximas({
+    required DateTime desdeUtc,
+    int limite = 5,
+  }) async {
+    try {
+      final rows = await _client
+          .from('citas')
+          .select(_select)
+          .inFilter('estado', ['pendiente', 'confirmada'])
+          .gte('fecha_hora', desdeUtc.toUtc().toIso8601String())
+          // postgrest-dart ordena descendente por defecto: con `limit` eso
+          // devolvería las últimas citas, no las próximas.
+          .order('fecha_hora', ascending: true)
+          .limit(limite);
+      return (rows as List)
+          .map((row) => citaDesdeFila(row as Map<String, dynamic>))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw CitaFailure(_messageFor(e), limite: limitePlanDe(e));
+    } catch (e) {
+      if (esErrorDeRed(e)) rethrow;
+      throw const CitaFailure('No pudimos cargar las próximas citas.');
     }
   }
 
