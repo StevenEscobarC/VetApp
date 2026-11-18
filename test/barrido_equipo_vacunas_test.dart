@@ -202,4 +202,52 @@ void main() {
       expect(repo.rolesCambiados, [('vet-2', 'admin')]);
     });
   });
+
+  group('vacunas', () {
+    testWidgets("'Más acciones' mide al menos 48x48", (tester) async {
+      await tester.pumpWidget(_dosis(AppTheme.light));
+      await tester.pumpAndSettle();
+      final size = tester.getSize(find.byType(PopupMenuButton<String>));
+      expect(size.width, greaterThanOrEqualTo(AppSpacing.touchTarget));
+      expect(size.height, greaterThanOrEqualTo(AppSpacing.touchTarget));
+    });
+
+    testWidgets("'(retirado)' usa onSurfaceVariant en claro", (tester) async {
+      await tester.pumpWidget(_dosis(AppTheme.light));
+      await tester.pumpAndSettle();
+      expect(_colorRetirado(tester), AppColors.textMuted);
+    });
+
+    testWidgets("'(retirado)' legible en oscuro", (tester) async {
+      await tester.pumpWidget(_dosis(AppTheme.dark));
+      await tester.pumpAndSettle();
+      expect(_colorRetirado(tester), AppColors.mutedForegroundDark);
+    });
+
+    testWidgets('carga del carné mide AppSpacing.xl', (tester) async {
+      final pendiente = Completer<Carne>();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            carneProvider.overrideWith((ref, id) => pendiente.future),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: CarneResumenSection(mascotaId: 'm1', rutaBase: '/p/m1'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final caja = tester.widget<SizedBox>(
+        find.descendant(
+          of: find.byType(AppCard),
+          matching: find.byWidgetPredicate(
+            (w) => w is SizedBox && w.width == double.infinity,
+          ),
+        ),
+      );
+      expect(caja.height, AppSpacing.xl);
+    });
+  });
 }
