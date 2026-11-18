@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
@@ -135,14 +134,17 @@ class _ServicioSheetState extends ConsumerState<_ServicioSheet> {
           'Ya no aparecerá al cobrar. Los cobros anteriores no cambian.',
         ),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Cancelar',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
           ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.destructive),
+          AppButton(
+            label: 'Quitar',
+            variant: AppButtonVariant.destructive,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Quitar'),
           ),
         ],
       ),
@@ -229,13 +231,10 @@ class _ServicioSheetState extends ConsumerState<_ServicioSheet> {
             ),
             if (_esEdicion) ...[
               const SizedBox(height: AppSpacing.sm),
-              TextButton(
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.destructive,
-                  minimumSize: const Size.fromHeight(AppSpacing.touchTarget),
-                ),
+              AppButton(
+                label: 'Quitar servicio',
+                variant: AppButtonVariant.destructive,
                 onPressed: _guardando ? null : _quitar,
-                child: const Text('Quitar servicio'),
               ),
             ],
           ],
