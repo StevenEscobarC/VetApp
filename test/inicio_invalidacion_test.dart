@@ -28,10 +28,7 @@ const _linea = LineaCobroNueva(
 );
 
 ProviderContainer _contenedor(List overrides) {
-  final c = ProviderContainer(
-    retry: (_, _) => null,
-    overrides: [...overrides],
-  );
+  final c = ProviderContainer(retry: (_, _) => null, overrides: [...overrides]);
   addTearDown(c.dispose);
   c.listen(inicioRevisionProvider, (_, _) {});
   return c;

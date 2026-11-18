@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/data/inicio_revision.dart';
 import '../../../../core/data/supabase_client_provider.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../inventory/presentation/providers/inventario_providers.dart';
@@ -87,6 +88,7 @@ void invalidarCobros(
 }) {
   ref.invalidate(cobrosProvider);
   ref.invalidate(resumenCobrosProvider);
+  ref.read(inicioRevisionProvider.notifier).incrementar();
   ref.invalidate(cobroVinculadoProvider);
   if (cobroId != null) {
     ref.invalidate(cobroProvider(cobroId));

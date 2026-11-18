@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/data/inicio_revision.dart';
 import '../../../../core/data/supabase_client_provider.dart';
 import '../../../../core/utils/formato.dart';
 import '../../../appointments/presentation/providers/citas_providers.dart';
@@ -52,30 +53,34 @@ class RegistrarConsulta {
     String? mucosas,
     String? citaId,
   }) async {
-    final id = await _ref
-        .read(consultaRepositoryProvider)
-        .registrarConsulta(
-          mascotaId: mascotaId,
-          diagnostico: diagnostico.trim(),
-          tratamiento: tratamiento.trim(),
-          anamnesis: blancoANull(anamnesis),
-          evolucion: blancoANull(evolucion),
-          pesoKg: pesoKg,
-          temperaturaC: temperaturaC,
-          frecuenciaCardiaca: frecuenciaCardiaca,
-          frecuenciaRespiratoria: frecuenciaRespiratoria,
-          mucosas: blancoANull(mucosas),
-          citaId: citaId,
-        );
-    _ref.invalidate(consultasProvider(mascotaId));
-    if (pesoKg != null) {
-      _ref.invalidate(pesosProvider(mascotaId));
+    try {
+      final id = await _ref
+          .read(consultaRepositoryProvider)
+          .registrarConsulta(
+            mascotaId: mascotaId,
+            diagnostico: diagnostico.trim(),
+            tratamiento: tratamiento.trim(),
+            anamnesis: blancoANull(anamnesis),
+            evolucion: blancoANull(evolucion),
+            pesoKg: pesoKg,
+            temperaturaC: temperaturaC,
+            frecuenciaCardiaca: frecuenciaCardiaca,
+            frecuenciaRespiratoria: frecuenciaRespiratoria,
+            mucosas: blancoANull(mucosas),
+            citaId: citaId,
+          );
+      _ref.invalidate(consultasProvider(mascotaId));
+      if (pesoKg != null) {
+        _ref.invalidate(pesosProvider(mascotaId));
+      }
+      if (citaId != null) {
+        _ref.invalidate(citaProvider(citaId));
+        _ref.invalidate(agendaSemanaProvider);
+      }
+      return id;
+    } finally {
+      _ref.read(inicioRevisionProvider.notifier).incrementar();
     }
-    if (citaId != null) {
-      _ref.invalidate(citaProvider(citaId));
-      _ref.invalidate(agendaSemanaProvider);
-    }
-    return id;
   }
 }
 
