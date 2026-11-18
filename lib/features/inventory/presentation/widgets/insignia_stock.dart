@@ -84,10 +84,9 @@ class InsigniaStock extends StatelessWidget {
             const SizedBox(width: AppSpacing.xs),
             Text(
               s.label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: s.fg,
-                fontWeight: FontWeight.w600,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: s.fg),
             ),
           ],
         ),

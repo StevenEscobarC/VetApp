@@ -433,9 +433,11 @@ class _Historial extends ConsumerWidget {
               style: textTheme.bodyLarge,
             ),
           ),
-          TextButton(
+          AppButton(
+            label: 'Reintentar',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => ref.invalidate(movimientosProvider(producto.id)),
-            child: const Text('Reintentar'),
           ),
         ],
       );
@@ -499,9 +501,11 @@ class _AccionArchivarState extends ConsumerState<_AccionArchivar> {
           'se puede deshacer desde la app.',
         ),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Cancelar',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
           ),
           AppButton(
             label: 'Archivar',

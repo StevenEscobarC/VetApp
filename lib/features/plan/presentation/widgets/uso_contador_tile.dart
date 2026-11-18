@@ -51,7 +51,7 @@ class UsoContadorTile extends StatelessWidget {
                   if (p != null) ...[
                     const SizedBox(height: AppSpacing.sm),
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                       child: LinearProgressIndicator(
                         key: const ValueKey('uso-barra'),
                         value: p,

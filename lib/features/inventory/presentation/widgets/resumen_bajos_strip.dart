@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 
 /// Tira de alerta de la lista de inventario (INV-02): avisa cuántos productos
 /// están bajo su mínimo y lleva al filtro "Bajos". No se descarta: es el mismo
@@ -47,15 +48,11 @@ class ResumenBajosStrip extends StatelessWidget {
               ),
             ),
           ),
-          TextButton(
+          AppButton(
+            label: 'Ver bajos',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: onVerBajos,
-            style: TextButton.styleFrom(
-              minimumSize: const Size(
-                AppSpacing.touchTarget,
-                AppSpacing.touchTarget,
-              ),
-            ),
-            child: const Text('Ver bajos'),
           ),
         ],
       ),

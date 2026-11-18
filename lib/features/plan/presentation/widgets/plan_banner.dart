@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../aviso_plan.dart';
 import '../providers/plan_providers.dart';
@@ -85,15 +86,11 @@ class PlanBanner extends ConsumerWidget {
               ),
             ),
             ExcludeSemantics(
-              child: TextButton(
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(48, AppSpacing.touchTarget),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                  ),
-                ),
+              child: AppButton(
+                label: 'Ver mi plan',
+                variant: AppButtonVariant.text,
+                expand: false,
                 onPressed: () => context.push('/mas/plan'),
-                child: const Text('Ver mi plan'),
               ),
             ),
             if (aviso.descartable)
