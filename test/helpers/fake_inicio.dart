@@ -44,3 +44,9 @@ List<Override> inicioOverrides({
   inicioRepositoryProvider.overrideWithValue(inicio ?? FakeInicioRepository()),
   citaRepositoryProvider.overrideWithValue(citas ?? FakeCitaRepository()),
 ];
+
+/// Todo test que arranca el router real pinta /inicio: este override deja el
+/// repositorio de Inicio en memoria para que nunca llegue a `Supabase.instance`.
+List<Override> inicioShellOverrides({FakeInicioRepository? inicio}) => [
+  inicioRepositoryProvider.overrideWithValue(inicio ?? FakeInicioRepository()),
+];

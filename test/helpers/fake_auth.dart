@@ -10,6 +10,7 @@ import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart'
 import 'package:vetapp/main.dart';
 
 import 'fake_citas.dart';
+import 'fake_inicio.dart';
 import 'fake_recordatorios.dart';
 
 /// Fake [AuthProfileNotifier] used by widget tests so no test ever touches
@@ -101,6 +102,7 @@ Widget appUnderTest({
       recordatoriosServiceProvider.overrideWithValue(
         FakeRecordatoriosService(),
       ),
+      ...inicioShellOverrides(),
       ...overrides,
     ],
     child: const VetApp(),
