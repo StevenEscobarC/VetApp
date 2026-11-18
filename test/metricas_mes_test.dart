@@ -99,7 +99,7 @@ void main() {
         tester.getSemantics(
           find.bySemanticsLabel('Hola, Ana Ramírez. Clínica Patitas'),
         ),
-        containsSemantics(isHeader: true),
+        isSemantics(isHeader: true),
       );
       semantics.dispose();
     });
@@ -159,7 +159,7 @@ void main() {
       expect(consultas, findsOneWidget);
       expect(
         tester.getSemantics(consultas),
-        containsSemantics(isButton: false, hasTapAction: false),
+        isSemantics(isButton: false, hasTapAction: false),
       );
       final ingresos = find.bySemanticsLabel(
         'Ingresos del mes: \$ 3.849.999. Abre Cobros',
@@ -167,7 +167,7 @@ void main() {
       expect(ingresos, findsOneWidget);
       expect(
         tester.getSemantics(ingresos),
-        containsSemantics(isButton: true, hasTapAction: true),
+        isSemantics(isButton: true, hasTapAction: true),
       );
       final nuevos = find.bySemanticsLabel(
         'Pacientes nuevos del mes: 7. Abre Pacientes',
@@ -175,7 +175,7 @@ void main() {
       expect(nuevos, findsOneWidget);
       expect(
         tester.getSemantics(nuevos),
-        containsSemantics(isButton: true, hasTapAction: true),
+        isSemantics(isButton: true, hasTapAction: true),
       );
       semantics.dispose();
     });

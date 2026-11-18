@@ -378,8 +378,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      // El único candado es el de Vacunar: las cifras no se bloquean.
-      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+      // Las cifras no se bloquean: ningún candado dentro de ellas.
+      expect(
+        find.descendant(
+          of: find.byType(MetricasMes),
+          matching: find.byIcon(Icons.lock_outline),
+        ),
+        findsNothing,
+      );
       await tester.tap(find.text('Ingresos'));
       await tester.pumpAndSettle();
       expect(find.text('PANTALLA COBROS'), findsOneWidget);
