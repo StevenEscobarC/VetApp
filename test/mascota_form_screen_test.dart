@@ -1,8 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:vetapp/core/data/inicio_revision.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/core/widgets/chips/app_filter_chip.dart';
@@ -67,6 +69,10 @@ Widget _appUnderTest({
   );
 }
 
+/// Contenedor de la app de prueba: sobrevive al `pop` del formulario.
+ProviderContainer _contenedor(WidgetTester tester) =>
+    ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+
 Carne _carneDe(String nombre) => Carne(
   hoy: DateTime.utc(2026, 10, 2),
   mascotaId: 'm-1',
@@ -82,6 +88,53 @@ Carne _carneDe(String nombre) => Carne(
 );
 
 void main() {
+  testWidgets('crear una mascota suma uno a la revisión de Inicio', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appUnderTest(initialLocation: '/clientes/c-1/nueva-mascota'),
+    );
+    await tester.pumpAndSettle();
+    final c = _contenedor(tester);
+    final antes = c.read(inicioRevisionProvider);
+
+    await tester.enterText(find.byType(TextFormField).first, 'Toby');
+    await tester.ensureVisible(find.text('Perro'));
+    await tester.tap(find.text('Perro'));
+    await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(AppButton, 'Nueva mascota'));
+    await tester.tap(find.widgetWithText(AppButton, 'Nueva mascota'));
+    await tester.pumpAndSettle();
+
+    expect(c.read(inicioRevisionProvider), antes + 1);
+  });
+
+  testWidgets('editar una mascota no toca la revisión de Inicio', (
+    tester,
+  ) async {
+    final repo = FakeMascotaRepository(mascotas: [mascotaRocky]);
+    await tester.pumpWidget(
+      _appUnderTest(initialLocation: '/pacientes/m-1', mascotaRepo: repo),
+    );
+    await tester.pumpAndSettle();
+    final c = _contenedor(tester);
+    final antes = c.read(inicioRevisionProvider);
+
+    await tester.ensureVisible(find.widgetWithText(AppButton, 'Editar'));
+    await tester.tap(find.widgetWithText(AppButton, 'Editar'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(1), 'Golden');
+    await tester.pump();
+    await tester.ensureVisible(
+      find.widgetWithText(AppButton, 'Guardar cambios'),
+    );
+    await tester.tap(find.widgetWithText(AppButton, 'Guardar cambios'));
+    await tester.pumpAndSettle();
+
+    expect(repo.actualizados, hasLength(1));
+    expect(c.read(inicioRevisionProvider), antes);
+  });
+
   testWidgets(
     'desde la ficha del cliente, "Nueva mascota" abre el formulario con el '
     'dueño de solo lectura y sin volver a pedir el teléfono',

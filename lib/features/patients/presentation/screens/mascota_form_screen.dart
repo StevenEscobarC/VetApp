@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/data/inicio_revision.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/captura_foto.dart';
 import '../../../../core/utils/formato.dart';
@@ -182,8 +183,10 @@ class _MascotaFormScreenState extends ConsumerState<MascotaFormScreen> {
       }
 
       if (!mounted) return;
-      // Un paciente más: el contador del plan (tope de Gratis) cambió.
+      // Un paciente más: el contador del plan (tope de Gratis) y las cifras
+      // de Inicio cambiaron.
       ref.invalidate(miPlanProvider);
+      ref.read(inicioRevisionProvider.notifier).incrementar();
       ref.invalidate(mascotasDeClienteProvider(clienteId));
       ref.invalidate(clienteProvider(clienteId));
       ref.read(clientesProvider.notifier).refrescar();

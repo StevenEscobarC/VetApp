@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/data/inicio_revision.dart';
 import '../../plan/presentation/providers/plan_providers.dart';
 
 /// Bottom-nav shell over the 5 [StatefulShellRoute] branches. Desktop
@@ -34,7 +35,11 @@ class _AppShellState extends ConsumerState<AppShell> {
         _ramasQueRefrescanPlan.contains(indice)) {
       // Corre durante el build: Riverpod no permite invalidar hasta el frame.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) ref.invalidate(miPlanProvider);
+        if (!mounted) return;
+        ref.invalidate(miPlanProvider);
+        if (indice == 0) {
+          ref.read(inicioRevisionProvider.notifier).incrementar();
+        }
       });
     }
   }

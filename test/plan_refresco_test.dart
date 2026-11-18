@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vetapp/core/data/inicio_revision.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/citas_providers.dart';
 import 'package:vetapp/features/appointments/presentation/providers/recordatorios_providers.dart';
@@ -252,6 +253,55 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repo.llamadas, 1);
+    });
+  });
+
+  group('AppShell refresca Inicio', () {
+    int revision(WidgetTester tester) => ProviderScope.containerOf(
+      tester.element(find.byType(NavigationBar)),
+    ).read(inicioRevisionProvider);
+
+    testWidgets('volver a Inicio por toque suma uno; ir a Más no', (
+      tester,
+    ) async {
+      _vista(tester);
+      await tester.pumpWidget(_conShell(FakePlanRepository(plan: planGratis)));
+      await tester.pumpAndSettle();
+      final inicial = revision(tester);
+
+      await tester.tap(_destino('Más'));
+      await tester.pumpAndSettle();
+      expect(revision(tester), inicial);
+
+      await tester.tap(_destino('Inicio'));
+      await tester.pumpAndSettle();
+      expect(revision(tester), inicial + 1);
+    });
+
+    testWidgets('volver a Inicio con context.go suma uno', (tester) async {
+      _vista(tester);
+      await tester.pumpWidget(_conShell(FakePlanRepository(plan: planGratis)));
+      await tester.pumpAndSettle();
+      await tester.tap(_destino('Más'));
+      await tester.pumpAndSettle();
+      final antes = revision(tester);
+
+      GoRouter.of(tester.element(find.byType(MasScreen))).go('/inicio');
+      await tester.pumpAndSettle();
+
+      expect(revision(tester), antes + 1);
+    });
+
+    testWidgets('sin navegación el contador no cambia', (tester) async {
+      _vista(tester);
+      await tester.pumpWidget(_conShell(FakePlanRepository(plan: planGratis)));
+      await tester.pumpAndSettle();
+      final inicial = revision(tester);
+
+      await tester.pump(const Duration(minutes: 10));
+      await tester.pumpAndSettle();
+
+      expect(revision(tester), inicial);
     });
   });
 

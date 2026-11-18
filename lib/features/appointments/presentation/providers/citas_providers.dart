@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/data/inicio_revision.dart';
 import '../../../../core/data/supabase_client_provider.dart';
 import '../../../../core/utils/zona_bogota.dart';
 import '../../data/repositories/supabase_cita_repository.dart';
@@ -77,22 +78,26 @@ class CitaActions {
     required String notas,
     String? veterinarioId,
   }) async {
-    final id = await _ref
-        .read(citaRepositoryProvider)
-        .crear(
-          clienteId: clienteId,
-          mascotaIds: mascotaIds,
-          fechaHora: fechaHora,
-          duracionMin: duracionMin,
-          modalidad: modalidad,
-          direccion: direccion,
-          motivo: motivo,
-          notas: notas,
-          veterinarioId: veterinarioId,
-        );
-    _ref.invalidate(agendaSemanaProvider);
-    _ref.read(citasRevisionProvider.notifier).incrementar();
-    return id;
+    try {
+      final id = await _ref
+          .read(citaRepositoryProvider)
+          .crear(
+            clienteId: clienteId,
+            mascotaIds: mascotaIds,
+            fechaHora: fechaHora,
+            duracionMin: duracionMin,
+            modalidad: modalidad,
+            direccion: direccion,
+            motivo: motivo,
+            notas: notas,
+            veterinarioId: veterinarioId,
+          );
+      _ref.invalidate(agendaSemanaProvider);
+      _ref.read(citasRevisionProvider.notifier).incrementar();
+      return id;
+    } finally {
+      _ref.read(inicioRevisionProvider.notifier).incrementar();
+    }
   }
 
   Future<void> actualizar({
@@ -106,33 +111,45 @@ class CitaActions {
     required String notas,
     String? veterinarioId,
   }) async {
-    await _ref
-        .read(citaRepositoryProvider)
-        .actualizar(
-          citaId: citaId,
-          mascotaIds: mascotaIds,
-          fechaHora: fechaHora,
-          duracionMin: duracionMin,
-          modalidad: modalidad,
-          direccion: direccion,
-          motivo: motivo,
-          notas: notas,
-          veterinarioId: veterinarioId,
-        );
-    _refrescar(citaId);
-    _ref.read(citasRevisionProvider.notifier).incrementar();
+    try {
+      await _ref
+          .read(citaRepositoryProvider)
+          .actualizar(
+            citaId: citaId,
+            mascotaIds: mascotaIds,
+            fechaHora: fechaHora,
+            duracionMin: duracionMin,
+            modalidad: modalidad,
+            direccion: direccion,
+            motivo: motivo,
+            notas: notas,
+            veterinarioId: veterinarioId,
+          );
+      _refrescar(citaId);
+      _ref.read(citasRevisionProvider.notifier).incrementar();
+    } finally {
+      _ref.read(inicioRevisionProvider.notifier).incrementar();
+    }
   }
 
   Future<void> reasignar(String citaId, String veterinarioId) async {
-    await _ref.read(citaRepositoryProvider).reasignar(citaId, veterinarioId);
-    _refrescar(citaId);
-    _ref.read(citasRevisionProvider.notifier).incrementar();
+    try {
+      await _ref.read(citaRepositoryProvider).reasignar(citaId, veterinarioId);
+      _refrescar(citaId);
+      _ref.read(citasRevisionProvider.notifier).incrementar();
+    } finally {
+      _ref.read(inicioRevisionProvider.notifier).incrementar();
+    }
   }
 
   Future<void> cambiarEstado(String citaId, EstadoCita nuevo) async {
-    await _ref.read(citaRepositoryProvider).cambiarEstado(citaId, nuevo);
-    _refrescar(citaId);
-    _ref.read(citasRevisionProvider.notifier).incrementar();
+    try {
+      await _ref.read(citaRepositoryProvider).cambiarEstado(citaId, nuevo);
+      _refrescar(citaId);
+      _ref.read(citasRevisionProvider.notifier).incrementar();
+    } finally {
+      _ref.read(inicioRevisionProvider.notifier).incrementar();
+    }
   }
 
   /// No incrementa la revisión: los recordatorios locales no dependen de esto.
