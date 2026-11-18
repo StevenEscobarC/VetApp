@@ -25,10 +25,9 @@ const _archivos = [
 ];
 
 /// Source without `//` comments, so doc text never trips the guard.
-String _sinComentarios(String path) => File(path)
-    .readAsLinesSync()
-    .map((l) => l.replaceFirst(RegExp(r'//.*$'), ''))
-    .join('\n');
+String _sinComentarios(String path) => File(
+  path,
+).readAsLinesSync().map((l) => l.replaceFirst(RegExp(r'//.*$'), '')).join('\n');
 
 class _SignOutSpy extends FakeAuthProfileNotifier {
   _SignOutSpy() : super(profile: clienteProfile);
@@ -143,6 +142,40 @@ void main() {
         tester.widget<Text>(find.text('Listo')).style?.color,
         AppColors.successBg,
       );
+    });
+  });
+
+  group('cliente', () {
+    testWidgets('sin CTAs muertos y con cerrar sesión intacto', (tester) async {
+      final spy = _SignOutSpy();
+      await tester.pumpWidget(
+        ProviderScope(
+          retry: (retryCount, error) => null,
+          overrides: [authProfileProvider.overrideWith(() => spy)],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: const ClientHomeScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mis mascotas'), findsOneWidget);
+      expect(find.text('Aún no tienes mascotas registradas.'), findsOneWidget);
+      expect(
+        find.text(
+          'Tu veterinario registra tus mascotas; aquí podrás consultar su '
+          'historial.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Agregar mascota'), findsNothing);
+      expect(find.text('Agendar cita'), findsNothing);
+      expect(find.byType(AppButton), findsNothing);
+
+      await tester.tap(find.byTooltip('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      expect(spy.signOuts, 1);
     });
   });
 }
