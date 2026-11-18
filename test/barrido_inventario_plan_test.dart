@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:vetapp/core/data/clock_provider.dart';
+import 'package:vetapp/core/theme/app_spacing.dart';
 import 'package:vetapp/core/theme/app_theme.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/auth/presentation/providers/auth_providers.dart';
@@ -13,6 +14,8 @@ import 'package:vetapp/features/inventory/domain/entities/producto.dart';
 import 'package:vetapp/features/inventory/presentation/providers/inventario_providers.dart';
 import 'package:vetapp/features/inventory/presentation/screens/inventario_screen.dart';
 import 'package:vetapp/features/inventory/presentation/widgets/insignia_stock.dart';
+import 'package:vetapp/features/plan/presentation/widgets/plan_banner.dart';
+import 'package:vetapp/features/plan/presentation/widgets/uso_contador_tile.dart';
 
 import 'helpers/fake_auth.dart';
 import 'helpers/fake_inventario.dart';
@@ -191,6 +194,69 @@ void main() {
       await tester.tap(find.text('Bajos (1)'));
       await tester.pumpAndSettle();
       expect(find.text('Zinc'), findsNothing);
+    });
+  });
+
+  group('plan', () {
+    testWidgets('Ver mi plan es AppButton de 48 y abre Mi plan', (
+      tester,
+    ) async {
+      String? ruta;
+      await tester.pumpWidget(
+        routerHarness(
+          initialLocation: '/',
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (_, _) => const Scaffold(body: PlanBanner()),
+            ),
+            GoRoute(
+              path: '/mas/plan',
+              builder: (_, _) {
+                ruta = '/mas/plan';
+                return const Text('PANTALLA MI PLAN');
+              },
+            ),
+          ],
+          overrides: [
+            ...planOverrides(plan: planGratisAlTope),
+            authProfileProvider.overrideWith(
+              () => FakeAuthProfileNotifier(profile: vetAdminProfile),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      final boton = find.widgetWithText(AppButton, 'Ver mi plan');
+      expect(boton, findsOneWidget);
+      final size = tester.getSize(boton);
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+      await tester.tap(boton);
+      await tester.pumpAndSettle();
+      expect(ruta, '/mas/plan');
+    });
+
+    testWidgets('la barra de uso usa radiusSm', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(
+            body: UsoContadorTile(
+              icono: Icons.pets,
+              texto: '10 de 50 pacientes',
+              progreso: 0.2,
+            ),
+          ),
+        ),
+      );
+      final clip = tester.widget<ClipRRect>(
+        find.ancestor(
+          of: find.byKey(const ValueKey('uso-barra')),
+          matching: find.byType(ClipRRect),
+        ),
+      );
+      expect(clip.borderRadius, BorderRadius.circular(AppSpacing.radiusSm));
     });
   });
 }
