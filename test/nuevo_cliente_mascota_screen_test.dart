@@ -1,9 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:vetapp/core/data/inicio_revision.dart';
 import 'package:vetapp/core/errors/limite_plan.dart';
 import 'package:vetapp/core/utils/telefono_co.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
@@ -70,6 +72,10 @@ Widget _appUnderTest({
   );
 }
 
+/// Contenedor de la app de prueba: sobrevive al `pop` del formulario.
+ProviderContainer _contenedor(WidgetTester tester) =>
+    ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+
 Future<void> _llenarCamposRequeridos(WidgetTester tester) async {
   await tester.enterText(
     find.byType(TextFormField).at(_campoClienteNombre),
@@ -95,6 +101,28 @@ Future<void> _expandirDetalles(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('guardar cliente y mascota suma uno a la revisión de Inicio', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final repo = FakeMascotaRepository();
+    await tester.pumpWidget(_appUnderTest(mascotaRepo: repo));
+    await tester.pumpAndSettle();
+    final c = _contenedor(tester);
+    final antes = c.read(inicioRevisionProvider);
+
+    await _llenarCamposRequeridos(tester);
+    await tester.ensureVisible(find.text('Guardar cliente y mascota'));
+    await tester.tap(find.text('Guardar cliente y mascota'));
+    await tester.pumpAndSettle();
+
+    expect(repo.registros, hasLength(1));
+    expect(c.read(inicioRevisionProvider), antes + 1);
+  });
+
   testWidgets(
     'muestra ambas secciones en una sola pantalla continua, sin pasos',
     (tester) async {
