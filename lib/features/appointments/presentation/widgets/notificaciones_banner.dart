@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../providers/recordatorios_providers.dart';
 import 'permiso_notificaciones.dart';
 
@@ -26,7 +27,10 @@ class NotificacionesBanner extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.notifications_off_outlined, color: AppColors.warning),
+          const Icon(
+            Icons.notifications_off_outlined,
+            color: AppColors.warning,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -46,10 +50,11 @@ class NotificacionesBanner extends ConsumerWidget {
               ],
             ),
           ),
-          TextButton(
-            style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+          AppButton(
+            label: 'Activar',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => activarNotificaciones(ref),
-            child: const Text('Activar'),
           ),
         ],
       ),

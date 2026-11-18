@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formato_hora.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/utils/zona_bogota.dart';
 
 /// Selector de hora en pasos de 15 min con botones grandes (D-06): nunca un
@@ -134,14 +135,13 @@ class _PasoBotonState extends State<_PasoBoton> {
                 ),
           onLongPressEnd: (_) => _parar(),
           onLongPressCancel: _parar,
-          child: SizedBox(
-            width: TimeStepper._boton,
-            height: TimeStepper._boton,
-            child: OutlinedButton(
-              onPressed: widget.onPaso,
-              style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
-              child: Icon(widget.icono),
-            ),
+          child: AppButton(
+            label: widget.etiqueta,
+            icon: widget.icono,
+            variant: AppButtonVariant.outline,
+            cuadrado: true,
+            lado: TimeStepper._boton,
+            onPressed: widget.onPaso,
           ),
         ),
       ),

@@ -501,7 +501,12 @@ class _EncabezadoSemana extends StatelessWidget {
           ),
           const Spacer(),
           if (mostrarHoy)
-            TextButton(onPressed: onHoy, child: const Text('Hoy')),
+            AppButton(
+              label: 'Hoy',
+              variant: AppButtonVariant.text,
+              expand: false,
+              onPressed: onHoy,
+            ),
         ],
       ),
     );

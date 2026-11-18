@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_bar/app_top_bar.dart';
+import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/cards/app_card.dart';
 import '../providers/recordatorios_providers.dart';
 
@@ -23,7 +24,9 @@ class RecordatoriosScreen extends ConsumerWidget {
   Future<void> _elegir(BuildContext context, WidgetRef ref, int minutos) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(anticipacionRecordatorioProvider.notifier).cambiar(minutos);
+      await ref
+          .read(anticipacionRecordatorioProvider.notifier)
+          .cambiar(minutos);
       messenger.showSnackBar(
         const SnackBar(content: Text('Recordatorio actualizado')),
       );
@@ -72,10 +75,12 @@ class RecordatoriosScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                TextButton(
+                AppButton(
+                  label: 'Abrir ajustes',
+                  variant: AppButtonVariant.text,
+                  expand: false,
                   onPressed: () =>
                       ref.read(recordatoriosServiceProvider).abrirAjustes(),
-                  child: const Text('Abrir ajustes'),
                 ),
               ],
             ),

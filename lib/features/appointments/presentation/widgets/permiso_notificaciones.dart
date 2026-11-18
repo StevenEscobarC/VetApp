@@ -36,9 +36,11 @@ Future<void> pedirPermisoEnContexto(BuildContext context, WidgetRef ref) async {
           'para que no se te pase ninguna.',
         ),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Ahora no',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Ahora no'),
           ),
           AppButton(
             label: 'Activar recordatorios',
