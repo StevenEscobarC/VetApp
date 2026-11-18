@@ -44,13 +44,17 @@ class _EquipoScreenState extends ConsumerState<EquipoScreen> {
         title: const Text('¿Generar un código nuevo?'),
         content: const Text('El código actual dejará de funcionar.'),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Volver',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Volver'),
           ),
-          TextButton(
+          AppButton(
+            label: 'Generar nuevo',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Generar nuevo'),
           ),
         ],
       ),

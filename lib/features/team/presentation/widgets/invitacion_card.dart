@@ -62,9 +62,11 @@ class InvitacionCard extends ConsumerWidget {
         title: const Text('¿Revocar este código?'),
         content: Text('Nadie podrá usar el código $codigo.'),
         actions: [
-          TextButton(
+          AppButton(
+            label: 'Volver',
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Volver'),
           ),
           AppButton(
             label: 'Revocar',

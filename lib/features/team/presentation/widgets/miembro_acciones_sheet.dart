@@ -117,9 +117,11 @@ Future<bool> _confirmar(
       title: Text(titulo),
       content: Text(cuerpo),
       actions: [
-        TextButton(
+        AppButton(
+          label: 'Volver',
+          variant: AppButtonVariant.text,
+          expand: false,
           onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Volver'),
         ),
         if (destructivo)
           AppButton(
@@ -129,9 +131,11 @@ Future<bool> _confirmar(
             onPressed: () => Navigator.of(ctx).pop(true),
           )
         else
-          TextButton(
+          AppButton(
+            label: accion,
+            variant: AppButtonVariant.text,
+            expand: false,
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(accion),
           ),
       ],
     ),
