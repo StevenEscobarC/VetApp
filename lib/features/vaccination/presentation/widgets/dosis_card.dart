@@ -119,7 +119,7 @@ class DosisCard extends StatelessWidget {
                             PopupMenuButton<String>(
                               tooltip: 'Más acciones',
                               icon: const Icon(Icons.more_vert),
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(AppSpacing.sm),
                               onSelected: (_) => showAnularDosisSheet(
                                 context,
                                 dosis,
@@ -210,10 +210,7 @@ class DosisCard extends StatelessWidget {
     final tieneP = p != null && p.isNotEmpty;
     final tieneL = l != null && l.isNotEmpty;
     if (!tieneP && !tieneL) return null;
-    return [
-      if (tieneP) 'Producto: $p',
-      if (tieneL) 'Lote: $l',
-    ].join(' · ');
+    return [if (tieneP) 'Producto: $p', if (tieneL) 'Lote: $l'].join(' · ');
   }
 
   String _semantica(DosisEstado? estado, DateTime? proxima) {
@@ -303,7 +300,9 @@ class _Atribucion extends StatelessWidget {
                 if (!vet.activo)
                   TextSpan(
                     text: ' (retirado)',
-                    style: const TextStyle(color: AppColors.textMuted),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
               ],
             ),

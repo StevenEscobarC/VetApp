@@ -58,7 +58,7 @@ class CarneResumenSection extends ConsumerWidget {
             onTap: () => context.push('$rutaBase/carne'),
           ),
           loading: () => const AppCard(
-            child: SizedBox(height: 32, width: double.infinity),
+            child: SizedBox(height: AppSpacing.xl, width: double.infinity),
           ),
           error: (_, _) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -135,7 +135,11 @@ class _Resumen extends StatelessWidget {
 /// día" cuando hay dosis y nada pendiente, o nada si no hay dosis. Tocarla
 /// abre el carné.
 class CarneBadge extends ConsumerWidget {
-  const CarneBadge({super.key, required this.mascotaId, required this.rutaBase});
+  const CarneBadge({
+    super.key,
+    required this.mascotaId,
+    required this.rutaBase,
+  });
 
   final String mascotaId;
   final String rutaBase;
