@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/buttons/app_button.dart';
 import '../../../../core/widgets/inputs/app_text_field.dart';
 import '../../domain/auth_failure.dart';
@@ -59,7 +60,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         keyboardType: TextInputType.emailAddress,
         hintText: 'tu@correo.com',
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpacing.md),
       AppTextField(
         label: 'Contraseña',
         controller: _password,
@@ -68,9 +69,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
       Align(
         alignment: Alignment.centerRight,
-        child: TextButton(
+        child: AppButton(
+          label: 'Olvidé mi contraseña',
+          variant: AppButtonVariant.text,
+          expand: false,
           onPressed: () => context.push('/reset-password'),
-          child: const Text('Olvidé mi contraseña'),
         ),
       ),
       AppButton(
@@ -78,11 +81,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         onPressed: _submit,
         isLoading: _loading,
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.sm),
       Center(
-        child: TextButton(
+        child: AppButton(
+          label: 'Crear cuenta',
+          variant: AppButtonVariant.text,
+          expand: false,
           onPressed: () => context.push('/register'),
-          child: const Text('Crear cuenta'),
         ),
       ),
     ],

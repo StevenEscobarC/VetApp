@@ -54,11 +54,23 @@ class AuthScaffold extends StatelessWidget {
                   Text(subtitle, style: textTheme.bodyLarge),
                   const SizedBox(height: AppSpacing.lg),
                   if (error != null) ...[
-                    Text(error!, style: TextStyle(color: colorScheme.error)),
+                    Text(
+                      error!,
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: colorScheme.error,
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.md),
                   ],
                   if (success != null) ...[
-                    Text(success!, style: const TextStyle(color: AppColors.success)),
+                    Text(
+                      success!,
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? AppColors.successBg
+                            : AppColors.success,
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.md),
                   ],
                   ...children,
