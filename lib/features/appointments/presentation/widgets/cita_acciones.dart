@@ -92,14 +92,17 @@ Future<bool> confirmarCancelacion(BuildContext context, Cita cita) async {
         'La cita quedará como cancelada y no se borra.',
       ),
       actions: [
-        TextButton(
+        AppButton(
+          label: 'Volver',
+          variant: AppButtonVariant.text,
+          expand: false,
           onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Volver'),
         ),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: AppColors.destructive),
+        AppButton(
+          label: 'Cancelar cita',
+          variant: AppButtonVariant.destructive,
+          expand: false,
           onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Cancelar cita'),
         ),
       ],
     ),
@@ -169,20 +172,15 @@ Future<void> mostrarMasAcciones(
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            SizedBox(
-              width: double.infinity,
-              child: ControlEscritura(
-                puedeEscribir: puede,
+            ControlEscritura(
+              puedeEscribir: puede,
+              label: 'Cancelar cita',
+              onTap: () => Navigator.of(ctx).pop(_Accion.cancelar),
+              child: AppButton(
                 label: 'Cancelar cita',
-                onTap: () => Navigator.of(ctx).pop(_Accion.cancelar),
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.destructive,
-                  ),
-                  onPressed: () => Navigator.of(ctx).pop(_Accion.cancelar),
-                  icon: Icon(iconoEscritura(puede, Icons.cancel_outlined)),
-                  label: const Text('Cancelar cita'),
-                ),
+                variant: AppButtonVariant.destructive,
+                icon: iconoEscritura(puede, Icons.cancel_outlined),
+                onPressed: () => Navigator.of(ctx).pop(_Accion.cancelar),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),

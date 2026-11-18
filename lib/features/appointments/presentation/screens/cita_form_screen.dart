@@ -830,7 +830,12 @@ class _ClienteElegido extends StatelessWidget {
           if (soloLectura)
             const SizedBox.shrink()
           else if (cambiar)
-            TextButton(onPressed: onQuitar, child: const Text('Cambiar'))
+            AppButton(
+              label: 'Cambiar',
+              variant: AppButtonVariant.text,
+              expand: false,
+              onPressed: onQuitar,
+            )
           else
             IconButton(
               tooltip: 'Quitar cliente',
