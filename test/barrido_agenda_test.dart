@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vetapp/core/theme/app_theme.dart';
 import 'package:vetapp/core/widgets/buttons/app_button.dart';
 import 'package:vetapp/features/appointments/presentation/widgets/cita_acciones.dart';
+import 'package:vetapp/features/appointments/presentation/widgets/day_strip.dart';
 import 'package:vetapp/features/appointments/presentation/widgets/time_stepper.dart';
 
 import 'helpers/fake_citas.dart';
@@ -118,6 +119,79 @@ void main() {
       await gesto.up();
       await tester.pump();
       expect(cambios.length, greaterThanOrEqualTo(2));
+    });
+  });
+
+  group('DayStrip', () {
+    final lunes = DateTime.utc(2026, 11, 16);
+    final miercoles = DateTime.utc(2026, 11, 18);
+
+    Future<List<DateTime>> pump(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final tocados = <DateTime>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: DayStrip(
+              lunes: lunes,
+              seleccionado: miercoles,
+              hoy: lunes,
+              conteos: {miercoles: 2},
+              onSeleccionar: tocados.add,
+            ),
+          ),
+        ),
+      );
+      return tocados;
+    }
+
+    testWidgets('cada día mide al menos 48x48 a 360 dp', (tester) async {
+      await pump(tester);
+      final celdas = find.byWidgetPredicate(
+        (w) =>
+            w is InkWell &&
+            w.key is ValueKey<String> &&
+            (w.key! as ValueKey<String>).value.startsWith('dia-'),
+      );
+      expect(celdas, findsNWidgets(7));
+      for (final e in celdas.evaluate()) {
+        final size = tester.getSize(find.byWidget(e.widget));
+        expect(size.width, greaterThanOrEqualTo(48), reason: '${e.widget.key}');
+        expect(size.height, greaterThanOrEqualTo(48));
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('tocar un día lo selecciona; semántica intacta', (
+      tester,
+    ) async {
+      final tocados = await pump(tester);
+      await tester.tap(find.byKey(const ValueKey('dia-2026-11-20')));
+      expect(tocados, [DateTime.utc(2026, 11, 20)]);
+      expect(
+        find.bySemanticsLabel(RegExp(r', 2 citas, seleccionado$')),
+        findsOneWidget,
+      );
+    });
+
+    test('day_strip.dart sin literales de espaciado', () {
+      final fuente = _sinComentarios(
+        File('$_dir/widgets/day_strip.dart').readAsStringSync(),
+      );
+      expect(fuente, contains('AppSpacing.touchTarget'));
+      expect(
+        RegExp(
+          r'EdgeInsets\.[a-zA-Z]+\([^)]*[^a-zA-Z_.][0-9]+\b',
+        ).hasMatch(fuente),
+        isFalse,
+      );
+      expect(
+        RegExp(r'SizedBox\((height|width): *[0-9]+\)').hasMatch(fuente),
+        isFalse,
+      );
     });
   });
 }
